@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 export function ScanButton() {
   const [isPending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <Button
@@ -20,14 +21,21 @@ export function ScanButton() {
       disabled={done}
       onClick={() =>
         startTransition(async () => {
-          await triggerScan();
+          setError(null);
+          const result = await triggerScan();
+          if (!result.ok) {
+            setError(result.error ?? "Falha ao iniciar a varredura.");
+            return;
+          }
           setDone(true);
           // Reabilita após 30s (a varredura leva um tempo para popular)
           setTimeout(() => setDone(false), 30000);
         })
       }
     >
-      {done ? (
+      {error ? (
+        <span className="text-error">{error}</span>
+      ) : done ? (
         <span className="animate-pop text-success">✓ Varredura iniciada</span>
       ) : (
         <>

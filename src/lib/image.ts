@@ -17,6 +17,10 @@ import { fal } from "@fal-ai/client";
 import sharp from "sharp";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { IgProfile, VisualIdentity } from "@/lib/types";
+import { FONT_FACE_CSS, FONT_FAMILY } from "@/lib/font-data";
+
+/** font-family usada em todos os <text> do SVG — ver font-data.ts */
+const TEXT_FONT = `'${FONT_FAMILY}', Arial, sans-serif`;
 
 const WIDTH = 1080;
 const HEIGHT = 1350;
@@ -69,10 +73,11 @@ async function mockGenerateImage(): Promise<Buffer> {
           <stop offset="100%" stop-color="#0f0f23"/>
         </linearGradient>
       </defs>
+      ${FONT_FACE_CSS}
       <rect width="100%" height="100%" fill="url(#bg)"/>
       <circle cx="540" cy="500" r="260" fill="#7c3aed" opacity="0.25"/>
       <circle cx="300" cy="900" r="180" fill="#a78bfa" opacity="0.15"/>
-      <text x="540" y="520" font-family="Arial" font-size="120" fill="#c4b5fd" text-anchor="middle" opacity="0.6">🤖</text>
+      <text x="540" y="520" font-family="${TEXT_FONT}" font-size="120" fill="#c4b5fd" text-anchor="middle" opacity="0.6">🤖</text>
     </svg>`;
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
@@ -265,7 +270,7 @@ async function buildProfileChipLayers(
     ? ""
     : `<circle cx="${avatarX + avatarSize / 2}" cy="${avatarY + avatarSize / 2}" r="${avatarSize / 2}" fill="url(#avatarGrad)"/>
        <text x="${avatarX + avatarSize / 2}" y="${avatarY + avatarSize / 2 + nameSize * 0.36}"
-             font-family="Arial, sans-serif" font-size="${nameSize}" font-weight="800"
+             font-family="${TEXT_FONT}" font-size="${nameSize}" font-weight="800"
              fill="#ffffff" text-anchor="middle">${escapeXml(initials(name))}</text>`;
 
   // SVG do chip: fundo escuro semitransparente + borda tracejada +
@@ -282,6 +287,7 @@ async function buildProfileChipLayers(
           <stop offset="100%" stop-color="${AVATAR_GRADIENT_TO}"/>
         </linearGradient>
       </defs>
+      ${FONT_FACE_CSS}
       <rect x="${chipX}" y="${chipY}" width="${chipW}" height="${chipH}"
             rx="${radius}" fill="rgba(15,15,20,0.82)" filter="url(#chipShadow)"/>
       <rect x="${chipX}" y="${chipY}" width="${chipW}" height="${chipH}"
@@ -290,10 +296,10 @@ async function buildProfileChipLayers(
       ${fallbackAvatarSvg}
       <circle cx="${avatarX + avatarSize / 2}" cy="${avatarY + avatarSize / 2}" r="${avatarSize / 2}"
               fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="${Math.max(1, Math.round(1.5 * s))}"/>
-      <text x="${textX}" y="${nameY}" font-family="Arial, sans-serif"
+      <text x="${textX}" y="${nameY}" font-family="${TEXT_FONT}"
             font-size="${nameSize}" font-weight="800" fill="#ffffff">${escapeXml(name)}</text>
       ${verifiedSvg}
-      <text x="${textX}" y="${handleY}" font-family="Arial, sans-serif"
+      <text x="${textX}" y="${handleY}" font-family="${TEXT_FONT}"
             font-size="${handleSize}" font-weight="500" fill="#B0B3C0">${escapeXml(handleText)}</text>
     </svg>`;
 
@@ -351,12 +357,13 @@ function buildWatermarkLayer(width: number, height: number): CompositeLayer {
 
   const svg = `
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      ${FONT_FACE_CSS}
       <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${Math.round(h / 2)}"
             fill="rgba(0,0,0,0.5)" stroke="rgba(255,255,255,0.22)" stroke-width="${Math.max(1, Math.round(s))}"/>
       <g transform="translate(${boltX}, ${boltY}) scale(${(bolt / 24).toFixed(3)})">
         <path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2z" fill="#A78BFA"/>
       </g>
-      <text x="${textX}" y="${textY}" font-family="Arial, sans-serif" font-size="${fontSize}"
+      <text x="${textX}" y="${textY}" font-family="${TEXT_FONT}" font-size="${fontSize}"
             font-weight="600" fill="rgba(255,255,255,0.92)">${escapeXml(WATERMARK_TEXT)}</text>
     </svg>`;
   return { input: Buffer.from(svg), top: 0, left: 0 };
@@ -454,7 +461,7 @@ export async function renderTemplateSlide(
   const topLinesSvg = topLines
     .map((line, i) => {
       const y = cursorY + i * lineHeight + Math.round(sideFontSize * 0.8);
-      return `<text x="${centerX}" y="${y}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${sideFontSize}" font-weight="800" fill="${identity.colorText}" letter-spacing="${Math.round(2 * s)}">${escapeXml(line.toUpperCase())}</text>`;
+      return `<text x="${centerX}" y="${y}" text-anchor="middle" font-family="${TEXT_FONT}" font-size="${sideFontSize}" font-weight="800" fill="${identity.colorText}" letter-spacing="${Math.round(2 * s)}">${escapeXml(line.toUpperCase())}</text>`;
     })
     .join("\n");
   cursorY += topBlockH;
@@ -469,7 +476,7 @@ export async function renderTemplateSlide(
       <rect x="${ctaX}" y="${ctaY}" width="${ctaW}" height="${ctaH}"
             rx="${Math.round(ctaH / 2)}" fill="${identity.colorAccent}"/>
       <text x="${centerX}" y="${ctaY + ctaH - ctaPadY - Math.round(ctaFontSize * 0.2)}" text-anchor="middle"
-            font-family="Arial, sans-serif" font-size="${ctaFontSize}" font-weight="800"
+            font-family="${TEXT_FONT}" font-size="${ctaFontSize}" font-weight="800"
             fill="${identity.colorText}">${escapeXml(CTA_LABEL)}</text>`;
     cursorY += ctaH + gapCtaBox;
   } else {
@@ -483,12 +490,13 @@ export async function renderTemplateSlide(
   const bottomLinesSvg = bottomLines
     .map((line, i) => {
       const y = cursorY + i * lineHeight + Math.round(sideFontSize * 0.8);
-      return `<text x="${centerX}" y="${y}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${sideFontSize}" font-weight="800" fill="${identity.colorText}" letter-spacing="${Math.round(2 * s)}">${escapeXml(line.toUpperCase())}</text>`;
+      return `<text x="${centerX}" y="${y}" text-anchor="middle" font-family="${TEXT_FONT}" font-size="${sideFontSize}" font-weight="800" fill="${identity.colorText}" letter-spacing="${Math.round(2 * s)}">${escapeXml(line.toUpperCase())}</text>`;
     })
     .join("\n");
 
   const svg = `
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      ${FONT_FACE_CSS}
       <!-- fundo sólido + brilhos sutis de profundidade -->
       <rect width="100%" height="100%" fill="${identity.colorBackground}"/>
       <circle cx="${width * 0.85}" cy="${height * 0.18}" r="${Math.round(260 * s)}"
@@ -510,7 +518,7 @@ export async function renderTemplateSlide(
       <rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}"
             rx="${Math.round(24 * s)}" fill="${identity.colorKeywordBox}"/>
       <text x="${centerX}" y="${boxY + boxH - boxPadY - Math.round(kwFontSize * 0.16)}" text-anchor="middle"
-            font-family="Arial, sans-serif" font-size="${kwFontSize}" font-weight="900"
+            font-family="${TEXT_FONT}" font-size="${kwFontSize}" font-weight="900"
             fill="${identity.colorText}">${escapeXml(keyword)}</text>
 
       <!-- texto embaixo (multi-linha) -->
@@ -589,11 +597,12 @@ async function composeTemplate(
           <stop offset="100%" stop-color="#000000" stop-opacity="0.92"/>
         </linearGradient>
       </defs>
+      ${FONT_FACE_CSS}
       <rect width="100%" height="100%" fill="url(#fade)"/>
       ${lines
         .map(
           (line, i) =>
-            `<text x="60" y="${firstLineY + i * lineHeight}" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="900" fill="#ffffff">${escapeXml(line)}</text>`
+            `<text x="60" y="${firstLineY + i * lineHeight}" font-family="${TEXT_FONT}" font-size="${fontSize}" font-weight="900" fill="#ffffff">${escapeXml(line)}</text>`
         )
         .join("\n")}
     </svg>`;

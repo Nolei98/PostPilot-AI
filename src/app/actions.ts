@@ -218,8 +218,18 @@ export async function markAsPosted(postId: string) {
 }
 
 /** Dispara a varredura de fontes manualmente (botão no dashboard) */
-export async function triggerScan() {
-  await inngest.send({ name: "news/scan.requested", data: {} });
+export async function triggerScan(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await inngest.send({ name: "news/scan.requested", data: {} });
+    return { ok: true };
+  } catch (err) {
+    console.error("[triggerScan] falha ao enviar evento para o Inngest:", err);
+    return {
+      ok: false,
+      error:
+        "Não foi possível iniciar a varredura. Verifique se INNGEST_EVENT_KEY e INNGEST_SIGNING_KEY estão configuradas.",
+    };
+  }
 }
 
 /** Adiciona uma fonte RSS */

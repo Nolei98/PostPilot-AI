@@ -38,3 +38,6 @@ next-env.d.ts
 
 # imagens geradas pelos scripts de teste visual (não faz parte do app)
 /scripts/out/
+
+.vercel
+.env*
