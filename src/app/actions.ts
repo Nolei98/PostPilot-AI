@@ -203,6 +203,82 @@ export async function updatePost(
 }
 
 /**
+ * Sobe uma imagem gerada MANUALMENTE pelo usuário (ex: colou o
+ * image_prompt do post no Gemini/nano banana e baixou o resultado) e
+ * substitui a página de conteúdo do post, aplicando o mesmo overlay
+ * de chip + hook do fluxo automático.
+ */
+export async function uploadPostImage(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+
+  const postId = String(formData.get("post_id") ?? "");
+  const file = formData.get("image") as File | null;
+  if (!postId || !file || file.size === 0) {
+    return { ok: false, error: "Selecione uma imagem." };
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    return { ok: false, error: "Imagem muito grande (máx 8MB)." };
+  }
+
+  const { data: post } = await supabase
+    .from("posts")
+    .select("id, hook")
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!post) return { ok: false, error: "Post não encontrado." };
+
+  const { data: notif } = await supabase
+    .from("notification_configs")
+    .select("*")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const profile: IgProfile = {
+    handle: notif?.ig_handle ?? "seuperfil.ia",
+    displayName: notif?.ig_display_name ?? "Seu Perfil de IA",
+    avatarUrl: notif?.ig_avatar_url ?? null,
+    verified: notif?.ig_verified ?? false,
+    showProfileChip: notif?.show_profile_chip ?? true,
+  };
+
+  try {
+    const { getUserPlan } = await import("@/lib/subscription");
+    const watermark = (await getUserPlan(user.id)) === "free";
+    const { applyCustomBaseImage } = await import("@/lib/image");
+    const buf = Buffer.from(await file.arrayBuffer());
+    const imageUrl = await applyCustomBaseImage(
+      postId,
+      post.hook,
+      profile,
+      watermark,
+      buf
+    );
+
+    const { error } = await supabase
+      .from("posts")
+      .update({ image_url: imageUrl })
+      .eq("id", postId);
+    if (error) return { ok: false, error: error.message };
+  } catch (err) {
+    console.error("[uploadPostImage] falha ao processar imagem:", err);
+    return {
+      ok: false,
+      error: "Não foi possível processar essa imagem. Tente um JPG/PNG.",
+    };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/ready");
+  return { ok: true };
+}
+
+/**
  * Marca um post aprovado como publicado (Plano B: publicação manual).
  * Reusa o status 'published' — na Fase 2 a Graph API usa o mesmo.
  */

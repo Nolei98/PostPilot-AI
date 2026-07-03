@@ -719,12 +719,28 @@ export async function generatePostImage(
     }
   }
 
+  return composeAndUploadContentImage(base, hook, postId, profile, watermark);
+}
+
+/**
+ * Compõe (chip + hook) e sobe a página de CONTEÚDO a partir de uma
+ * imagem base já pronta — compartilhado entre generatePostImage
+ * (base gerada por IA/mock) e applyCustomBaseImage (base enviada
+ * manualmente pelo usuário, ex: gerada por fora no nano banana).
+ */
+async function composeAndUploadContentImage(
+  base: Buffer,
+  hook: string,
+  postId: string,
+  profile: IgProfile,
+  watermark: boolean
+): Promise<string> {
   const supabase = createAdminClient();
 
-  // 2. Guarda a imagem BASE (antes do chip/hook) para permitir
-  //    re-renderizar a página de conteúdo depois — ex: nome/foto do
-  //    perfil mudou em Ajustes — sem chamar o Flux de novo.
-  //    Best-effort: uma falha aqui não derruba a geração do post.
+  // Guarda a imagem BASE (antes do chip/hook) para permitir
+  // re-renderizar a página de conteúdo depois — ex: nome/foto do
+  // perfil mudou em Ajustes — sem gerar a base de novo.
+  // Best-effort: uma falha aqui não derruba a geração do post.
   try {
     const baseJpeg = await sharp(base).jpeg({ quality: 92 }).toBuffer();
     await supabase.storage
@@ -737,10 +753,10 @@ export async function generatePostImage(
     console.warn("[image] falha ao salvar base para re-render futuro", err);
   }
 
-  // 3. Template de marca: chip de perfil no topo (se habilitado) + hook
+  // Template de marca: chip de perfil no topo (se habilitado) + hook
   const final = await composeTemplate(base, hook, profile, watermark);
 
-  // 4. Upload no Storage (bucket público criado na migration)
+  // Upload no Storage (bucket público criado na migration)
   const path = `${postId}.jpg`;
   const { error } = await supabase.storage
     .from("post-images")
@@ -748,7 +764,22 @@ export async function generatePostImage(
   if (error) throw new Error(`Erro no upload da imagem: ${error.message}`);
 
   const { data } = supabase.storage.from("post-images").getPublicUrl(path);
-  return data.publicUrl;
+  return `${data.publicUrl}?v=${Date.now()}`;
+}
+
+/**
+ * Aplica uma imagem base ENVIADA PELO USUÁRIO (ex: gerada por fora
+ * no Gemini/nano banana a partir do image_prompt do post) — mesmo
+ * pipeline de composição (chip + hook) do fluxo automático.
+ */
+export async function applyCustomBaseImage(
+  postId: string,
+  hook: string,
+  profile: IgProfile,
+  watermark: boolean,
+  base: Buffer
+): Promise<string> {
+  return composeAndUploadContentImage(base, hook, postId, profile, watermark);
 }
 
 /**

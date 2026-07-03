@@ -16,6 +16,7 @@ import {
   approvePost,
   discardPost,
   updatePost,
+  uploadPostImage,
 } from "@/app/actions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardActions } from "@/components/ui/Card";
@@ -57,6 +58,30 @@ export function PostCard({
   const [exit, setExit] = useState<ExitDirection>(null);
   const [gone, setGone] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploading, startUpload] = useTransition();
+
+  function copyImagePrompt() {
+    navigator.clipboard.writeText(post.image_prompt).then(() => {
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    });
+  }
+
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadError(null);
+    const fd = new FormData();
+    fd.set("post_id", post.id);
+    fd.set("image", file);
+    startUpload(async () => {
+      const result = await uploadPostImage(fd);
+      if (!result.ok) setUploadError(result.error ?? "Falha ao subir imagem.");
+    });
+  }
 
   // ---- Identidade visual (por post) ----
   // Modal prefilled: valores do post (se já aplicado) ou defaults de Ajustes.
@@ -176,6 +201,48 @@ export function PostCard({
             </span>
           </div>
         )}
+
+        {/* Prompt de imagem (gerado junto com o post) — copie e cole no
+            Gemini/nano banana pra criar a arte manualmente, depois suba
+            o resultado aqui pra substituir a imagem atual do post. */}
+        <div className="space-y-1.5 border-b border-line px-4 py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-micro text-subtle">🎨 Prompt de imagem</span>
+            <div className="flex items-center gap-2">
+              <a
+                href="https://gemini.google.com/app"
+                target="_blank"
+                rel="noreferrer"
+                className="text-micro text-muted transition-colors hover:text-content"
+              >
+                Abrir Gemini ↗
+              </a>
+              <button
+                type="button"
+                onClick={copyImagePrompt}
+                className="rounded-full bg-surface-2 px-2 py-0.5 text-micro text-muted transition-colors hover:text-content"
+              >
+                {promptCopied ? "✓ Copiado" : "Copiar"}
+              </button>
+            </div>
+          </div>
+          <p className="line-clamp-2 text-micro text-subtle">
+            {post.image_prompt}
+          </p>
+          <label className="flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content">
+            <span>
+              {uploading ? "Enviando…" : "Subir imagem gerada (nano banana)"}
+            </span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png"
+              className="hidden"
+              disabled={uploading}
+              onChange={handleImageUpload}
+            />
+          </label>
+          {uploadError && <p className="text-micro text-error">{uploadError}</p>}
+        </div>
 
         {/* ===== Preview fiel ao Instagram ===== */}
         <div className="bg-black">
