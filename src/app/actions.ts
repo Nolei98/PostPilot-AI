@@ -272,14 +272,22 @@ export async function saveTelegramChatId(formData: FormData) {
   const chatId = String(formData.get("telegram_chat_id") ?? "").trim() || null;
   const postLanguage =
     String(formData.get("post_language") ?? "").trim() || "pt-BR";
+  const textProvider =
+    formData.get("text_provider") === "claude" ? "claude" : "gemini";
+  const imageProvider =
+    formData.get("image_provider") === "fal" ? "fal" : "gemini";
 
   // upsert: cria a config se não existir, atualiza se existir
-  const { error } = await supabase
-    .from("notification_configs")
-    .upsert(
-      { user_id: user.id, telegram_chat_id: chatId, post_language: postLanguage },
-      { onConflict: "user_id" }
-    );
+  const { error } = await supabase.from("notification_configs").upsert(
+    {
+      user_id: user.id,
+      telegram_chat_id: chatId,
+      post_language: postLanguage,
+      text_provider: textProvider,
+      image_provider: imageProvider,
+    },
+    { onConflict: "user_id" }
+  );
   if (error) throw new Error(error.message);
   revalidatePath("/settings");
 }

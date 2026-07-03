@@ -97,24 +97,33 @@ export const generatePost = inngest.createFunction(
       };
       const applyMode: TemplateApplyMode =
         data?.template_apply_mode === "on_approval" ? "on_approval" : "all";
+      const textProvider: "claude" | "gemini" =
+        data?.text_provider === "claude" ? "claude" : "gemini";
+      const imageProvider: "fal" | "gemini" =
+        data?.image_provider === "fal" ? "fal" : "gemini";
       return {
         language: (data?.post_language as string | undefined) ?? "pt-BR",
         profile,
         identity,
         applyMode,
+        textProvider,
+        imageProvider,
       };
     });
     const language = prefs.language;
     const applyTemplate = prefs.applyMode === "all";
 
-    // 3. Sonnet gera o pacote de texto no idioma configurado
+    // 3. Gera o pacote de texto no idioma e provider configurados
     const pkg = await step.run("generate-text", async () => {
-      return generatePostPackage({
-        title: news.title,
-        summary: news.summary,
-        url: news.url,
-        language,
-      });
+      return generatePostPackage(
+        {
+          title: news.title,
+          summary: news.summary,
+          url: news.url,
+          language,
+        },
+        prefs.textProvider
+      );
     });
 
     // 3. Cria o Post como draft. Se o modo for 'all', já grava os
@@ -154,7 +163,7 @@ export const generatePost = inngest.createFunction(
     const watermark = quota.plan === "free";
 
     // 4. Página de CONTEÚDO — usa a imagem original da matéria quando
-    //    o feed trouxe uma (evita custo do Flux); senão Flux/mock.
+    //    o feed trouxe uma; senão o provider configurado em Ajustes.
     const imageUrl = await step.run("generate-content-image", async () => {
       return generatePostImage(
         pkg.image_prompt,
@@ -162,7 +171,8 @@ export const generatePost = inngest.createFunction(
         postId,
         prefs.profile,
         watermark,
-        news.image_url
+        news.image_url,
+        prefs.imageProvider
       );
     });
 

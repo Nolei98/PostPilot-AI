@@ -44,6 +44,9 @@ export interface NotificationConfig {
   tpl_bottom_text: string;
   tpl_cta_enabled: boolean; // mostra "COMENTE:" acima da palavra-chave na contra-capa
   template_apply_mode: TemplateApplyMode;
+  // Provider de IA escolhido em Ajustes (default: gemini/gemini)
+  text_provider: "claude" | "gemini";
+  image_provider: "fal" | "gemini";
   created_at: string;
 }
 

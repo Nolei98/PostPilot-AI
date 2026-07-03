@@ -15,6 +15,7 @@
 // ============================================================
 import { fal } from "@fal-ai/client";
 import sharp from "sharp";
+import { GoogleGenAI } from "@google/genai";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { IgProfile, VisualIdentity } from "@/lib/types";
 import { FONT_FAMILY } from "@/lib/font-data";
@@ -58,6 +59,26 @@ async function fluxGenerate(prompt: string): Promise<Buffer> {
   const res = await fetch(imageUrl);
   if (!res.ok) throw new Error(`Falha ao baixar imagem: ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
+}
+
+/**
+ * Gera a imagem base via Gemini 2.5 Flash Image ("nano banana"),
+ * alternativa ao Flux quando o usuário escolhe Gemini em Ajustes.
+ */
+async function geminiGenerateImage(prompt: string): Promise<Buffer> {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-image",
+    contents: prompt,
+  });
+
+  const parts = response.candidates?.[0]?.content?.parts ?? [];
+  const imagePart = parts.find((p) => p.inlineData?.data);
+  if (!imagePart?.inlineData?.data) {
+    throw new Error("Gemini não retornou imagem");
+  }
+  return Buffer.from(imagePart.inlineData.data, "base64");
 }
 
 /**
@@ -666,14 +687,23 @@ export async function generatePostImage(
   postId: string,
   profile: IgProfile = DEFAULT_PROFILE,
   watermark = false,
-  sourceImageUrl: string | null = null
+  sourceImageUrl: string | null = null,
+  imageProvider: "fal" | "gemini" = "gemini"
 ): Promise<string> {
   // 1. Imagem base — prioriza a imagem original da matéria (evita
-  //    custo do Flux e mantém a foto real da notícia); cai pro
-  //    Flux/mock se não tiver imagem-fonte ou o download falhar.
+  //    custo de gerar do zero e mantém a foto real da notícia); cai
+  //    pro provider escolhido em Ajustes (Gemini ou Fal.ai) se não
+  //    tiver imagem-fonte ou o download falhar; MOCK se faltar key.
   let base: Buffer | null = sourceImageUrl
     ? await fetchSourceImage(sourceImageUrl)
     : null;
+  if (!base && imageProvider === "gemini" && process.env.GEMINI_API_KEY) {
+    try {
+      base = await geminiGenerateImage(imagePrompt);
+    } catch (err) {
+      console.warn("[image] Gemini falhou ao gerar imagem, caindo pro Fal/mock:", err);
+    }
+  }
   if (!base) {
     if (!process.env.FAL_KEY) {
       console.warn("[image] FAL_KEY ausente — usando MOCK (gradiente local)");

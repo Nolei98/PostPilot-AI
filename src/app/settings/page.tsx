@@ -323,6 +323,40 @@ export default async function SettingsPage() {
                 className={fieldClasses}
               />
             </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="text_provider" className="block text-caption text-muted">
+                Provider de IA — texto (hook, legenda, hashtags)
+              </label>
+              <select
+                id="text_provider"
+                name="text_provider"
+                defaultValue={notifConfig?.text_provider ?? "gemini"}
+                className={fieldClasses}
+              >
+                <option value="gemini">Gemini (Google AI Studio)</option>
+                <option value="claude">Claude (Anthropic)</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="image_provider" className="block text-caption text-muted">
+                Provider de IA — imagem (arte do post)
+              </label>
+              <select
+                id="image_provider"
+                name="image_provider"
+                defaultValue={notifConfig?.image_provider ?? "gemini"}
+                className={fieldClasses}
+              >
+                <option value="gemini">Gemini (Google AI Studio)</option>
+                <option value="fal">Fal.ai (Flux)</option>
+              </select>
+            </div>
+            <p className="text-caption text-subtle">
+              Se o provider escolhido não tiver a chave configurada no
+              servidor, o app cai automaticamente pro outro disponível (ou
+              MOCK, sem custo).
+            </p>
             <p className="text-caption text-subtle">
               1. Crie um bot com o @BotFather e configure o token no servidor
               (TELEGRAM_BOT_TOKEN). 2. Mande /start para o bot. 3. Pegue seu

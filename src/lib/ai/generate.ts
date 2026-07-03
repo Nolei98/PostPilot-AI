@@ -190,13 +190,15 @@ async function geminiGenerate(input: GenerateInput): Promise<PostPackage> {
 }
 
 /**
- * Ponto de entrada: Gemini se AI_PROVIDER=gemini (+ GEMINI_API_KEY),
- * Claude se houver ANTHROPIC_API_KEY, senão mock.
+ * Ponto de entrada: usa o provider escolhido pelo usuário em Ajustes
+ * (text_provider). Cai pro Claude se pedir Gemini sem GEMINI_API_KEY,
+ * e pro MOCK se não tiver nenhuma key configurada.
  */
 export async function generatePostPackage(
-  input: GenerateInput
+  input: GenerateInput,
+  provider: "claude" | "gemini" = "gemini"
 ): Promise<PostPackage> {
-  if (process.env.AI_PROVIDER === "gemini" && process.env.GEMINI_API_KEY) {
+  if (provider === "gemini" && process.env.GEMINI_API_KEY) {
     return geminiGenerate(input);
   }
   if (!process.env.ANTHROPIC_API_KEY) {
