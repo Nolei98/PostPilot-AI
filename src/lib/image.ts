@@ -17,10 +17,11 @@ import { fal } from "@fal-ai/client";
 import sharp from "sharp";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { IgProfile, VisualIdentity } from "@/lib/types";
-import { FONT_FACE_CSS, FONT_FAMILY } from "@/lib/font-data";
+import { FONT_FAMILY } from "@/lib/font-data";
+import { rasterizeSvg } from "@/lib/svg-render";
 
 /** font-family usada em todos os <text> do SVG — ver font-data.ts */
-const TEXT_FONT = `'${FONT_FAMILY}', Arial, sans-serif`;
+const TEXT_FONT = FONT_FAMILY;
 
 const WIDTH = 1080;
 const HEIGHT = 1350;
@@ -73,13 +74,11 @@ async function mockGenerateImage(): Promise<Buffer> {
           <stop offset="100%" stop-color="#0f0f23"/>
         </linearGradient>
       </defs>
-      ${FONT_FACE_CSS}
       <rect width="100%" height="100%" fill="url(#bg)"/>
       <circle cx="540" cy="500" r="260" fill="#7c3aed" opacity="0.25"/>
       <circle cx="300" cy="900" r="180" fill="#a78bfa" opacity="0.15"/>
-      <text x="540" y="520" font-family="${TEXT_FONT}" font-size="120" fill="#c4b5fd" text-anchor="middle" opacity="0.6">🤖</text>
     </svg>`;
-  return sharp(Buffer.from(svg)).png().toBuffer();
+  return rasterizeSvg(svg);
 }
 
 /**
@@ -126,9 +125,18 @@ function wrapMultiline(
   return allLines.slice(0, maxTotalLines);
 }
 
-/** Escapa caracteres especiais de XML para o SVG */
+// Emoji/pictogramas não existem na fonte Inter embutida (só glifos
+// latinos) — sem filtrar, o resvg desenha uma caixa "NO GLYPH" no
+// lugar, pior que não ter nada. Cobre os blocos Unicode de emoji
+// mais comuns (símbolos, pictogramas, transporte, bandeiras, dingbats).
+const EMOJI_RE =
+  /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu;
+
+/** Remove emoji (sem glifo na fonte) e escapa caracteres especiais de XML */
 function escapeXml(s: string): string {
   return s
+    .replace(EMOJI_RE, "")
+    .trim()
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -287,7 +295,6 @@ async function buildProfileChipLayers(
           <stop offset="100%" stop-color="${AVATAR_GRADIENT_TO}"/>
         </linearGradient>
       </defs>
-      ${FONT_FACE_CSS}
       <rect x="${chipX}" y="${chipY}" width="${chipW}" height="${chipH}"
             rx="${radius}" fill="rgba(15,15,20,0.82)" filter="url(#chipShadow)"/>
       <rect x="${chipX}" y="${chipY}" width="${chipW}" height="${chipH}"
@@ -304,7 +311,7 @@ async function buildProfileChipLayers(
     </svg>`;
 
   const layers: CompositeLayer[] = [
-    { input: Buffer.from(chipSvg), top: 0, left: 0 },
+    { input: rasterizeSvg(chipSvg), top: 0, left: 0 },
   ];
   // Avatar raster entra como camada própria, por cima do chip
   if (avatarLayer) {
@@ -357,7 +364,6 @@ function buildWatermarkLayer(width: number, height: number): CompositeLayer {
 
   const svg = `
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      ${FONT_FACE_CSS}
       <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${Math.round(h / 2)}"
             fill="rgba(0,0,0,0.5)" stroke="rgba(255,255,255,0.22)" stroke-width="${Math.max(1, Math.round(s))}"/>
       <g transform="translate(${boltX}, ${boltY}) scale(${(bolt / 24).toFixed(3)})">
@@ -366,7 +372,7 @@ function buildWatermarkLayer(width: number, height: number): CompositeLayer {
       <text x="${textX}" y="${textY}" font-family="${TEXT_FONT}" font-size="${fontSize}"
             font-weight="600" fill="rgba(255,255,255,0.92)">${escapeXml(WATERMARK_TEXT)}</text>
     </svg>`;
-  return { input: Buffer.from(svg), top: 0, left: 0 };
+  return { input: rasterizeSvg(svg), top: 0, left: 0 };
 }
 
 // ------------------------------------------------------------
@@ -496,7 +502,6 @@ export async function renderTemplateSlide(
 
   const svg = `
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      ${FONT_FACE_CSS}
       <!-- fundo sólido + brilhos sutis de profundidade -->
       <rect width="100%" height="100%" fill="${identity.colorBackground}"/>
       <circle cx="${width * 0.85}" cy="${height * 0.18}" r="${Math.round(260 * s)}"
@@ -535,7 +540,7 @@ export async function renderTemplateSlide(
     layers.push(buildWatermarkLayer(width, height));
   }
 
-  return sharp(Buffer.from(svg))
+  return sharp(rasterizeSvg(svg))
     .composite(layers)
     .jpeg({ quality: 90 })
     .toBuffer();
@@ -597,7 +602,6 @@ async function composeTemplate(
           <stop offset="100%" stop-color="#000000" stop-opacity="0.92"/>
         </linearGradient>
       </defs>
-      ${FONT_FACE_CSS}
       <rect width="100%" height="100%" fill="url(#fade)"/>
       ${lines
         .map(
@@ -611,7 +615,7 @@ async function composeTemplate(
   // Chip fica no topo e o hook no rodapé — não colidem; nenhum
   // offset extra de conteúdo é necessário.
   const layers: CompositeLayer[] = [
-    { input: Buffer.from(textSvg), top: 0, left: 0 },
+    { input: rasterizeSvg(textSvg), top: 0, left: 0 },
   ];
   if (profile.showProfileChip) {
     layers.push(...(await buildProfileChipLayers(profile, WIDTH)));

@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // resvg-js tem um binário nativo (.node) — sem isso o webpack tenta
+  // "bundlar" o binário como se fosse JS e quebra o build (o mesmo
+  // problema que o Next já resolve automaticamente para o sharp).
+  experimental: {
+    serverComponentsExternalPackages: ["@resvg/resvg-js"],
+  },
   // Build de produção usa pasta separada (.next-build via env no
   // script "build") para NUNCA sobrescrever o .next que o `next dev`
   // está servindo — rodar `npm run build` com o dev aberto corrompia
