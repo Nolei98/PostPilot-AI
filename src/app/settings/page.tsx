@@ -12,6 +12,7 @@ import {
   saveVisualIdentity,
 } from "@/app/actions";
 import { IdentityForm } from "@/components/IdentityForm";
+import { AvatarFileInput } from "@/components/AvatarFileInput";
 import { AppShell } from "@/components/ui/AppShell";
 import { Card } from "@/components/ui/Card";
 import { DeleteSourceButton } from "@/components/DeleteSourceButton";
@@ -115,18 +116,7 @@ export default async function SettingsPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="avatar" className="block text-caption text-muted">
-                Foto de perfil (JPG/PNG, máx 2MB)
-              </label>
-              <input
-                id="avatar"
-                name="avatar"
-                type="file"
-                accept="image/jpeg,image/png"
-                className="w-full text-caption text-muted file:mr-3 file:rounded-control file:border-0 file:bg-surface-2 file:px-3 file:py-2 file:text-caption file:text-content hover:file:bg-line"
-              />
-            </div>
+            <AvatarFileInput />
             <div className="space-y-1.5">
               <label htmlFor="ig_display_name" className="block text-caption text-muted">
                 Nome exibido

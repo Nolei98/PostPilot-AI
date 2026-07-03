@@ -308,26 +308,31 @@ export async function saveIgProfile(formData: FormData) {
     .replace(/^@/, ""); // aceita com ou sem @
   const displayName = String(formData.get("ig_display_name") ?? "").trim();
 
-  // Upload da foto (opcional)
+  // Upload da foto (opcional). Falha aqui (tamanho, erro de upload) não
+  // derruba o salvamento do resto do perfil — só a foto fica como estava.
   let avatarUrl: string | undefined;
   const file = formData.get("avatar") as File | null;
   if (file && file.size > 0) {
     if (file.size > 2 * 1024 * 1024) {
-      throw new Error("Foto muito grande (máx 2MB)");
+      console.warn(`[saveIgProfile] foto rejeitada (${file.size} bytes > 2MB)`);
+    } else {
+      const ext = file.type === "image/png" ? "png" : "jpg";
+      const path = `${user.id}.${ext}`;
+      // Upload via client ADMIN (service role): esta server action roda só
+      // no servidor e o nome do arquivo é o user_id autenticado — seguro,
+      // e dispensa policies de storage para o usuário comum.
+      const admin = createAdminClient();
+      const { error: uploadError } = await admin.storage
+        .from("avatars")
+        .upload(path, file, { contentType: file.type, upsert: true });
+      if (uploadError) {
+        console.error("[saveIgProfile] falha no upload da foto:", uploadError.message);
+      } else {
+        const { data } = admin.storage.from("avatars").getPublicUrl(path);
+        // cache-bust: URL muda a cada upload para o browser não mostrar a antiga
+        avatarUrl = `${data.publicUrl}?v=${Date.now()}`;
+      }
     }
-    const ext = file.type === "image/png" ? "png" : "jpg";
-    const path = `${user.id}.${ext}`;
-    // Upload via client ADMIN (service role): esta server action roda só
-    // no servidor e o nome do arquivo é o user_id autenticado — seguro,
-    // e dispensa policies de storage para o usuário comum.
-    const admin = createAdminClient();
-    const { error: uploadError } = await admin.storage
-      .from("avatars")
-      .upload(path, file, { contentType: file.type, upsert: true });
-    if (uploadError) throw new Error(uploadError.message);
-    const { data } = admin.storage.from("avatars").getPublicUrl(path);
-    // cache-bust: URL muda a cada upload para o browser não mostrar a antiga
-    avatarUrl = `${data.publicUrl}?v=${Date.now()}`;
   }
 
   // Checkboxes: presentes no form → "on"; ausentes → false
