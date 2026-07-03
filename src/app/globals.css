@@ -2,26 +2,141 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   POSTPILOT AI — DESIGN SYSTEM (fonte única de verdade)
+   Todos os tokens visuais vivem aqui. Mudou aqui → muda no app
+   inteiro (o tailwind.config.ts só referencia estas variáveis).
+
+   Cores em triplas RGB ("R G B") para o Tailwind suportar
+   opacidade (ex: bg-primary/20).
+   ============================================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ---------- PALETA ------------------------------------ */
+  /* Fundos (base escura — tech/IA) */
+  --color-bg: 9 9 15;            /* #09090F fundo do app */
+  --color-surface: 20 20 29;     /* #14141D cards, painéis */
+  --color-surface-2: 28 28 40;   /* #1C1C28 inputs, hover de card */
+  --color-border: 42 42 58;      /* #2A2A3A bordas sutis */
+
+  /* Marca */
+  --color-primary: 124 92 255;   /* #7C5CFF violeta elétrico (accent IA) */
+  --color-primary-hover: 147 120 255; /* #9378FF */
+  --color-secondary: 34 211 238; /* #22D3EE ciano (detalhes, links) */
+
+  /* Texto */
+  --color-text: 244 244 248;     /* #F4F4F8 principal */
+  --color-text-muted: 156 160 176;  /* #9CA0B0 secundário */
+  --color-text-subtle: 106 110 128; /* #6A6E80 terciário/dicas */
+
+  /* Estados */
+  --color-success: 16 185 129;   /* #10B981 aprovar / confirmado */
+  --color-error: 244 63 94;      /* #F43F5E descartar / erro */
+  --color-warning: 245 158 11;   /* #F59E0B score viral / atenção */
+
+  /* ---------- TIPOGRAFIA --------------------------------- */
+  /* Família: Geist (local, já no projeto) → fallback system */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+
+  /* Escala (mobile-first) */
+  --text-display: 1.5rem;   /* 24px — título de página (peso 700) */
+  --text-title: 1.125rem;   /* 18px — título de seção (peso 600) */
+  --text-body: 0.875rem;    /* 14px — corpo padrão (peso 400) */
+  --text-caption: 0.75rem;  /* 12px — metadados, labels (peso 500) */
+  --text-micro: 0.6875rem;  /* 11px — badges, hints (peso 600) */
+
+  /* ---------- FORMA / ESPAÇO ----------------------------- */
+  --radius-card: 1rem;      /* 16px cards */
+  --radius-control: 0.625rem; /* 10px botões e inputs */
+  --radius-full: 9999px;    /* pills e badges */
+
+  /* ---------- SOMBRAS / ELEVAÇÃO ------------------------- */
+  --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.03) inset,
+                 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --shadow-modal: 0 24px 64px -16px rgb(0 0 0 / 0.8);
+  --glow-primary: 0 0 24px -4px rgb(var(--color-primary) / 0.5);
+
+  /* ---------- MOVIMENTO ---------------------------------- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 400ms;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ---------- BASE ------------------------------------------ */
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: rgb(var(--color-bg));
+  color: rgb(var(--color-text));
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar discreta, coerente com o tema */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-border));
+  border-radius: var(--radius-full);
+}
+
+/* ---------- MICRO-INTERAÇÕES (keyframes) ------------------- */
+
+/* Card entrando na fila */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Aprovado: desliza para a direita com leve giro (swipe feliz) */
+@keyframes exit-right {
+  to { opacity: 0; transform: translateX(70%) rotate(3deg); }
+}
+
+/* Descartado: desliza para a esquerda */
+@keyframes exit-left {
+  to { opacity: 0; transform: translateX(-70%) rotate(-3deg); }
+}
+
+/* Check de sucesso "pulando" */
+@keyframes pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  70%  { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Modal */
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Skeleton de carregamento */
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  .animate-fade-up   { animation: fade-up var(--duration-slow) var(--ease-out) both; }
+  .animate-exit-right{ animation: exit-right var(--duration-slow) var(--ease-out) forwards; }
+  .animate-exit-left { animation: exit-left var(--duration-slow) var(--ease-out) forwards; }
+  .animate-pop       { animation: pop var(--duration-base) var(--ease-out) both; }
+  .animate-modal-in  { animation: modal-in var(--duration-base) var(--ease-out) both; }
+  .animate-backdrop-in { animation: backdrop-in var(--duration-fast) ease-out both; }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgb(var(--color-surface-2)) 25%,
+      rgb(var(--color-border)) 50%,
+      rgb(var(--color-surface-2)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
   }
 }

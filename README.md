@@ -1,36 +1,110 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📱 PostPilot AI
 
-## Getting Started
+> Seu perfil de IA posta sozinho. Você só aprova.
 
-First, run the development server:
+Monitora notícias de IA via RSS, classifica potencial viral (Claude Haiku), gera post pronto — legenda no tom viral (Claude Sonnet) + arte com template de marca (Flux/Fal.ai + sharp) — e entrega para aprovação e publicação manual no Instagram (Plano B, sem Graph API).
+
+## Rodando localmente
+
+### 1. Supabase
+
+1. Crie um projeto em [supabase.com](https://supabase.com) (free tier)
+2. SQL Editor → cole e rode `supabase/migrations/001_schema.sql`
+3. Authentication → Users → **Add user** (seu e-mail + senha)
+4. Copie o UUID do usuário, substitua em `supabase/seed.sql` e rode no SQL Editor (fontes RSS iniciais)
+5. Settings → API → copie URL, `anon key` e `service_role key`
+
+### 2. Variáveis de ambiente
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
+# preencha pelo menos as 3 do Supabase
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**Modo grátis (mocks):** deixe `ANTHROPIC_API_KEY`, `FAL_KEY` e `TELEGRAM_BOT_TOKEN` vazios — triagem usa palavras-chave, geração usa texto fixo, imagem é um gradiente local e notificação vira log. O pipeline inteiro funciona com $0.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Modo real:** preencha as chaves (instruções dentro do `.env.example`).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. Rodar
 
-## Learn More
+```bash
+npm install
+npm run dev          # terminal 1 — app em http://localhost:3000
+npx inngest-cli dev  # terminal 2 — Inngest Dev Server em http://localhost:8288
+```
 
-To learn more about Next.js, take a look at the following resources:
+### 4. Testar o pipeline
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Login em `http://localhost:3000` (usuário criado no passo 1.3)
+2. Confira as fontes em **⚙️ Ajustes**
+3. Clique **🔄 Varrer agora** no dashboard (ou espere o cron de 3h)
+4. Acompanhe os jobs em `http://localhost:8288` (Runs)
+5. Posts aparecem na fila → aprovar/editar/descartar
+6. Aprovados vão para **✅ Prontos**: copiar texto + baixar arte + marcar postado
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deploy na Vercel (grátis)
 
-## Deploy on Vercel
+### 1. App
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npx vercel        # ou conecte o repo no dashboard da Vercel
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Em **Settings → Environment Variables**, adicione:
+
+| Variável | Obrigatória | Onde pegar |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase → Settings → API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase → Settings → API |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Supabase → Settings → API |
+| `ANTHROPIC_API_KEY` | p/ IA real | console.anthropic.com |
+| `FAL_KEY` | p/ imagem real | fal.ai/dashboard |
+| `TELEGRAM_BOT_TOKEN` | p/ notificação | @BotFather no Telegram |
+| `INNGEST_EVENT_KEY` | ✅ produção | app.inngest.com → Manage → Event Keys |
+| `INNGEST_SIGNING_KEY` | ✅ produção | app.inngest.com → Manage → Signing Key |
+| `NEXT_PUBLIC_APP_URL` | ✅ | URL do deploy (https://seu-app.vercel.app) |
+
+### 2. Inngest (cron + jobs)
+
+O **cron de varredura (a cada 3h) roda dentro da Inngest** — não usa Vercel Cron, então não há limite do free tier da Vercel para crons.
+
+1. Crie conta em [app.inngest.com](https://app.inngest.com) (free tier: 50k steps/mês — sobra)
+2. Copie `INNGEST_EVENT_KEY` e `INNGEST_SIGNING_KEY` para a Vercel (tabela acima) e redeploy
+3. Inngest → **Apps → Sync new app** → cole `https://seu-app.vercel.app/api/inngest`
+4. As 3 funções aparecem: `scan-news` (cron 0 */3 * * *), `generate-post`, `notify-post-ready`
+
+> A Inngest tem integração oficial com a Vercel (Marketplace) que faz o sync automático a cada deploy — recomendado.
+
+### 3. Custo mensal
+
+| Serviço | Plano | $/mês |
+|---|---|---|
+| Vercel Hobby | free | $0 |
+| Supabase | free | $0 |
+| Inngest | free | $0 |
+| Telegram | — | $0 |
+| Anthropic (Haiku + Sonnet) | pay-as-you-go | ~$3–6 |
+| Fal.ai (Flux schnell) | pay-as-you-go | ~$2 |
+| **Total** | | **~$5–8** |
+
+## Estrutura
+
+```
+supabase/migrations/001_schema.sql  # schema + RLS + bucket de imagens
+supabase/seed.sql                   # fontes RSS iniciais
+src/middleware.ts                   # auth guard (Supabase SSR)
+src/lib/ai/triage.ts                # Haiku: score viral (+ mock)
+src/lib/ai/generate.ts              # Sonnet: pacote do post (+ mock)
+src/lib/image.ts                    # Flux + template de marca + upload
+src/lib/telegram.ts                 # notificações
+src/inngest/functions/scan-news.ts  # cron: RSS → dedupe → triagem
+src/inngest/functions/generate-post.ts # texto → arte → pending_approval
+src/inngest/functions/notify.ts     # aviso no Telegram
+src/app/page.tsx                    # fila de aprovação (dashboard)
+src/app/ready/page.tsx              # posts prontos p/ publicar
+src/app/settings/page.tsx           # fontes + Telegram
+```
+
+## Fase 2 (fora deste MVP)
+
+Instagram Graph API (o schema já tem `scheduled`/`published`, `scheduled_for` e `ig_media_id` prontos), vídeo/Reels, multi-perfil, billing, analytics.

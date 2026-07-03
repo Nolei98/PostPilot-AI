@@ -1,0 +1,60 @@
+"use client";
+
+// ============================================================
+// Modal do design system.
+// Backdrop com blur, entrada animada, fecha no ESC / clique fora.
+// Mobile: sobe como sheet do rodapé. Desktop: centralizado.
+// ============================================================
+import { useEffect, type ReactNode } from "react";
+
+interface ModalProps {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+}
+
+export function Modal({ open, onClose, title, children }: ModalProps) {
+  // Fecha com ESC + trava o scroll do body enquanto aberto
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="animate-backdrop-in fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="animate-modal-in w-full max-w-lg rounded-t-card border border-line bg-surface p-5 shadow-modal sm:rounded-card"
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-title">{title}</h3>
+          <button
+            onClick={onClose}
+            className="rounded-control p-1 text-muted transition-colors hover:bg-surface-2 hover:text-content"
+            aria-label="Fechar"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}

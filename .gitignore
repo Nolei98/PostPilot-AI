@@ -34,3 +34,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.next-build/
+
+# imagens geradas pelos scripts de teste visual (não faz parte do app)
+/scripts/out/

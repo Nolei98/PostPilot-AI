@@ -1,101 +1,131 @@
-import Image from "next/image";
+// ============================================================
+// FILA DE APROVAÇÃO — tela principal.
+// Mobile-first: 1 coluna de cards. Desktop: sidebar + coluna
+// central mais larga. Estado vazio auto-explicativo com CTA.
+// ============================================================
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { FirstScanKickoff } from "@/components/FirstScanKickoff";
+import { PostCard } from "@/components/PostCard";
+import { ScanButton } from "@/components/ScanButton";
+import { AppShell } from "@/components/ui/AppShell";
+import type {
+  IgProfile,
+  PostWithNews,
+  TemplateApplyMode,
+  VisualIdentity,
+} from "@/lib/types";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function DashboardPage() {
+  const supabase = createClient();
+
+  const { data: queue } = await supabase
+    .from("posts")
+    .select("*, news_items(title, url, viral_score)")
+    .eq("status", "pending_approval")
+    .order("created_at", { ascending: false });
+
+  const { count: readyCount } = await supabase
+    .from("posts")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "approved");
+
+  // Usuário NOVO = nunca teve nenhum post (qualquer status).
+  // Distingue "acabou de chegar" (onboarding) de "fila vazia normal".
+  const { count: totalPosts } = await supabase
+    .from("posts")
+    .select("id", { count: "exact", head: true });
+  const isNewUser = (totalPosts ?? 0) === 0;
+
+  // Perfil do IG exibido no header dos previews (config em Ajustes)
+  const { data: config } = await supabase
+    .from("notification_configs")
+    .select("*")
+    .maybeSingle();
+
+  const profile: IgProfile = {
+    handle: config?.ig_handle ?? "seuperfil.ia",
+    displayName: config?.ig_display_name ?? "Seu Perfil de IA",
+    avatarUrl: config?.ig_avatar_url ?? null,
+    verified: config?.ig_verified ?? false,
+    showProfileChip: config?.show_profile_chip ?? true,
+  };
+
+  // Defaults da identidade visual (prefill do modal na aprovação)
+  const identityDefaults: VisualIdentity = {
+    colorBackground: config?.color_background ?? "#0B0B12",
+    colorAccent: config?.color_accent ?? "#7C5CFF",
+    colorText: config?.color_text ?? "#FFFFFF",
+    colorKeywordBox: config?.color_keyword_box ?? "#7C5CFF",
+    keyword: config?.tpl_keyword ?? "IA",
+    topText: config?.tpl_top_text ?? "A NOVIDADE DE",
+    bottomText: config?.tpl_bottom_text ?? "QUE MUDA TUDO",
+    ctaEnabled: config?.tpl_cta_enabled ?? false,
+  };
+  const applyMode: TemplateApplyMode =
+    config?.template_apply_mode === "on_approval" ? "on_approval" : "all";
+
+  const posts = (queue ?? []) as PostWithNews[];
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <AppShell readyCount={readyCount ?? 0}>
+      {/* Cabeçalho da tela: título + ação de varredura */}
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="text-display">Fila de aprovação</h1>
+          <p className="text-caption text-muted">
+            {posts.length === 0
+              ? "Nada aguardando revisão"
+              : `${posts.length} ${posts.length === 1 ? "post aguarda" : "posts aguardam"} sua decisão`}
+          </p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        <ScanButton />
+      </div>
+
+      {posts.length === 0 && isNewUser ? (
+        /* ===== Usuário novo: dispara o 1º scan e acompanha ao vivo ===== */
+        <FirstScanKickoff />
+      ) : posts.length === 0 ? (
+        /* ===== Estado vazio: explica o que acontece e o que fazer ===== */
+        <div className="animate-fade-up rounded-card border border-dashed border-line px-6 py-14 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+          </div>
+          <h2 className="mb-1 text-title">Nenhum candidato na fila</h2>
+          <p className="mx-auto mb-6 max-w-xs text-body text-muted">
+            O monitor varre suas fontes a cada 3 horas e traz aqui as notícias
+            com potencial viral, já transformadas em post.
+          </p>
+          <div className="flex flex-col items-center gap-3">
+            <ScanButton />
+            <Link
+              href="/settings"
+              className="text-caption text-subtle underline-offset-2 transition-colors hover:text-muted hover:underline"
+            >
+              Conferir fontes monitoradas →
+            </Link>
+          </div>
+        </div>
+      ) : (
+        /* ===== Fila: cards entram escalonados ===== */
+        <div className="space-y-6">
+          {posts.map((post, i) => (
+            <div key={post.id} style={{ animationDelay: `${i * 60}ms` }} className="animate-fade-up">
+              <PostCard
+                post={post}
+                profile={profile}
+                identityDefaults={identityDefaults}
+                applyMode={applyMode}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </AppShell>
   );
 }
