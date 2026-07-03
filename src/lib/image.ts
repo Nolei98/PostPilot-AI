@@ -71,12 +71,18 @@ async function geminiGenerateImage(prompt: string): Promise<Buffer> {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-image",
     contents: prompt,
+    // Sem isso o modelo pode responder só com texto (recusa/descrição)
+    // em vez de gerar a imagem.
+    config: { responseModalities: ["IMAGE"] },
   });
 
   const parts = response.candidates?.[0]?.content?.parts ?? [];
   const imagePart = parts.find((p) => p.inlineData?.data);
   if (!imagePart?.inlineData?.data) {
-    throw new Error("Gemini não retornou imagem");
+    const textPart = parts.find((p) => p.text)?.text;
+    throw new Error(
+      `Gemini não retornou imagem${textPart ? ` (respondeu texto: "${textPart.slice(0, 200)}")` : ""}`
+    );
   }
   return Buffer.from(imagePart.inlineData.data, "base64");
 }
