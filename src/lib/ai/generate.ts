@@ -1,14 +1,20 @@
 // ============================================================
-// Geração do pacote de conteúdo com Claude Sonnet 4.6.
+// Geração do pacote de conteúdo — Claude Sonnet 4.6 por padrão.
 // Entrada: notícia candidata. Saída: hook + legenda + hashtags
 // + prompt de imagem, no tom dos perfis de referência.
 //
 // 💰 Custo: Sonnet 4.6 = $3/M entrada, $15/M saída.
 //    ~90 posts/mês ≈ $2-4/mês.
-// 🆓 MOCK: sem ANTHROPIC_API_KEY, gera pacote fixo baseado
-//    no título — $0, testa o pipeline inteiro.
+// 🆓 MOCK: sem ANTHROPIC_API_KEY nem GEMINI_API_KEY, gera pacote
+//    fixo baseado no título — $0, testa o pipeline inteiro.
+//
+// Gemini (alternativa): defina AI_PROVIDER=gemini e GEMINI_API_KEY
+// (console do Google AI Studio) para usar Gemini 2.5 Flash em vez
+// de Claude — tier gratuito bem maior, qualidade de texto um pouco
+// abaixo do Sonnet para esse estilo de copy.
 // ============================================================
 import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 
 export interface GenerateInput {
   title: string;
@@ -119,14 +125,82 @@ REGRAS DO PACOTE:
   return JSON.parse(textBlock.text) as PostPackage;
 }
 
+// Mesmo prompt (system + few-shot) do Claude, só o transporte muda —
+// mantém geração equivalente entre os dois providers.
+function buildSystemPrompt(lang: string): string {
+  return `Você escreve posts virais de Instagram para um perfil de notícias de IA, no estilo de @gurudoprompt, @guilhermemorais.ia e @hollyfield.ia.
+
+⚠️ IDIOMA DO POST: escreva hook, caption e hashtags em ${lang}. Os exemplos abaixo estão em português apenas para mostrar o ESTILO — reproduza o estilo, não o idioma. O image_prompt continua sempre em inglês.
+
+CARACTERÍSTICAS DO TOM:
+- Sensacionalista mas verídico: urgência, choque, FOMO — sem inventar fatos
+- Frases curtas. Parágrafos de 1-2 linhas. Emojis estratégicos (🚨🤯👇💥)
+- Fala direto com o leitor ("você", "me segue")
+- Sempre termina com CTA (seguir, comentar, compartilhar)
+
+EXEMPLOS DO ESTILO (few-shot):
+
+Exemplo 1 —
+hook: "🚨 A OpenAI acabou de MATAR os apps de fotos"
+caption: "O novo modelo de imagem da OpenAI faz em 10 segundos o que designers levam horas.\\n\\nEdição por texto. Qualquer estilo. De graça.\\n\\n🤯 E o pior (ou melhor): isso é só o começo.\\n\\nQuem trabalha com design precisa ver isso AGORA.\\n\\n👉 Me segue para não ficar para trás na revolução da IA."
+
+Exemplo 2 —
+hook: "🤖 Robôs da China já trabalham 24h sem parar"
+caption: "Enquanto você dormia, uma fábrica na China rodou a noite inteira SEM UM ÚNICO humano.\\n\\nRobôs com IA:\\n✅ Não cansam\\n✅ Não erram\\n✅ Não pedem aumento\\n\\n💥 A pergunta não é SE isso chega no Brasil. É QUANDO.\\n\\n👇 Comenta aí: seu trabalho está seguro?"
+
+REGRAS DO PACOTE:
+- hook: máx 70 caracteres, vai escrito NA IMAGEM (precisa bater o olho e entender)
+- caption: 400-900 caracteres, estilo dos exemplos, SEM hashtags no meio
+- hashtags: 6-10, misturando o idioma do post e EN, separadas por espaço
+- image_prompt: em INGLÊS, descreve uma arte impactante SEM TEXTO (o hook é sobreposto depois). Estilo: cinematic, dramatic lighting, tech/AI aesthetic.`;
+}
+
+const POST_PACKAGE_SCHEMA = {
+  type: "object",
+  properties: {
+    hook: { type: "string" },
+    caption: { type: "string" },
+    hashtags: { type: "string" },
+    image_prompt: { type: "string" },
+  },
+  required: ["hook", "caption", "hashtags", "image_prompt"],
+};
+
 /**
- * Ponto de entrada: Claude se houver key, senão mock.
+ * Geração real com Gemini 2.5 Flash — mesmo prompt do Claude, JSON
+ * garantido via responseSchema. Alternativa mais barata ao Sonnet.
+ */
+async function geminiGenerate(input: GenerateInput): Promise<PostPackage> {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+  const lang = languageName(input.language ?? "pt-BR");
+
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: `Crie o pacote de post para esta notícia:\n\nTítulo: ${input.title}\nResumo: ${input.summary ?? "(sem resumo)"}\nFonte: ${input.url}`,
+    config: {
+      systemInstruction: buildSystemPrompt(lang),
+      responseMimeType: "application/json",
+      responseSchema: POST_PACKAGE_SCHEMA,
+    },
+  });
+
+  const text = response.text;
+  if (!text) throw new Error("Resposta da geração (Gemini) sem texto");
+  return JSON.parse(text) as PostPackage;
+}
+
+/**
+ * Ponto de entrada: Gemini se AI_PROVIDER=gemini (+ GEMINI_API_KEY),
+ * Claude se houver ANTHROPIC_API_KEY, senão mock.
  */
 export async function generatePostPackage(
   input: GenerateInput
 ): Promise<PostPackage> {
+  if (process.env.AI_PROVIDER === "gemini" && process.env.GEMINI_API_KEY) {
+    return geminiGenerate(input);
+  }
   if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn("[generate] ANTHROPIC_API_KEY ausente — usando MOCK");
+    console.warn("[generate] nenhuma API key de IA — usando MOCK");
     return mockGenerate(input);
   }
   return claudeGenerate(input);
