@@ -23,7 +23,9 @@ export default async function DashboardPage() {
 
   const { data: queue } = await supabase
     .from("posts")
-    .select("*, news_items(title, url, viral_score)")
+    .select(
+      "*, news_items(title, url, viral_score, image_url, image_license_hint)"
+    )
     .eq("status", "pending_approval")
     .order("created_at", { ascending: false });
 

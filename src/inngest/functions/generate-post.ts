@@ -153,14 +153,16 @@ export const generatePost = inngest.createFunction(
     // (loop viral do produto; some no upgrade via resync)
     const watermark = quota.plan === "free";
 
-    // 4. Página de CONTEÚDO — sempre gerada (Flux/mock + hook + chip).
+    // 4. Página de CONTEÚDO — usa a imagem original da matéria quando
+    //    o feed trouxe uma (evita custo do Flux); senão Flux/mock.
     const imageUrl = await step.run("generate-content-image", async () => {
       return generatePostImage(
         pkg.image_prompt,
         pkg.hook,
         postId,
         prefs.profile,
-        watermark
+        watermark,
+        news.image_url
       );
     });
 

@@ -81,6 +81,11 @@ export interface NewsItem {
   viral_score: number | null;
   score_reason: string | null;
   status: NewsStatus;
+  // Imagem original da matéria (do feed RSS), se houver — usada como
+  // base da arte em vez do Flux. image_license_hint é heurística, não
+  // confirmação jurídica (ver src/lib/image-license.ts).
+  image_url: string | null;
+  image_license_hint: "likely_free" | "verify" | null;
   created_at: string;
 }
 
@@ -114,5 +119,8 @@ export interface Post {
 
 // Post com a notícia de origem embutida (para o dashboard)
 export interface PostWithNews extends Post {
-  news_items: Pick<NewsItem, "title" | "url" | "viral_score">;
+  news_items: Pick<
+    NewsItem,
+    "title" | "url" | "viral_score" | "image_url" | "image_license_hint"
+  >;
 }

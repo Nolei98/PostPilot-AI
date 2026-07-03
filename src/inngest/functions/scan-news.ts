@@ -9,7 +9,25 @@ import Parser from "rss-parser";
 import { inngest } from "@/inngest/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { triageNews, type TriageInput } from "@/lib/ai/triage";
+import { checkImageLicenseHint } from "@/lib/image-license";
 import type { SourceConfig } from "@/lib/types";
+
+// media:content não é um campo padrão do rss-parser — precisa
+// registrar explicitamente. enclosure já vem por padrão.
+type FeedItemWithMedia = Parser.Item & {
+  "media:content"?: { $?: { url?: string; medium?: string } } | Array<{ $?: { url?: string; medium?: string } }>;
+};
+
+/** Extrai a URL da imagem original da matéria, se o feed trouxer uma. */
+function extractImageUrl(item: FeedItemWithMedia): string | null {
+  if (item.enclosure?.url && item.enclosure.type?.startsWith("image/")) {
+    return item.enclosure.url;
+  }
+  const media = item["media:content"];
+  const mediaItem = Array.isArray(media) ? media[0] : media;
+  if (mediaItem?.$?.url) return mediaItem.$.url;
+  return null;
+}
 
 // Quantas notícias por chamada de triagem (controla tamanho do prompt)
 const TRIAGE_BATCH_SIZE = 20;
@@ -43,7 +61,10 @@ export const scanNews = inngest.createFunction(
     let totalInserted = 0;
     for (const source of sources) {
       const inserted = await step.run(`scan-${source.id}`, async () => {
-        const parser = new Parser({ timeout: 15000 });
+        const parser = new Parser({
+          timeout: 15000,
+          customFields: { item: ["media:content"] },
+        });
         let feed;
         try {
           feed = await parser.parseURL(source.feed_url);
@@ -63,16 +84,21 @@ export const scanNews = inngest.createFunction(
             const d = new Date(item.isoDate ?? item.pubDate!).getTime();
             return d >= cutoff;
           })
-          .map((item) => ({
-            source_id: source.id,
-            url: item.link!,
-            title: item.title!.slice(0, 500),
-            summary: (item.contentSnippet ?? item.content ?? "")
-              .slice(0, 1000)
-              .trim() || null,
-            published_at: item.isoDate ?? null,
-            status: "new" as const,
-          }));
+          .map((item) => {
+            const imageUrl = extractImageUrl(item);
+            return {
+              source_id: source.id,
+              url: item.link!,
+              title: item.title!.slice(0, 500),
+              summary: (item.contentSnippet ?? item.content ?? "")
+                .slice(0, 1000)
+                .trim() || null,
+              published_at: item.isoDate ?? null,
+              status: "new" as const,
+              image_url: imageUrl,
+              image_license_hint: checkImageLicenseHint(imageUrl),
+            };
+          });
 
         if (rows.length === 0) return 0;
 

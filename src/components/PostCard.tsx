@@ -149,6 +149,34 @@ export function PostCard({
           </span>
         </div>
 
+        {/* Imagem original da matéria (se a arte usou ela como base) —
+            link direto + selo heurístico. NÃO é confirmação jurídica:
+            sempre confira antes de publicar. */}
+        {post.news_items.image_url && (
+          <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2 text-micro">
+            <a
+              href={post.news_items.image_url}
+              target="_blank"
+              rel="noreferrer"
+              className="truncate text-muted transition-colors hover:text-content"
+            >
+              🖼 Imagem original da fonte ↗
+            </a>
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 ${
+                post.news_items.image_license_hint === "likely_free"
+                  ? "bg-success/15 text-success"
+                  : "bg-warning/15 text-warning"
+              }`}
+              title="Heurística por domínio — não é confirmação jurídica. Confira sempre antes de publicar."
+            >
+              {post.news_items.image_license_hint === "likely_free"
+                ? "provável uso livre"
+                : "confirmar direitos"}
+            </span>
+          </div>
+        )}
+
         {/* ===== Preview fiel ao Instagram ===== */}
         <div className="bg-black">
           {/* Header fiel ao IG: foto + nome (negrito) + @handle */}

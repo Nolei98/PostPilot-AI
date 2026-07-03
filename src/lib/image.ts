@@ -61,6 +61,29 @@ async function fluxGenerate(prompt: string): Promise<Buffer> {
 }
 
 /**
+ * Baixa a imagem original da matéria (do feed RSS) para usar como
+ * base da arte, em vez de gerar uma nova via Flux. Retorna null em
+ * qualquer falha (URL quebrada, timeout, formato inválido) — quem
+ * chama cai de volta pro Flux/mock automaticamente.
+ */
+async function fetchSourceImage(url: string): Promise<Buffer | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    // Valida que é uma imagem decodificável antes de seguir no pipeline
+    await sharp(buf).metadata();
+    return buf;
+  } catch (err) {
+    console.warn(`[image] falha ao baixar imagem da fonte (${url}):`, err);
+    return null;
+  }
+}
+
+/**
  * Mock local: fundo gradiente violeta gerado com SVG → PNG.
  * Zero custo, serve para validar a composição e o pipeline.
  */
@@ -642,15 +665,22 @@ export async function generatePostImage(
   hook: string,
   postId: string,
   profile: IgProfile = DEFAULT_PROFILE,
-  watermark = false
+  watermark = false,
+  sourceImageUrl: string | null = null
 ): Promise<string> {
-  // 1. Imagem base
-  let base: Buffer;
-  if (!process.env.FAL_KEY) {
-    console.warn("[image] FAL_KEY ausente — usando MOCK (gradiente local)");
-    base = await mockGenerateImage();
-  } else {
-    base = await fluxGenerate(imagePrompt);
+  // 1. Imagem base — prioriza a imagem original da matéria (evita
+  //    custo do Flux e mantém a foto real da notícia); cai pro
+  //    Flux/mock se não tiver imagem-fonte ou o download falhar.
+  let base: Buffer | null = sourceImageUrl
+    ? await fetchSourceImage(sourceImageUrl)
+    : null;
+  if (!base) {
+    if (!process.env.FAL_KEY) {
+      console.warn("[image] FAL_KEY ausente — usando MOCK (gradiente local)");
+      base = await mockGenerateImage();
+    } else {
+      base = await fluxGenerate(imagePrompt);
+    }
   }
 
   const supabase = createAdminClient();
