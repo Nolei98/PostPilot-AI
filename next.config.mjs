@@ -5,6 +5,15 @@ const nextConfig = {
   // problema que o Next já resolve automaticamente para o sharp).
   experimental: {
     serverComponentsExternalPackages: ["@resvg/resvg-js"],
+    // Default de Server Actions é 1MB. Fotos de celular / imagens do
+    // nano banana passam disso fácil (10-20MB) — a imagem é comprimida
+    // e redimensionada no servidor (normalizeUploadedImage, lib/image.ts)
+    // antes de compor, então aceitar o arquivo original grande aqui é
+    // seguro. Sem isso o upload cai com 413 e o client recebe resposta
+    // não-JSON.
+    serverActions: {
+      bodySizeLimit: "20mb",
+    },
   },
   // Build de produção usa pasta separada (.next-build via env no
   // script "build") para NUNCA sobrescrever o .next que o `next dev`

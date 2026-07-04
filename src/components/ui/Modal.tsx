@@ -39,9 +39,9 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="animate-modal-in w-full max-w-lg rounded-t-card border border-line bg-surface p-5 shadow-modal sm:rounded-card"
+        className="animate-modal-in flex max-h-[90vh] w-full max-w-lg flex-col rounded-t-card border border-line bg-surface p-5 shadow-modal sm:rounded-card"
       >
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex shrink-0 items-center justify-between">
           <h3 className="text-title">{title}</h3>
           <button
             onClick={onClose}
@@ -53,7 +53,10 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
             </svg>
           </button>
         </div>
-        {children}
+        {/* Conteúdo rola dentro do modal em vez de estourar a tela —
+            sem isso, modais altos (ex: editar post) ficavam com o topo
+            cortado acima da viewport, parecendo "fora do centro". */}
+        <div className="overflow-y-auto">{children}</div>
       </div>
     </div>
   );

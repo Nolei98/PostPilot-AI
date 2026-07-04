@@ -9,12 +9,7 @@ import { FirstScanKickoff } from "@/components/FirstScanKickoff";
 import { PostCard } from "@/components/PostCard";
 import { ScanButton } from "@/components/ScanButton";
 import { AppShell } from "@/components/ui/AppShell";
-import type {
-  IgProfile,
-  PostWithNews,
-  TemplateApplyMode,
-  VisualIdentity,
-} from "@/lib/types";
+import type { IgProfile, PostWithNews, VisualIdentity } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -66,9 +61,6 @@ export default async function DashboardPage() {
     bottomText: config?.tpl_bottom_text ?? "QUE MUDA TUDO",
     ctaEnabled: config?.tpl_cta_enabled ?? false,
   };
-  const applyMode: TemplateApplyMode =
-    config?.template_apply_mode === "on_approval" ? "on_approval" : "all";
-
   const posts = (queue ?? []) as PostWithNews[];
 
   return (
@@ -122,7 +114,6 @@ export default async function DashboardPage() {
                 post={post}
                 profile={profile}
                 identityDefaults={identityDefaults}
-                applyMode={applyMode}
               />
             </div>
           ))}

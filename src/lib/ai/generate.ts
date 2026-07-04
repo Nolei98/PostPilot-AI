@@ -53,7 +53,7 @@ function mockGenerate(input: GenerateInput): PostPackage {
     hashtags:
       "#inteligenciaartificial #ia #ai #tecnologia #chatgpt #inovacao #futuro #tech",
     image_prompt:
-      "futuristic AI technology concept, glowing neural network, dramatic blue and violet lighting, cinematic, high detail, no text",
+      "person interacting with technology in a modern office, natural window light, photorealistic, shot on camera, realistic textures, editorial photography, vertical 4:5 framing, no CGI look, no AI-art look, no text",
   };
 }
 
@@ -92,7 +92,7 @@ REGRAS DO PACOTE:
 - hook: máx 70 caracteres, vai escrito NA IMAGEM (precisa bater o olho e entender)
 - caption: 400-900 caracteres, estilo dos exemplos, SEM hashtags no meio
 - hashtags: 6-10, misturando o idioma do post e EN, separadas por espaço
-- image_prompt: em INGLÊS, descreve uma arte impactante SEM TEXTO (o hook é sobreposto depois). Estilo: cinematic, dramatic lighting, tech/AI aesthetic.`,
+- image_prompt: em INGLÊS, descreve uma cena SEM TEXTO (o hook é sobreposto depois), enquadrada para vertical 4:5 (feed do Instagram) — assunto principal centralizado, sem detalhes importantes perto das bordas de cima/baixo. Estilo FOTOGRÁFICO REALISTA (parece foto tirada por câmera de verdade, iluminação natural, textura real de pele/materiais) — NUNCA render 3D genérico, ilustração digital brilhante demais, simetria perfeita ou o "estilo IA" óbvio (cores neon saturadas, glow artificial, pele plástica). Termine sempre com: "photorealistic, shot on camera, natural lighting, realistic textures, editorial photography, no CGI look, no AI-art look".`,
     messages: [
       {
         role: "user",

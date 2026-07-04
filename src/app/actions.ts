@@ -222,8 +222,8 @@ export async function uploadPostImage(
   if (!postId || !file || file.size === 0) {
     return { ok: false, error: "Selecione uma imagem." };
   }
-  if (file.size > 8 * 1024 * 1024) {
-    return { ok: false, error: "Imagem muito grande (máx 8MB)." };
+  if (file.size > 20 * 1024 * 1024) {
+    return { ok: false, error: "Imagem muito grande (máx 20MB)." };
   }
 
   const { data: post } = await supabase
@@ -630,6 +630,28 @@ export async function applyTemplateToPost(
       tpl_color_text: fields.colorText,
       tpl_color_keyword_box: fields.colorKeywordBox,
     })
+    .eq("id", postId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+  revalidatePath("/ready");
+}
+
+/**
+ * Remove a contra-capa (2ª página) de um post — desfaz o que
+ * applyTemplateToPost aplicou. Mantém os campos tpl_* salvos (não
+ * apaga), então se o usuário marcar de novo, o modal reabre com os
+ * últimos valores em vez de voltar pro default de Ajustes.
+ */
+export async function removeTemplateFromPost(postId: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { error } = await supabase
+    .from("posts")
+    .update({ template_applied: false, closing_image_url: null })
     .eq("id", postId);
   if (error) throw new Error(error.message);
   revalidatePath("/");

@@ -71,9 +71,15 @@ async function geminiGenerateImage(prompt: string): Promise<Buffer> {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-image",
     contents: prompt,
-    // Sem isso o modelo pode responder só com texto (recusa/descrição)
-    // em vez de gerar a imagem.
-    config: { responseModalities: ["IMAGE"] },
+    config: {
+      // Sem isso o modelo pode responder só com texto (recusa/descrição)
+      // em vez de gerar a imagem.
+      responseModalities: ["IMAGE"],
+      // 4:5 = mesma proporção do feed do Instagram (1080x1350). Sem
+      // isso o modelo gera em 1:1 e o sharp.resize({fit:"cover"})
+      // corta as bordas depois — pedir já no formato certo evita crop.
+      imageConfig: { aspectRatio: "4:5" },
+    },
   });
 
   const parts = response.candidates?.[0]?.content?.parts ?? [];
@@ -768,6 +774,23 @@ async function composeAndUploadContentImage(
 }
 
 /**
+ * Normaliza uma imagem enviada pelo usuário antes de compor: corrige
+ * orientação EXIF (fotos de celular) e reduz para no máx 2000px no
+ * maior lado — a página final sai em 1080x1350 de qualquer forma
+ * (composeTemplate faz resize "cover"), então não há motivo pra
+ * carregar/guardar o arquivo original de 10-20MB de uma foto de
+ * celular. Isso permite aceitar uploads grandes sem rejeitar por
+ * tamanho: só compactamos em vez de bloquear.
+ */
+async function normalizeUploadedImage(buf: Buffer): Promise<Buffer> {
+  return sharp(buf)
+    .rotate()
+    .resize(2000, 2000, { fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 88 })
+    .toBuffer();
+}
+
+/**
  * Aplica uma imagem base ENVIADA PELO USUÁRIO (ex: gerada por fora
  * no Gemini/nano banana a partir do image_prompt do post) — mesmo
  * pipeline de composição (chip + hook) do fluxo automático.
@@ -779,7 +802,8 @@ export async function applyCustomBaseImage(
   watermark: boolean,
   base: Buffer
 ): Promise<string> {
-  return composeAndUploadContentImage(base, hook, postId, profile, watermark);
+  const normalized = await normalizeUploadedImage(base);
+  return composeAndUploadContentImage(normalized, hook, postId, profile, watermark);
 }
 
 /**

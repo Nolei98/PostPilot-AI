@@ -15,6 +15,7 @@ import {
   applyTemplateToPost,
   approvePost,
   discardPost,
+  removeTemplateFromPost,
   updatePost,
   uploadPostImage,
 } from "@/app/actions";
@@ -23,12 +24,7 @@ import { Card, CardActions } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Input, Textarea } from "@/components/ui/Input";
 import { CarouselPreview } from "@/components/CarouselPreview";
-import type {
-  IgProfile,
-  PostWithNews,
-  TemplateApplyMode,
-  VisualIdentity,
-} from "@/lib/types";
+import type { IgProfile, PostWithNews, VisualIdentity } from "@/lib/types";
 
 type ExitDirection = "right" | "left" | null;
 
@@ -43,12 +39,10 @@ export function PostCard({
   post,
   profile,
   identityDefaults,
-  applyMode,
 }: {
   post: PostWithNews;
   profile: IgProfile;
   identityDefaults: VisualIdentity;
-  applyMode: TemplateApplyMode;
 }) {
   const HANDLE = profile.handle;
   const [editing, setEditing] = useState(false);
@@ -61,6 +55,15 @@ export function PostCard({
   const [promptCopied, setPromptCopied] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, startUpload] = useTransition();
+  const [removingTpl, startRemoveTpl] = useTransition();
+
+  function handleToggleTemplate(checked: boolean) {
+    if (checked) {
+      openTplModal();
+    } else {
+      startRemoveTpl(() => removeTemplateFromPost(post.id));
+    }
+  }
 
   function copyImagePrompt() {
     navigator.clipboard.writeText(post.image_prompt).then(() => {
@@ -78,8 +81,12 @@ export function PostCard({
     fd.set("post_id", post.id);
     fd.set("image", file);
     startUpload(async () => {
-      const result = await uploadPostImage(fd);
-      if (!result.ok) setUploadError(result.error ?? "Falha ao subir imagem.");
+      try {
+        const result = await uploadPostImage(fd);
+        if (!result.ok) setUploadError(result.error ?? "Falha ao subir imagem.");
+      } catch {
+        setUploadError("Falha ao subir imagem. Tente um arquivo menor.");
+      }
     });
   }
 
@@ -308,34 +315,32 @@ export function PostCard({
           </div>
         </div>
 
-        {/* ===== Contra-capa (por post) ===== */}
-        {post.template_applied ? (
-          <div className="flex items-center justify-between border-t border-line px-4 py-2.5">
+        {/* ===== Contra-capa (por post) — sempre ajustável na fila ===== */}
+        <div className="flex items-center justify-between border-t border-line px-4 py-2.5">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={post.template_applied}
+              onChange={(e) => handleToggleTemplate(e.target.checked)}
+              disabled={isPending || removingTpl || exit !== null}
+              className="h-4 w-4 accent-[#7C5CFF]"
+            />
             <span className="text-caption text-muted">
-              🎨 Contra-capa adicionada (2 páginas)
+              {post.template_applied
+                ? "🎨 Contra-capa adicionada (2 páginas)"
+                : "Adicionar contra-capa"}
             </span>
+          </label>
+          {post.template_applied && (
             <button
               onClick={openTplModal}
-              disabled={isPending || exit !== null}
+              disabled={isPending || removingTpl || exit !== null}
               className="text-caption text-primary transition-colors hover:text-primary-hover disabled:opacity-50"
             >
               Editar
             </button>
-          </div>
-        ) : applyMode === "on_approval" ? (
-          <label className="flex cursor-pointer items-center gap-2 border-t border-line px-4 py-2.5">
-            <input
-              type="checkbox"
-              checked={tplOpen}
-              onChange={(e) => (e.target.checked ? openTplModal() : setTplOpen(false))}
-              disabled={isPending || exit !== null}
-              className="h-4 w-4 accent-[#7C5CFF]"
-            />
-            <span className="text-caption text-muted">
-              Adicionar contra-capa
-            </span>
-          </label>
-        ) : null}
+          )}
+        </div>
 
         {/* ===== Ações — 1 clique, sem manual ===== */}
         <CardActions>
