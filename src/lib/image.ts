@@ -104,7 +104,11 @@ async function pollinationsGenerate(prompt: string): Promise<Buffer> {
   const seed = Math.floor(Math.random() * 1_000_000);
   const url =
     `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
-    `?width=${WIDTH}&height=${HEIGHT}&model=flux&seed=${seed}&nologo=true`;
+    `?width=${WIDTH}&height=${HEIGHT}&model=flux&seed=${seed}` +
+    // nologo: sem marca d'água deles | private: não vaza no feed público
+    // deles | enhance=false: mantém o prompt como veio (o enhance reescreve
+    // via LLM deles e quebra a consistência do wrapper de realismo)
+    `&nologo=true&private=true&enhance=false`;
 
   const apiKey = process.env.POLLINATIONS_API_KEY;
   const res = await fetch(url, {
