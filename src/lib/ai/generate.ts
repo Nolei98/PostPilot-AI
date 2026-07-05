@@ -53,7 +53,7 @@ function mockGenerate(input: GenerateInput): PostPackage {
     hashtags:
       "#inteligenciaartificial #ia #ai #tecnologia #chatgpt #inovacao #futuro #tech",
     image_prompt:
-      "person interacting with technology in a modern office, natural window light, photorealistic, shot on camera, realistic textures, editorial photography, vertical 4:5 framing, no CGI look, no AI-art look, no text",
+      "person interacting with technology in a modern office, vertical 4:5 portrait aspect ratio (1080x1350), candid documentary photograph, shot on camera, 85mm lens, shallow depth of field, natural window light, realistic skin texture with visible pores, muted natural color grading, fine film grain, photorealistic, no CGI look, no AI-art look, no text",
   };
 }
 

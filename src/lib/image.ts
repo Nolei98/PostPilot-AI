@@ -37,6 +37,23 @@ const DEFAULT_PROFILE: IgProfile = {
 };
 
 /**
+ * Reforço de realismo aplicado a QUALQUER image_prompt antes de mandar
+ * pra qualquer provider (Flux, Gemini, Pollinations) — camada de
+ * segurança independente do LLM que gerou o prompt (Claude, Gemini ou
+ * um texto editado à mão em Ajustes). Só complementa se o prompt ainda
+ * não menciona "photorealistic" (o texto do Claude/Gemini já termina
+ * com o wrapper completo — não duplica).
+ */
+const REALISM_SUFFIX =
+  "candid documentary photograph, shot on camera, 85mm lens, shallow depth of field, " +
+  "natural window light, realistic skin texture with visible pores, muted natural color " +
+  "grading, fine film grain, photorealistic, no CGI look, no AI-art look";
+
+function withRealismSuffix(prompt: string): string {
+  return /photorealistic/i.test(prompt) ? prompt : `${prompt}, ${REALISM_SUFFIX}`;
+}
+
+/**
  * Gera a imagem base via Flux (Fal.ai). Retorna o buffer PNG/JPEG.
  */
 async function fluxGenerate(prompt: string): Promise<Buffer> {
@@ -739,16 +756,17 @@ export async function generatePostImage(
   let base: Buffer | null = sourceImageUrl
     ? await fetchSourceImage(sourceImageUrl)
     : null;
+  const prompt = withRealismSuffix(imagePrompt);
   if (!base && imageProvider === "gemini" && process.env.GEMINI_API_KEY) {
     try {
-      base = await geminiGenerateImage(imagePrompt);
+      base = await geminiGenerateImage(prompt);
     } catch (err) {
       console.warn("[image] Gemini falhou ao gerar imagem, caindo pro próximo provider:", err);
     }
   }
   if (!base && imageProvider === "pollinations") {
     try {
-      base = await pollinationsGenerate(imagePrompt);
+      base = await pollinationsGenerate(prompt);
     } catch (err) {
       console.warn("[image] Pollinations falhou ao gerar imagem, caindo pro próximo provider:", err);
     }
@@ -758,7 +776,7 @@ export async function generatePostImage(
       console.warn("[image] FAL_KEY ausente — usando MOCK (gradiente local)");
       base = await mockGenerateImage();
     } else {
-      base = await fluxGenerate(imagePrompt);
+      base = await fluxGenerate(prompt);
     }
   }
 
