@@ -5,7 +5,8 @@
 // Backdrop com blur, entrada animada, fecha no ESC / clique fora.
 // Mobile: sobe como sheet do rodapé. Desktop: centralizado.
 // ============================================================
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 interface ModalProps {
   open: boolean;
@@ -27,9 +28,18 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  // Só monta o portal no client — document não existe durante o SSR.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  return (
+  if (!open || !mounted) return null;
+
+  // Portal pro <body>: renderizar o modal dentro do card (que tem
+  // animate-fade-up) faz o card virar containing block do `fixed`
+  // assim que a animação termina (transform: translateY(0) != none),
+  // descentralizando o modal em telas roladas. Fora da árvore do
+  // card, position: fixed sempre centraliza contra a viewport.
+  return createPortal(
     <div
       className="animate-backdrop-in fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
       onClick={onClose}
@@ -58,6 +68,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
             cortado acima da viewport, parecendo "fora do centro". */}
         <div className="overflow-y-auto">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
