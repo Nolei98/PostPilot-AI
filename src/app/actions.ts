@@ -348,10 +348,16 @@ export async function saveTelegramChatId(formData: FormData) {
   const chatId = String(formData.get("telegram_chat_id") ?? "").trim() || null;
   const postLanguage =
     String(formData.get("post_language") ?? "").trim() || "pt-BR";
+  const textProviderRaw = formData.get("text_provider");
   const textProvider =
-    formData.get("text_provider") === "claude" ? "claude" : "gemini";
+    textProviderRaw === "claude" || textProviderRaw === "pollinations"
+      ? textProviderRaw
+      : "gemini";
+  const imageProviderRaw = formData.get("image_provider");
   const imageProvider =
-    formData.get("image_provider") === "fal" ? "fal" : "gemini";
+    imageProviderRaw === "fal" || imageProviderRaw === "pollinations"
+      ? imageProviderRaw
+      : "gemini";
 
   // upsert: cria a config se não existir, atualiza se existir
   const { error } = await supabase.from("notification_configs").upsert(

@@ -94,6 +94,31 @@ async function geminiGenerateImage(prompt: string): Promise<Buffer> {
 }
 
 /**
+ * Gera a imagem base via Pollinations.ai — sem key, sem custo.
+ * width/height exatos evitam crop (mesma lógica do Gemini acima).
+ * Sem key/registro a imagem pode vir com marca d'água deles; se
+ * POLLINATIONS_API_KEY estiver setada, manda como Bearer pra tirar
+ * a marca e usar o rate limit maior (ver docs.pollinations.ai).
+ */
+async function pollinationsGenerate(prompt: string): Promise<Buffer> {
+  const seed = Math.floor(Math.random() * 1_000_000);
+  const url =
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
+    `?width=${WIDTH}&height=${HEIGHT}&model=flux&seed=${seed}&nologo=true`;
+
+  const apiKey = process.env.POLLINATIONS_API_KEY;
+  const res = await fetch(url, {
+    headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+  });
+  if (!res.ok) {
+    throw new Error(`Pollinations respondeu ${res.status}`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  await sharp(buf).metadata(); // valida que veio uma imagem de verdade (não erro em texto/html)
+  return buf;
+}
+
+/**
  * Baixa a imagem original da matéria (do feed RSS) para usar como
  * base da arte, em vez de gerar uma nova via Flux. Retorna null em
  * qualquer falha (URL quebrada, timeout, formato inválido) — quem
@@ -700,12 +725,13 @@ export async function generatePostImage(
   profile: IgProfile = DEFAULT_PROFILE,
   watermark = false,
   sourceImageUrl: string | null = null,
-  imageProvider: "fal" | "gemini" = "gemini"
+  imageProvider: "fal" | "gemini" | "pollinations" = "gemini"
 ): Promise<string> {
   // 1. Imagem base — prioriza a imagem original da matéria (evita
   //    custo de gerar do zero e mantém a foto real da notícia); cai
-  //    pro provider escolhido em Ajustes (Gemini ou Fal.ai) se não
-  //    tiver imagem-fonte ou o download falhar; MOCK se faltar key.
+  //    pro provider escolhido em Ajustes (Gemini, Fal.ai ou
+  //    Pollinations) se não tiver imagem-fonte ou o download falhar;
+  //    MOCK se faltar key (Fal).
   let base: Buffer | null = sourceImageUrl
     ? await fetchSourceImage(sourceImageUrl)
     : null;
@@ -713,7 +739,14 @@ export async function generatePostImage(
     try {
       base = await geminiGenerateImage(imagePrompt);
     } catch (err) {
-      console.warn("[image] Gemini falhou ao gerar imagem, caindo pro Fal/mock:", err);
+      console.warn("[image] Gemini falhou ao gerar imagem, caindo pro próximo provider:", err);
+    }
+  }
+  if (!base && imageProvider === "pollinations") {
+    try {
+      base = await pollinationsGenerate(imagePrompt);
+    } catch (err) {
+      console.warn("[image] Pollinations falhou ao gerar imagem, caindo pro próximo provider:", err);
     }
   }
   if (!base) {

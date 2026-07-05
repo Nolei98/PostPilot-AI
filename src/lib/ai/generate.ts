@@ -92,7 +92,7 @@ REGRAS DO PACOTE:
 - hook: máx 70 caracteres, vai escrito NA IMAGEM (precisa bater o olho e entender)
 - caption: 400-900 caracteres, estilo dos exemplos, SEM hashtags no meio
 - hashtags: 6-10, misturando o idioma do post e EN, separadas por espaço
-- image_prompt: em INGLÊS, descreve uma cena SEM TEXTO (o hook é sobreposto depois), enquadrada para vertical 4:5 (feed do Instagram) — assunto principal centralizado, sem detalhes importantes perto das bordas de cima/baixo. Estilo FOTOGRÁFICO REALISTA (parece foto tirada por câmera de verdade, iluminação natural, textura real de pele/materiais) — NUNCA render 3D genérico, ilustração digital brilhante demais, simetria perfeita ou o "estilo IA" óbvio (cores neon saturadas, glow artificial, pele plástica). Termine sempre com: "photorealistic, shot on camera, natural lighting, realistic textures, editorial photography, no CGI look, no AI-art look".`,
+- image_prompt: em INGLÊS, descreve uma cena SEM TEXTO (o hook é sobreposto depois), enquadrada para vertical 4:5 (feed do Instagram) — assunto principal centralizado, sem detalhes importantes perto das bordas de cima/baixo. Estilo FOTOGRÁFICO REALISTA (parece foto tirada por câmera de verdade, iluminação natural, textura real de pele/materiais) — NUNCA render 3D genérico, ilustração digital brilhante demais, simetria perfeita ou o "estilo IA" óbvio (cores neon saturadas, glow artificial, pele plástica). Termine SEMPRE com, nesta ordem exata: "vertical 4:5 portrait aspect ratio (1080x1350), photorealistic, shot on camera, natural lighting, realistic textures, editorial photography, no CGI look, no AI-art look". O aspect ratio precisa vir escrito no prompt final porque ele também é colado manualmente em apps de geração (Gemini/nano banana) que não recebem parâmetro de tamanho separado — só o texto.`,
     messages: [
       {
         role: "user",
@@ -152,7 +152,7 @@ REGRAS DO PACOTE:
 - hook: máx 70 caracteres, vai escrito NA IMAGEM (precisa bater o olho e entender)
 - caption: 400-900 caracteres, estilo dos exemplos, SEM hashtags no meio
 - hashtags: 6-10, misturando o idioma do post e EN, separadas por espaço
-- image_prompt: em INGLÊS, descreve uma arte impactante SEM TEXTO (o hook é sobreposto depois). Estilo: cinematic, dramatic lighting, tech/AI aesthetic.`;
+- image_prompt: em INGLÊS, descreve uma arte impactante SEM TEXTO (o hook é sobreposto depois), enquadrada para vertical 4:5 (feed do Instagram). Estilo: cinematic, dramatic lighting, tech/AI aesthetic. Termine SEMPRE com: "vertical 4:5 portrait aspect ratio (1080x1350)" — precisa vir escrito no prompt porque ele também é colado manualmente em apps de geração (Gemini/nano banana) sem parâmetro de tamanho.`;
 }
 
 const POST_PACKAGE_SCHEMA = {
@@ -190,14 +190,67 @@ async function geminiGenerate(input: GenerateInput): Promise<PostPackage> {
 }
 
 /**
+ * Geração via Pollinations.ai (text.pollinations.ai) — grátis, sem
+ * key (modelo "openai" = GPT-OSS 20B, tier anonymous). Mesmo
+ * system prompt do Claude/Gemini, só o transporte muda.
+ * A resposta vem com um campo "reasoning" (chain-of-thought) que
+ * é ignorado — só o "content" (JSON do pacote) importa. hashtags
+ * às vezes volta como array em vez de string — normaliza aqui.
+ */
+async function pollinationsGenerate(input: GenerateInput): Promise<PostPackage> {
+  const lang = languageName(input.language ?? "pt-BR");
+  const apiKey = process.env.POLLINATIONS_API_KEY;
+
+  const res = await fetch("https://text.pollinations.ai/openai", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(apiKey && { Authorization: `Bearer ${apiKey}` }),
+    },
+    body: JSON.stringify({
+      model: "openai",
+      messages: [
+        { role: "system", content: buildSystemPrompt(lang) },
+        {
+          role: "user",
+          content: `Crie o pacote de post para esta notícia:\n\nTítulo: ${input.title}\nResumo: ${input.summary ?? "(sem resumo)"}\nFonte: ${input.url}\n\nResponda APENAS com o JSON do pacote (hook, caption, hashtags, image_prompt), sem texto antes ou depois.`,
+        },
+      ],
+      response_format: { type: "json_object" },
+    }),
+  });
+  if (!res.ok) throw new Error(`Pollinations respondeu ${res.status}`);
+
+  const data = await res.json();
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw new Error("Pollinations não retornou conteúdo");
+
+  const parsed = JSON.parse(content) as {
+    hook: string;
+    caption: string;
+    hashtags: string | string[];
+    image_prompt: string;
+  };
+  return {
+    ...parsed,
+    hashtags: Array.isArray(parsed.hashtags)
+      ? parsed.hashtags.join(" ")
+      : parsed.hashtags,
+  };
+}
+
+/**
  * Ponto de entrada: usa o provider escolhido pelo usuário em Ajustes
  * (text_provider). Cai pro Claude se pedir Gemini sem GEMINI_API_KEY,
  * e pro MOCK se não tiver nenhuma key configurada.
  */
 export async function generatePostPackage(
   input: GenerateInput,
-  provider: "claude" | "gemini" = "gemini"
+  provider: "claude" | "gemini" | "pollinations" = "gemini"
 ): Promise<PostPackage> {
+  if (provider === "pollinations") {
+    return pollinationsGenerate(input);
+  }
   if (provider === "gemini" && process.env.GEMINI_API_KEY) {
     return geminiGenerate(input);
   }

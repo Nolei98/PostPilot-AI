@@ -97,10 +97,14 @@ export const generatePost = inngest.createFunction(
       };
       const applyMode: TemplateApplyMode =
         data?.template_apply_mode === "on_approval" ? "on_approval" : "all";
-      const textProvider: "claude" | "gemini" =
-        data?.text_provider === "claude" ? "claude" : "gemini";
-      const imageProvider: "fal" | "gemini" =
-        data?.image_provider === "fal" ? "fal" : "gemini";
+      const textProvider: "claude" | "gemini" | "pollinations" =
+        data?.text_provider === "claude" || data?.text_provider === "pollinations"
+          ? data.text_provider
+          : "gemini";
+      const imageProvider: "fal" | "gemini" | "pollinations" =
+        data?.image_provider === "fal" || data?.image_provider === "pollinations"
+          ? data.image_provider
+          : "gemini";
       return {
         language: (data?.post_language as string | undefined) ?? "pt-BR",
         profile,

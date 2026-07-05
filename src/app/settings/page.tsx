@@ -326,6 +326,7 @@ export default async function SettingsPage() {
               >
                 <option value="gemini">Gemini (Google AI Studio)</option>
                 <option value="claude">Claude (Anthropic)</option>
+                <option value="pollinations">Pollinations.ai (grátis, sem key)</option>
               </select>
             </div>
             <div className="space-y-1.5">
@@ -340,6 +341,7 @@ export default async function SettingsPage() {
               >
                 <option value="gemini">Gemini (Google AI Studio)</option>
                 <option value="fal">Fal.ai (Flux)</option>
+                <option value="pollinations">Pollinations.ai (grátis, sem key)</option>
               </select>
             </div>
             <p className="text-caption text-subtle">
