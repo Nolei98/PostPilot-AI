@@ -46,6 +46,7 @@ export function PostCard({
 }) {
   const HANDLE = profile.handle;
   const [editing, setEditing] = useState(false);
+  const [hook, setHook] = useState(post.hook);
   const [caption, setCaption] = useState(post.caption);
   const [hashtags, setHashtags] = useState(post.hashtags);
   const [expanded, setExpanded] = useState(false);
@@ -384,6 +385,16 @@ export function PostCard({
       <Modal open={editing} onClose={() => setEditing(false)} title="Editar post">
         <div className="space-y-4">
           <Textarea
+            label="Título (aparece NA IMAGEM)"
+            rows={2}
+            value={hook}
+            onChange={(e) => setHook(e.target.value)}
+          />
+          <p className="-mt-2 text-micro text-subtle">
+            Ao salvar, a imagem é re-renderizada com o novo título — sem
+            custo (não busca foto/gera de novo, só troca o texto).
+          </p>
+          <Textarea
             label="Legenda"
             rows={8}
             value={caption}
@@ -402,7 +413,7 @@ export function PostCard({
               loading={isPending}
               onClick={() =>
                 startTransition(async () => {
-                  await updatePost(post.id, { caption, hashtags });
+                  await updatePost(post.id, { hook, caption, hashtags });
                   setEditing(false);
                 })
               }
@@ -412,6 +423,7 @@ export function PostCard({
             <Button
               variant="ghost"
               onClick={() => {
+                setHook(post.hook);
                 setCaption(post.caption);
                 setHashtags(post.hashtags);
                 setEditing(false);

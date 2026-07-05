@@ -187,16 +187,54 @@ export async function discardPost(postId: string) {
   revalidatePath("/");
 }
 
-/** Salva edições de legenda/hashtags feitas na fila */
+/**
+ * Salva edições de título (hook)/legenda/hashtags feitas na fila.
+ * Se o hook mudou, re-renderiza a imagem em cima da base salva —
+ * sem custo (não busca foto/gera de novo, só refaz o texto no SVG).
+ */
 export async function updatePost(
   postId: string,
-  fields: { caption: string; hashtags: string }
+  fields: { hook: string; caption: string; hashtags: string }
 ) {
   const supabase = createClient();
-  const { error } = await supabase
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { data: post } = await supabase
     .from("posts")
-    .update({ caption: fields.caption, hashtags: fields.hashtags })
-    .eq("id", postId);
+    .select("hook")
+    .eq("id", postId)
+    .single();
+
+  const updates: { hook: string; caption: string; hashtags: string; image_url?: string } = {
+    hook: fields.hook,
+    caption: fields.caption,
+    hashtags: fields.hashtags,
+  };
+
+  if (post && post.hook !== fields.hook) {
+    const { data: config } = await supabase
+      .from("notification_configs")
+      .select("ig_handle, ig_display_name, ig_avatar_url, ig_verified, show_profile_chip")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const profile: IgProfile = {
+      handle: config?.ig_handle ?? "seuperfil.ia",
+      displayName: config?.ig_display_name ?? "Seu Perfil de IA",
+      avatarUrl: config?.ig_avatar_url ?? null,
+      verified: config?.ig_verified ?? false,
+      showProfileChip: config?.show_profile_chip ?? true,
+    };
+    const { getUserPlan } = await import("@/lib/subscription");
+    const watermark = (await getUserPlan(user.id)) === "free";
+    const { regenerateContentImage } = await import("@/lib/image");
+    const newImageUrl = await regenerateContentImage(postId, fields.hook, profile, watermark);
+    if (newImageUrl) updates.image_url = newImageUrl;
+  }
+
+  const { error } = await supabase.from("posts").update(updates).eq("id", postId);
   if (error) throw new Error(error.message);
   revalidatePath("/");
   revalidatePath("/ready");
