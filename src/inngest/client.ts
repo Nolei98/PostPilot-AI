@@ -7,8 +7,10 @@ import { EventSchemas, Inngest } from "inngest";
 
 // Eventos que trafegam entre os jobs (tipados)
 type Events = {
-  // Disparado pelo cron ou manualmente — inicia a varredura de feeds
-  "news/scan.requested": { data: Record<string, never> };
+  // Disparado pelo cron ou manualmente — inicia a varredura de feeds.
+  // scanRunId só vem no disparo manual (botão "Varrer agora") — usado
+  // pra reportar o status de volta na tabela scan_runs.
+  "news/scan.requested": { data: { scanRunId?: string } };
   // Uma notícia passou do threshold e virou candidata → gerar post
   "post/generate.requested": {
     data: { newsItemId: string; userId: string };

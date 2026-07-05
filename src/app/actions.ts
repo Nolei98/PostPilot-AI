@@ -331,19 +331,65 @@ export async function markAsPosted(postId: string) {
   revalidatePath("/ready");
 }
 
-/** Dispara a varredura de fontes manualmente (botão no dashboard) */
-export async function triggerScan(): Promise<{ ok: boolean; error?: string }> {
+/**
+ * Dispara a varredura de fontes manualmente (botão no dashboard).
+ * Cria uma linha em scan_runs ANTES de mandar o evento — o job (que
+ * roda em background no Inngest) atualiza essa linha quando termina,
+ * e o botão faz polling nela (getScanRunStatus) pra mostrar
+ * "rodando..." → "nada novo" ou "N encontrados, gerando...".
+ */
+export async function triggerScan(): Promise<{
+  ok: boolean;
+  error?: string;
+  scanRunId?: string;
+}> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+
   try {
-    await inngest.send({ name: "news/scan.requested", data: {} });
-    return { ok: true };
+    const { data: run, error } = await supabase
+      .from("scan_runs")
+      .insert({ requested_by: user.id, status: "running" })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+
+    await inngest.send({
+      name: "news/scan.requested",
+      data: { scanRunId: run.id as string },
+    });
+    return { ok: true, scanRunId: run.id as string };
   } catch (err) {
-    console.error("[triggerScan] falha ao enviar evento para o Inngest:", err);
+    console.error("[triggerScan] falha ao iniciar varredura:", err);
     return {
       ok: false,
       error:
         "Não foi possível iniciar a varredura. Verifique se INNGEST_EVENT_KEY e INNGEST_SIGNING_KEY estão configuradas.",
     };
   }
+}
+
+/** Status de uma varredura disparada manualmente — usado pelo botão via polling */
+export async function getScanRunStatus(scanRunId: string): Promise<{
+  status: "running" | "done" | "error";
+  candidates?: number;
+  errorMessage?: string;
+}> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("scan_runs")
+    .select("status, candidates, error_message")
+    .eq("id", scanRunId)
+    .maybeSingle();
+  if (error || !data) return { status: "error", errorMessage: "Varredura não encontrada." };
+  return {
+    status: data.status as "running" | "done" | "error",
+    candidates: data.candidates ?? undefined,
+    errorMessage: data.error_message ?? undefined,
+  };
 }
 
 /** Adiciona uma fonte RSS */

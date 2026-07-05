@@ -40,22 +40,57 @@ export const scanNews = inngest.createFunction(
     { cron: "0 */3 * * *" }, // a cada 3 horas
     { event: "news/scan.requested" }, // ou disparo manual
   ],
-  async ({ step }) => {
+  async ({ event, step }) => {
     const supabase = createAdminClient();
+    // Só presente no disparo manual (botão "Varrer agora") — usado pra
+    // reportar o resultado de volta na tabela scan_runs (o cron não usa;
+    // o trigger de cron nem tem campo "data" tipado do jeito do evento).
+    const scanRunId = (event as { data?: { scanRunId?: string } })?.data
+      ?.scanRunId;
 
-    // 1. Busca todas as fontes ativas (de todos os usuários)
-    const sources = await step.run("fetch-sources", async () => {
-      const { data, error } = await supabase
-        .from("source_configs")
-        .select("*")
-        .eq("enabled", true);
-      if (error) throw new Error(`Erro ao buscar fontes: ${error.message}`);
-      return (data ?? []) as SourceConfig[];
-    });
-
-    if (sources.length === 0) {
-      return { message: "Nenhuma fonte ativa configurada." };
+    async function finishScanRun(result: {
+      sources: number;
+      inserted: number;
+      triaged: number;
+      candidates: number;
+    }) {
+      if (scanRunId) {
+        await step.run("update-scan-run", async () => {
+          await supabase
+            .from("scan_runs")
+            .update({
+              status: "done",
+              sources: result.sources,
+              inserted: result.inserted,
+              triaged: result.triaged,
+              candidates: result.candidates,
+              finished_at: new Date().toISOString(),
+            })
+            .eq("id", scanRunId);
+        });
+      }
+      return result;
     }
+
+    try {
+      // 1. Busca todas as fontes ativas (de todos os usuários)
+      const sources = await step.run("fetch-sources", async () => {
+        const { data, error } = await supabase
+          .from("source_configs")
+          .select("*")
+          .eq("enabled", true);
+        if (error) throw new Error(`Erro ao buscar fontes: ${error.message}`);
+        return (data ?? []) as SourceConfig[];
+      });
+
+      if (sources.length === 0) {
+        return await finishScanRun({
+          sources: 0,
+          inserted: 0,
+          triaged: 0,
+          candidates: 0,
+        });
+      }
 
     // 2. Para cada fonte: baixa o feed e insere notícias novas
     let totalInserted = 0;
@@ -195,11 +230,26 @@ export const scanNews = inngest.createFunction(
       }
     }
 
-    return {
-      sources: sources.length,
-      inserted: totalInserted,
-      triaged: pending.length,
-      candidates,
-    };
+      return await finishScanRun({
+        sources: sources.length,
+        inserted: totalInserted,
+        triaged: pending.length,
+        candidates,
+      });
+    } catch (err) {
+      if (scanRunId) {
+        await step.run("mark-scan-run-error", async () => {
+          await supabase
+            .from("scan_runs")
+            .update({
+              status: "error",
+              error_message: err instanceof Error ? err.message : String(err),
+              finished_at: new Date().toISOString(),
+            })
+            .eq("id", scanRunId);
+        });
+      }
+      throw err;
+    }
   }
 );
