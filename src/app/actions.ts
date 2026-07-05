@@ -355,9 +355,11 @@ export async function saveTelegramChatId(formData: FormData) {
       : "gemini";
   const imageProviderRaw = formData.get("image_provider");
   const imageProvider =
-    imageProviderRaw === "fal" || imageProviderRaw === "pollinations"
+    imageProviderRaw === "fal" ||
+    imageProviderRaw === "pollinations" ||
+    imageProviderRaw === "gemini"
       ? imageProviderRaw
-      : "gemini";
+      : "stock";
 
   // upsert: cria a config se não existir, atualiza se existir
   const { error } = await supabase.from("notification_configs").upsert(

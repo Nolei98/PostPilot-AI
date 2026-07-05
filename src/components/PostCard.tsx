@@ -209,6 +209,15 @@ export function PostCard({
           </div>
         )}
 
+        {/* Foto real de banco (Pexels/Unsplash) usada na página de
+            conteúdo — Unsplash exige atribuição visível; Pexels não,
+            mas mostramos o crédito dos dois por transparência. */}
+        {post.stock_photo_credit && (
+          <div className="border-b border-line px-4 py-2 text-micro text-subtle">
+            📷 {post.stock_photo_credit}
+          </div>
+        )}
+
         {/* Prompt de imagem (gerado junto com o post) — copie e cole no
             Gemini/nano banana pra criar a arte manualmente, depois suba
             o resultado aqui pra substituir a imagem atual do post. */}

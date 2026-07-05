@@ -20,6 +20,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { IgProfile, VisualIdentity } from "@/lib/types";
 import { FONT_FAMILY } from "@/lib/font-data";
 import { rasterizeSvg } from "@/lib/svg-render";
+import { searchStockPhoto, fetchStockPhotoBuffer } from "@/lib/stock-photos";
 
 /** font-family usada em todos os <text> do SVG — ver font-data.ts */
 const TEXT_FONT = FONT_FAMILY;
@@ -746,17 +747,61 @@ export async function generatePostImage(
   profile: IgProfile = DEFAULT_PROFILE,
   watermark = false,
   sourceImageUrl: string | null = null,
-  imageProvider: "fal" | "gemini" | "pollinations" = "gemini"
+  imageProvider: "fal" | "gemini" | "pollinations" | "stock" = "stock",
+  userId: string | null = null
 ): Promise<string> {
   // 1. Imagem base — prioriza a imagem original da matéria (evita
   //    custo de gerar do zero e mantém a foto real da notícia); cai
-  //    pro provider escolhido em Ajustes (Gemini, Fal.ai ou
-  //    Pollinations) se não tiver imagem-fonte ou o download falhar;
+  //    pro provider escolhido em Ajustes (fotos reais, Gemini, Fal.ai
+  //    ou Pollinations) se não tiver imagem-fonte ou o download falhar;
   //    MOCK se faltar key (Fal).
   let base: Buffer | null = sourceImageUrl
     ? await fetchSourceImage(sourceImageUrl)
     : null;
   const prompt = withRealismSuffix(imagePrompt);
+
+  // 'stock': foto real de pessoa de verdade (Pexels → Unsplash), sem
+  // os artefatos de rosto/mãos da IA. Sem resultado (sem key ou sem
+  // match), cai pra IA de ilustração SEM pessoas — nunca gera rosto.
+  if (!base && imageProvider === "stock") {
+    try {
+      const supabase = createAdminClient();
+      const excludeIds = new Set<string>();
+      if (userId) {
+        const { data } = await supabase
+          .from("posts")
+          .select("stock_photo_id")
+          .eq("user_id", userId)
+          .not("stock_photo_id", "is", null);
+        for (const row of data ?? []) {
+          if (row.stock_photo_id) excludeIds.add(row.stock_photo_id);
+        }
+      }
+      const photo = await searchStockPhoto(imagePrompt, excludeIds);
+      if (photo) {
+        base = await fetchStockPhotoBuffer(photo);
+        await supabase
+          .from("posts")
+          .update({ stock_photo_id: photo.id, stock_photo_credit: photo.credit })
+          .eq("id", postId);
+      } else {
+        console.warn(
+          "[image] Nenhuma foto real encontrada (sem key ou sem match) — caindo pra IA (ilustração sem pessoas)"
+        );
+      }
+    } catch (err) {
+      console.warn("[image] Busca de foto real falhou, caindo pra IA:", err);
+    }
+    if (!base) {
+      try {
+        base = await pollinationsGenerate(
+          withRealismSuffix(`${imagePrompt}, empty scene, no people, abstract tech illustration`)
+        );
+      } catch (err) {
+        console.warn("[image] Pollinations (fallback do stock) falhou:", err);
+      }
+    }
+  }
   if (!base && imageProvider === "gemini" && process.env.GEMINI_API_KEY) {
     try {
       base = await geminiGenerateImage(prompt);

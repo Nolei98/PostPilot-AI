@@ -331,23 +331,27 @@ export default async function SettingsPage() {
             </div>
             <div className="space-y-1.5">
               <label htmlFor="image_provider" className="block text-caption text-muted">
-                Provider de IA — imagem (arte do post)
+                Provider de imagem (arte do post)
               </label>
               <select
                 id="image_provider"
                 name="image_provider"
-                defaultValue={notifConfig?.image_provider ?? "gemini"}
+                defaultValue={notifConfig?.image_provider ?? "stock"}
                 className={fieldClasses}
               >
+                <option value="stock">Fotos reais (Pexels/Unsplash) — recomendado</option>
                 <option value="gemini">Gemini (Google AI Studio)</option>
                 <option value="fal">Fal.ai (Flux)</option>
                 <option value="pollinations">Pollinations.ai (grátis, sem key)</option>
               </select>
             </div>
             <p className="text-caption text-subtle">
-              Se o provider escolhido não tiver a chave configurada no
-              servidor, o app cai automaticamente pro outro disponível (ou
-              MOCK, sem custo).
+              &quot;Fotos reais&quot; busca uma foto de pessoa de verdade no
+              banco (sem os artefatos de IA em rosto/mãos) e aplica o
+              branding por cima; sem resultado, cai pra IA (ilustração sem
+              pessoas). Se o provider escolhido não tiver a chave
+              configurada no servidor, o app cai automaticamente pro outro
+              disponível (ou MOCK, sem custo).
             </p>
             <p className="text-caption text-subtle">
               1. Crie um bot com o @BotFather e configure o token no servidor

@@ -2,7 +2,7 @@
 
 > Seu perfil de IA posta sozinho. Você só aprova.
 
-Monitora notícias de IA via RSS, classifica potencial viral (Claude Haiku), gera post pronto — legenda no tom viral (Claude Sonnet) + arte com template de marca (Flux/Fal.ai + sharp) — e entrega para aprovação e publicação manual no Instagram (Plano B, sem Graph API).
+Monitora notícias de IA via RSS, classifica potencial viral (Claude Haiku), gera post pronto — legenda no tom viral (Claude Sonnet) + arte com template de marca (foto real de banco — Pexels/Unsplash — ou Flux/Gemini/Pollinations como fallback + sharp) — e entrega para aprovação e publicação manual no Instagram (Plano B, sem Graph API).
 
 ## Rodando localmente
 
@@ -58,7 +58,9 @@ Em **Settings → Environment Variables**, adicione:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase → Settings → API |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Supabase → Settings → API |
 | `ANTHROPIC_API_KEY` | p/ IA real | console.anthropic.com |
-| `FAL_KEY` | p/ imagem real | fal.ai/dashboard |
+| `PEXELS_API_KEY` | p/ fotos reais (default) | pexels.com/api |
+| `UNSPLASH_ACCESS_KEY` | fallback das fotos reais | unsplash.com/developers |
+| `FAL_KEY` | p/ imagem gerada por IA | fal.ai/dashboard |
 | `TELEGRAM_BOT_TOKEN` | p/ notificação | @BotFather no Telegram |
 | `INNGEST_EVENT_KEY` | ✅ produção | app.inngest.com → Manage → Event Keys |
 | `INNGEST_SIGNING_KEY` | ✅ produção | app.inngest.com → Manage → Signing Key |
@@ -95,7 +97,8 @@ supabase/seed.sql                   # fontes RSS iniciais
 src/middleware.ts                   # auth guard (Supabase SSR)
 src/lib/ai/triage.ts                # Haiku: score viral (+ mock)
 src/lib/ai/generate.ts              # Sonnet: pacote do post (+ mock)
-src/lib/image.ts                    # Flux + template de marca + upload
+src/lib/stock-photos.ts             # fotos reais (Pexels/Unsplash) — provider default
+src/lib/image.ts                    # foto real/Flux/Gemini/Pollinations + template de marca + upload
 src/lib/telegram.ts                 # notificações
 src/inngest/functions/scan-news.ts  # cron: RSS → dedupe → triagem
 src/inngest/functions/generate-post.ts # texto → arte → pending_approval

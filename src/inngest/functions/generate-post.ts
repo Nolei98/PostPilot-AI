@@ -101,10 +101,12 @@ export const generatePost = inngest.createFunction(
         data?.text_provider === "claude" || data?.text_provider === "pollinations"
           ? data.text_provider
           : "gemini";
-      const imageProvider: "fal" | "gemini" | "pollinations" =
-        data?.image_provider === "fal" || data?.image_provider === "pollinations"
+      const imageProvider: "fal" | "gemini" | "pollinations" | "stock" =
+        data?.image_provider === "fal" ||
+        data?.image_provider === "pollinations" ||
+        data?.image_provider === "gemini"
           ? data.image_provider
-          : "gemini";
+          : "stock";
       return {
         language: (data?.post_language as string | undefined) ?? "pt-BR",
         profile,
@@ -176,7 +178,8 @@ export const generatePost = inngest.createFunction(
         prefs.profile,
         watermark,
         news.image_url,
-        prefs.imageProvider
+        prefs.imageProvider,
+        userId
       );
     });
 

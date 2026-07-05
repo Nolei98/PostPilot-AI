@@ -46,7 +46,7 @@ export interface NotificationConfig {
   template_apply_mode: TemplateApplyMode;
   // Provider de IA escolhido em Ajustes (default: gemini/gemini)
   text_provider: "claude" | "gemini" | "pollinations";
-  image_provider: "fal" | "gemini" | "pollinations";
+  image_provider: "fal" | "gemini" | "pollinations" | "stock";
   created_at: string;
 }
 
@@ -107,6 +107,10 @@ export interface Post {
   ig_media_id: string | null; // Fase 2
   // Página 2 do carrossel (a CONTRA-CAPA). null = post de 1 página.
   closing_image_url: string | null;
+  // Foto real de banco usada na página de conteúdo (Pexels/Unsplash),
+  // se o provider escolhido foi 'stock'. null = imagem gerada por IA.
+  stock_photo_id: string | null;
+  stock_photo_credit: string | null;
   // Identidade visual da contra-capa (override; null = default)
   template_applied: boolean;
   tpl_keyword: string | null;
