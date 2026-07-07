@@ -270,35 +270,7 @@ export function PostCard({
 
         {/* ===== Preview fiel ao Instagram ===== */}
         <div className="bg-black">
-          {/* Header fiel ao IG: foto + nome (negrito) + @handle */}
-          <div className="flex items-center gap-2.5 px-3 py-2.5">
-            {profile.avatarUrl ? (
-              <img
-                src={profile.avatarUrl}
-                alt={profile.displayName}
-                className="h-9 w-9 rounded-full object-cover"
-              />
-            ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-tr from-warning via-error to-primary text-sm">
-                🤖
-              </div>
-            )}
-            <div className="min-w-0 leading-tight">
-              <p className="flex items-center gap-1 truncate text-body font-semibold">
-                {profile.displayName}
-                {profile.verified && (
-                  /* selo azul — igual ao renderizado na arte */
-                  <svg width="14" height="14" viewBox="0 0 24 24" aria-label="Verificado" className="shrink-0">
-                    <circle cx="12" cy="12" r="11" fill="#3897F0" />
-                    <path d="m7.5 12.5 3 3 6-6.5" stroke="#fff" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </p>
-              <p className="truncate text-caption text-muted">@{HANDLE}</p>
-            </div>
-            {/* ⋯ do IG */}
-            <span className="ml-auto text-muted">⋯</span>
-          </div>
+          {/* Header (foto/nome/@) removido: já aparece no chip da imagem — evita redundância */}
 
           {/* Conteúdo (página 1) + fechamento (página 2, se aplicado) */}
           <CarouselPreview
