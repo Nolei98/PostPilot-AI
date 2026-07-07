@@ -60,9 +60,14 @@ export default function LoginPage() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      // Lido pelo trigger handle_new_user (migration 017) pra salvar o
-      // nicho na config default e semear fontes RSS curadas por nicho.
-      options: { data: { niche, brand_name: brandName.trim() || null } },
+      options: {
+        // Lido pelo trigger handle_new_user (migration 017) pra salvar o
+        // nicho na config default e semear fontes RSS curadas por nicho.
+        data: { niche, brand_name: brandName.trim() || null },
+        // Sem isso, o link de confirmação usa o Site URL do dashboard
+        // Supabase (pode estar em localhost) em vez do domínio atual.
+        emailRedirectTo: `${window.location.origin}/`,
+      },
     });
     if (error) {
       setError(
