@@ -16,6 +16,7 @@ import { AvatarFileInput } from "@/components/AvatarFileInput";
 import { AppShell } from "@/components/ui/AppShell";
 import { Card } from "@/components/ui/Card";
 import { DeleteSourceButton } from "@/components/DeleteSourceButton";
+import { SubmitButton } from "@/components/SubmitButton";
 import { getMonthlyQuota } from "@/lib/subscription";
 import { PLANS } from "@/lib/plans";
 import type { NotificationConfig, SourceConfig } from "@/lib/types";
@@ -30,7 +31,13 @@ export default async function SettingsPage() {
   } = await supabase.auth.getUser();
   const quota = user
     ? await getMonthlyQuota(user.id)
-    : { plan: "free" as const, used: 0, limit: PLANS.free.postsPerMonth, remaining: PLANS.free.postsPerMonth };
+    : {
+        plan: "free" as const,
+        used: 0,
+        limit: PLANS.free.postsPerMonth,
+        remaining: PLANS.free.postsPerMonth,
+        unlimited: false,
+      };
 
   const { data: sources } = await supabase
     .from("source_configs")
@@ -67,9 +74,13 @@ export default async function SettingsPage() {
         <h2 className="mb-3 text-title text-muted">Plano</h2>
         <Card className="flex items-center justify-between gap-3 p-4">
           <div>
-            <p className="text-body font-semibold">{PLANS[quota.plan].label}</p>
+            <p className="text-body font-semibold">
+              {quota.unlimited ? "Ilimitado" : PLANS[quota.plan].label}
+            </p>
             <p className="text-caption text-muted">
-              {quota.used}/{quota.limit} posts usados este mês
+              {quota.unlimited
+                ? `${quota.used} posts gerados este mês`
+                : `${quota.used}/${quota.limit} posts usados este mês`}
             </p>
           </div>
           <Link
@@ -170,9 +181,9 @@ export default async function SettingsPage() {
                 </span>
               </span>
             </label>
-            <button className="w-full rounded-control bg-primary px-4 py-2.5 text-body font-medium text-white transition-all duration-150 hover:bg-primary-hover hover:shadow-glow active:scale-[0.97]">
+            <SubmitButton savingLabel="Salvando perfil...">
               Salvar perfil
-            </button>
+            </SubmitButton>
           </form>
         </Card>
       </section>
@@ -274,9 +285,9 @@ export default async function SettingsPage() {
                 className={`${fieldClasses} w-20`}
               />
             </div>
-            <button className="w-full rounded-control bg-primary px-4 py-2.5 text-body font-medium text-white transition-all duration-150 hover:bg-primary-hover hover:shadow-glow active:scale-[0.97]">
+            <SubmitButton savingLabel="Adicionando...">
               + Adicionar fonte
-            </button>
+            </SubmitButton>
           </form>
         </Card>
       </section>
@@ -359,9 +370,7 @@ export default async function SettingsPage() {
               chat_id em api.telegram.org/bot&lt;TOKEN&gt;/getUpdates e cole
               aqui.
             </p>
-            <button className="w-full rounded-control bg-primary px-4 py-2.5 text-body font-medium text-white transition-all duration-150 hover:bg-primary-hover hover:shadow-glow active:scale-[0.97]">
-              Salvar
-            </button>
+            <SubmitButton>Salvar</SubmitButton>
           </form>
         </Card>
       </section>

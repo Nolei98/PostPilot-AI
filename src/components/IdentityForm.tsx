@@ -7,6 +7,7 @@
 // COMENTE:, caixa, texto-baixo).
 // ============================================================
 import { useState } from "react";
+import { SubmitButton } from "@/components/SubmitButton";
 import type { TemplateApplyMode, VisualIdentity } from "@/lib/types";
 
 interface Props {
@@ -170,9 +171,9 @@ export function IdentityForm({ initial, initialMode, action, fieldClasses }: Pro
         </label>
       </div>
 
-      <button className="w-full rounded-control bg-primary px-4 py-2.5 text-body font-medium text-white transition-all duration-150 hover:bg-primary-hover hover:shadow-glow active:scale-[0.97]">
+      <SubmitButton savingLabel="Salvando contra-capa...">
         Salvar contra-capa
-      </button>
+      </SubmitButton>
       <p className="text-center text-micro text-subtle">
         Posts ainda na fila que usam o default são atualizados
         automaticamente ao salvar.

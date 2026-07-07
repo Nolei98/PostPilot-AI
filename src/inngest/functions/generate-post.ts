@@ -97,14 +97,18 @@ export const generatePost = inngest.createFunction(
       };
       const applyMode: TemplateApplyMode =
         data?.template_apply_mode === "on_approval" ? "on_approval" : "all";
-      const textProvider: "claude" | "gemini" | "pollinations" =
-        data?.text_provider === "claude" || data?.text_provider === "pollinations"
+      // Conta ilimitada (flag manual, uso interno): custo zero sempre,
+      // ignora o que estiver salvo em Ajustes.
+      const textProvider: "claude" | "gemini" | "pollinations" = quota.unlimited
+        ? "pollinations"
+        : data?.text_provider === "claude" || data?.text_provider === "pollinations"
           ? data.text_provider
           : "gemini";
-      const imageProvider: "fal" | "gemini" | "pollinations" | "stock" =
-        data?.image_provider === "fal" ||
-        data?.image_provider === "pollinations" ||
-        data?.image_provider === "gemini"
+      const imageProvider: "fal" | "gemini" | "pollinations" | "stock" = quota.unlimited
+        ? "pollinations"
+        : data?.image_provider === "fal" ||
+          data?.image_provider === "pollinations" ||
+          data?.image_provider === "gemini"
           ? data.image_provider
           : "stock";
       return {
