@@ -29,16 +29,35 @@ export async function getUserPlan(userId: string): Promise<PlanId> {
 }
 
 /**
+ * Contas marcadas manualmente (SQL) como ilimitadas — uso interno,
+ * sem cota de posts e forçadas a Pollinations (grátis) na geração.
+ */
+export async function isUnlimitedAccount(userId: string): Promise<boolean> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("subscriptions")
+    .select("unlimited")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return data?.unlimited ?? false;
+}
+
+/**
  * Cota do mês: quantos posts o usuário ainda pode gerar.
  * Ciclo = mês calendário (simples e previsível para o usuário).
+ * Contas "unlimited" (flag manual) ignoram o teto do plano.
  */
 export async function getMonthlyQuota(userId: string): Promise<{
   plan: PlanId;
   used: number;
   limit: number;
   remaining: number;
+  unlimited: boolean;
 }> {
-  const plan = await getUserPlan(userId);
+  const [plan, unlimited] = await Promise.all([
+    getUserPlan(userId),
+    isUnlimitedAccount(userId),
+  ]);
   const limit = PLANS[plan].postsPerMonth;
 
   const monthStart = new Date();
@@ -53,5 +72,11 @@ export async function getMonthlyQuota(userId: string): Promise<{
     .gte("created_at", monthStart.toISOString());
 
   const used = count ?? 0;
-  return { plan, used, limit, remaining: Math.max(0, limit - used) };
+  return {
+    plan,
+    used,
+    limit,
+    remaining: unlimited ? Infinity : Math.max(0, limit - used),
+    unlimited,
+  };
 }

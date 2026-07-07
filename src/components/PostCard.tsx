@@ -24,6 +24,7 @@ import { Card, CardActions } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Input, Textarea } from "@/components/ui/Input";
 import { CarouselPreview } from "@/components/CarouselPreview";
+import { resizeImageForUpload } from "@/lib/resizeImageClient";
 import type { IgProfile, PostWithNews, VisualIdentity } from "@/lib/types";
 
 type ExitDirection = "right" | "left" | null;
@@ -78,11 +79,14 @@ export function PostCard({
     e.target.value = "";
     if (!file) return;
     setUploadError(null);
-    const fd = new FormData();
-    fd.set("post_id", post.id);
-    fd.set("image", file);
     startUpload(async () => {
       try {
+        // Comprime no navegador antes de enviar — evita estourar o
+        // limite de payload da plataforma com fotos de celular grandes.
+        const resized = await resizeImageForUpload(file);
+        const fd = new FormData();
+        fd.set("post_id", post.id);
+        fd.set("image", resized);
         const result = await uploadPostImage(fd);
         if (!result.ok) setUploadError(result.error ?? "Falha ao subir imagem.");
       } catch {
