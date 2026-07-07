@@ -9,16 +9,25 @@
 // ============================================================
 import { useState } from "react";
 
-const MAX_BYTES = 2 * 1024 * 1024;
+const DEFAULT_MAX_MB = 2;
 
-export function AvatarFileInput() {
+export function AvatarFileInput({
+  name = "avatar",
+  label = "Foto de perfil (JPG/PNG, máx 2MB)",
+  maxMB = DEFAULT_MAX_MB,
+}: {
+  name?: string;
+  label?: string;
+  maxMB?: number;
+}) {
   const [error, setError] = useState<string | null>(null);
+  const maxBytes = maxMB * 1024 * 1024;
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file && file.size > MAX_BYTES) {
+    if (file && file.size > maxBytes) {
       setError(
-        `Foto muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB, máx 2MB) — escolha outra.`
+        `Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB, máx ${maxMB}MB) — escolha outro.`
       );
       e.target.value = ""; // limpa a seleção inválida, não deixa submeter
     } else {
@@ -28,12 +37,12 @@ export function AvatarFileInput() {
 
   return (
     <div className="space-y-1.5">
-      <label htmlFor="avatar" className="block text-caption text-muted">
-        Foto de perfil (JPG/PNG, máx 2MB)
+      <label htmlFor={name} className="block text-caption text-muted">
+        {label}
       </label>
       <input
-        id="avatar"
-        name="avatar"
+        id={name}
+        name={name}
         type="file"
         accept="image/jpeg,image/png"
         onChange={handleChange}

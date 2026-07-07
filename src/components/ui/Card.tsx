@@ -16,8 +16,8 @@ export function Card({
 }: CardProps) {
   return (
     <div
-      className={`rounded-card border border-line bg-surface shadow-card
-        ${interactive ? "transition-colors duration-150 hover:border-primary/40" : ""}
+      className={`rounded-[22px] border border-white/8 bg-[#221038]/55 backdrop-blur-[20px] shadow-card transition-all duration-200
+        ${interactive ? "hover:border-[#E0219C]/50 hover:bg-[#221038]/70" : ""}
         ${className}`}
       {...props}
     >
@@ -34,7 +34,7 @@ export function CardActions({
 }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`flex gap-2 border-t border-line p-3 ${className}`}
+      className={`flex gap-2 border-t border-white/8 p-4 ${className}`}
       {...props}
     >
       {children}

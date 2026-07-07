@@ -111,51 +111,53 @@ export function PricingCards({ currentPlan }: { currentPlan: PlanId }) {
         return (
           <div
             key={card.id}
-            className={`relative flex flex-col rounded-card border bg-surface p-5
-              ${card.highlight ? "border-primary shadow-glow" : "border-line"}`}
+            className={`relative flex flex-col rounded-[22px] border p-6 backdrop-blur-[20px] transition-all duration-200
+              ${card.highlight 
+                ? "border-[#E0219C]/50 bg-[#221038]/75 shadow-card" 
+                : "border-white/8 bg-[#221038]/55 shadow-card"}`}
           >
             {card.highlight && (
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-0.5 text-micro font-semibold text-white">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-[#E0219C] to-[#7B2FF7] px-3 py-0.5 text-micro font-semibold text-white tracking-wider uppercase">
                 MAIS POPULAR
               </span>
             )}
 
-            <h3 className="text-title font-semibold">{card.name}</h3>
+            <h3 className="text-title font-semibold font-title tracking-wide">{card.name}</h3>
             <p className="mt-0.5 text-caption text-muted">{card.tagline}</p>
 
             <p className="mt-4">
-              <span className="text-display font-bold">{card.price}</span>
+              <span className="text-display font-bold font-title">{card.price}</span>
               <span className="text-caption text-muted"> {card.period}</span>
             </p>
 
-            <ul className="mt-4 flex-1 space-y-2">
+            <ul className="mt-4 flex-1 space-y-2.5">
               {card.features.map((f) => (
                 <li key={f} className="flex items-start gap-2 text-body">
-                  <span className="mt-0.5 text-success">✓</span>
-                  <span>{f}</span>
+                  <span className="mt-0.5 text-[#46E5B7]">✓</span>
+                  <span className="text-muted-foreground">{f}</span>
                 </li>
               ))}
             </ul>
 
-            <div className="mt-5">
+            <div className="mt-6">
               {isCurrent ? (
                 currentPlan === "free" ? (
-                  <p className="rounded-control bg-surface-2 px-4 py-2.5 text-center text-caption text-muted">
+                  <p className="rounded-control bg-[#2A1545] border border-white/10 px-4 py-3 text-center text-caption text-muted font-title font-semibold tracking-wider uppercase">
                     Seu plano atual
                   </p>
                 ) : (
                   <button
                     onClick={openPortal}
                     disabled={loading !== null}
-                    className="w-full rounded-control bg-surface-2 px-4 py-2.5 text-body text-muted transition-colors hover:text-content disabled:opacity-50"
+                    className="w-full rounded-control border border-white/20 py-3 text-body font-title font-semibold tracking-wider text-muted-foreground transition-all duration-200 hover:border-[#E0219C] hover:text-[#E0219C] disabled:opacity-50 uppercase"
                   >
                     Gerenciar assinatura
                   </button>
                 )
               ) : card.id === "free" ? (
                 <Link
-                  href="/"
-                  className="block w-full rounded-control bg-surface-2 px-4 py-2.5 text-center text-body transition-colors hover:bg-surface"
+                  href="/fila"
+                  className="block w-full text-center rounded-control border border-white/20 py-3 text-body font-title font-semibold tracking-wider text-white transition-all duration-200 hover:border-[#E0219C] hover:text-[#E0219C] uppercase"
                 >
                   {card.cta}
                 </Link>
@@ -163,8 +165,10 @@ export function PricingCards({ currentPlan }: { currentPlan: PlanId }) {
                 <button
                   onClick={() => checkout(card.id as "criador" | "pro")}
                   disabled={loading !== null}
-                  className={`w-full rounded-control px-4 py-2.5 text-body font-medium text-white transition-all duration-150 active:scale-[0.97] disabled:opacity-50
-                    ${card.highlight ? "bg-primary hover:bg-primary-hover hover:shadow-glow" : "bg-surface-2 hover:bg-primary"}`}
+                  className={`w-full rounded-control py-3 text-body font-title font-semibold tracking-wider text-white transition-all duration-200 active:scale-[0.97] disabled:opacity-50 uppercase
+                    ${card.highlight 
+                      ? "bg-gradient-to-br from-[#E0219C] via-[#A020F0] to-[#7B2FF7] shadow-[0_0_34px_rgba(224,33,156,0.35)] hover:shadow-[0_0_50px_rgba(224,33,156,0.6)]" 
+                      : "bg-transparent border border-white/20 hover:border-[#E0219C] hover:text-[#E0219C]"}`}
                 >
                   {loading === card.id ? "Abrindo pagamento…" : card.cta}
                 </button>

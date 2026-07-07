@@ -14,7 +14,9 @@ import { inngest } from "@/inngest/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generatePostPackage } from "@/lib/ai/generate";
 import { generatePostImage, renderAndUploadTemplateArt } from "@/lib/image";
+import { resolvePostFontFamily } from "@/lib/font-data";
 import type {
+  BrandTemplate,
   IgProfile,
   NewsItem,
   TemplateApplyMode,
@@ -111,13 +113,20 @@ export const generatePost = inngest.createFunction(
           data?.image_provider === "gemini"
           ? data.image_provider
           : "stock";
+      const brand: BrandTemplate = {
+        fontFamily: resolvePostFontFamily(data?.post_font_family),
+        logoUrl: data?.logo_url ?? null,
+        showLogo: data?.show_brand_logo ?? true,
+      };
       return {
         language: (data?.post_language as string | undefined) ?? "pt-BR",
+        niche: (data?.niche as string | null | undefined) ?? null,
         profile,
         identity,
         applyMode,
         textProvider,
         imageProvider,
+        brand,
       };
     });
     const language = prefs.language;
@@ -131,6 +140,7 @@ export const generatePost = inngest.createFunction(
           summary: news.summary,
           url: news.url,
           language,
+          niche: prefs.niche,
         },
         prefs.textProvider
       );
@@ -183,7 +193,8 @@ export const generatePost = inngest.createFunction(
         watermark,
         news.image_url,
         prefs.imageProvider,
-        userId
+        userId,
+        prefs.brand
       );
     });
 
@@ -195,7 +206,8 @@ export const generatePost = inngest.createFunction(
             postId,
             prefs.identity,
             prefs.profile,
-            watermark
+            watermark,
+            prefs.brand
           );
         })
       : null;

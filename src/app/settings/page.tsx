@@ -7,18 +7,23 @@ import { createClient } from "@/lib/supabase/server";
 /* eslint-disable @next/next/no-img-element */
 import {
   addSource,
+  saveBrandTemplate,
   saveIgProfile,
+  saveNiche,
   saveTelegramChatId,
   saveVisualIdentity,
 } from "@/app/actions";
 import { IdentityForm } from "@/components/IdentityForm";
 import { AvatarFileInput } from "@/components/AvatarFileInput";
+import { BrandColorPicker } from "@/components/BrandColorPicker";
 import { AppShell } from "@/components/ui/AppShell";
 import { Card } from "@/components/ui/Card";
 import { DeleteSourceButton } from "@/components/DeleteSourceButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getMonthlyQuota } from "@/lib/subscription";
 import { PLANS } from "@/lib/plans";
+import { POST_FONTS } from "@/lib/font-data";
+import { NICHES } from "@/lib/niches";
 import type { NotificationConfig, SourceConfig } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -61,7 +66,11 @@ export default async function SettingsPage() {
     "w-full rounded-control border border-line bg-surface-2 px-3 py-2.5 text-body text-content placeholder:text-subtle outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25";
 
   return (
-    <AppShell readyCount={readyCount ?? 0}>
+    <AppShell
+      readyCount={readyCount ?? 0}
+      brandName={notifConfig?.brand_name}
+      logoUrl={notifConfig?.logo_url}
+    >
       <div className="mb-5">
         <h1 className="text-display">Ajustes</h1>
         <p className="text-caption text-muted">
@@ -75,13 +84,18 @@ export default async function SettingsPage() {
         <Card className="flex items-center justify-between gap-3 p-4">
           <div>
             <p className="text-body font-semibold">
-              {quota.unlimited ? "Ilimitado" : PLANS[quota.plan].label}
+              {quota.unlimited ? "Ilimitado (Pollinations.ai)" : PLANS[quota.plan].label}
             </p>
             <p className="text-caption text-muted">
               {quota.unlimited
                 ? `${quota.used} posts gerados este mês`
                 : `${quota.used}/${quota.limit} posts usados este mês`}
             </p>
+            {quota.unlimited && (
+              <p className="mt-1 text-caption text-warning">
+                Conta ilimitada: texto e imagem sempre via Pollinations.ai (grátis), independente do que estiver selecionado em Preferências.
+              </p>
+            )}
           </div>
           <Link
             href="/pricing"
@@ -214,6 +228,87 @@ export default async function SettingsPage() {
         </Card>
       </section>
 
+      {/* ===== Template da marca (logo + fonte das artes) ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Template da marca</h2>
+        <Card className="p-4">
+          <form action={saveBrandTemplate} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="brand_name" className="block text-caption text-muted">
+                Nome da marca
+              </label>
+              <input
+                id="brand_name"
+                name="brand_name"
+                defaultValue={notifConfig?.brand_name ?? ""}
+                placeholder="Ex: Sua Marca"
+                className={fieldClasses}
+              />
+              <p className="text-micro text-subtle">
+                Aparece na barra lateral do app (em vez de &quot;Sua Marca&quot;).
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              {notifConfig?.logo_url ? (
+                <img
+                  src={notifConfig.logo_url}
+                  alt="Logo da marca"
+                  className="h-14 w-14 rounded-full object-cover ring-2 ring-line"
+                />
+              ) : (
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-2 text-micro text-subtle">
+                  sem logo
+                </div>
+              )}
+              <div className="flex-1">
+                <AvatarFileInput
+                  name="logo"
+                  label="Logo da marca (JPG/PNG, máx 2MB)"
+                />
+              </div>
+            </div>
+            <label className="flex cursor-pointer items-center gap-3 rounded-control bg-surface-2 px-3 py-2.5">
+              <input
+                type="checkbox"
+                name="show_brand_logo"
+                defaultChecked={notifConfig?.show_brand_logo ?? true}
+                className="h-4 w-4 accent-[#7C5CFF]"
+              />
+              <span className="text-body">
+                Mostrar logo na arte{" "}
+                <span className="text-caption text-subtle">
+                  (selo discreto no canto do conteúdo e da contra-capa)
+                </span>
+              </span>
+            </label>
+            <BrandColorPicker initial={notifConfig?.color_accent ?? "#E0219C"} />
+            <div className="space-y-1.5">
+              <label htmlFor="post_font_family" className="block text-caption text-muted">
+                Fonte das artes
+              </label>
+              <select
+                id="post_font_family"
+                name="post_font_family"
+                defaultValue={notifConfig?.post_font_family ?? "inter"}
+                className={fieldClasses}
+              >
+                {POST_FONTS.map((f) => (
+                  <option key={f.key} value={f.key}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-micro text-subtle">
+                Usada no título, no chip de perfil e na contra-capa — salvar re-renderiza os posts na fila.
+              </p>
+            </div>
+            <SubmitButton savingLabel="Salvando template...">
+              Salvar template da marca
+            </SubmitButton>
+          </form>
+        </Card>
+      </section>
+
       {/* ===== Fontes RSS ===== */}
       <section className="mb-8">
         <h2 className="mb-3 text-title text-muted">Fontes RSS</h2>
@@ -292,6 +387,33 @@ export default async function SettingsPage() {
         </Card>
       </section>
 
+      {/* ===== Nicho do negócio ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Nicho do negócio</h2>
+        <Card className="p-4">
+          <form action={saveNiche} className="space-y-3">
+            <div className="space-y-1.5">
+              <label htmlFor="niche" className="block text-caption text-muted">
+                Direciona o tom dos posts e o critério de triagem viral
+              </label>
+              <select
+                id="niche"
+                name="niche"
+                defaultValue={notifConfig?.niche ?? NICHES[0].key}
+                className={fieldClasses}
+              >
+                {NICHES.map((n) => (
+                  <option key={n.key} value={n.key}>
+                    {n.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <SubmitButton savingLabel="Salvando...">Salvar nicho</SubmitButton>
+          </form>
+        </Card>
+      </section>
+
       {/* ===== Preferências (idioma + Telegram) ===== */}
       <section>
         <h2 className="mb-3 text-title text-muted">Preferências</h2>
@@ -325,6 +447,11 @@ export default async function SettingsPage() {
               />
             </div>
 
+            {quota.unlimited && (
+              <p className="rounded-control bg-warning/10 px-3 py-2.5 text-caption text-warning">
+                Sua conta é ilimitada — os providers abaixo são ignorados; texto e imagem saem sempre pelo Pollinations.ai (grátis).
+              </p>
+            )}
             <div className="space-y-1.5">
               <label htmlFor="text_provider" className="block text-caption text-muted">
                 Provider de IA — texto (hook, legenda, hashtags)

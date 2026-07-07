@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - PostPilot AI (v1.2)</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body style="background: var(--bg-radial);">
+
+  <!-- Starfield space effect -->
+  <div class="starfield"></div>
+
+  <!-- Mobile Sidebar Toggle -->
+  <button class="sidebar-toggle" id="mobile-toggle">
+    ☰
+  </button>
+
+  <!-- ==========================================================================
+       AUTHENTICATION SECTION (Split Layout)
+       ========================================================================== -->
+  <div class="auth-wrapper" id="auth-container">
+    <div class="glass-panel auth-card">
+      <div class="auth-brand-side">
+        <div>
+          <a href="index.html" class="logo-wrap">
+            <div class="orb-logo"></div>
+            <div class="logo-text" style="font-size: 1.4rem;">POSTPILOT<span>/AI</span></div>
+          </a>
+          <p style="font-size: 0.85rem; margin-top: 16px; max-width: 280px; color: var(--text-secondary);">
+            Seu piloto automático de conteúdo para Instagram. Você só aprova.
+          </p>
+        </div>
+        
+        <!-- Large animated Orbe -->
+        <div style="display:flex; justify-content:center; align-items:center; flex-grow:1;">
+          <div class="orb-3d" style="width: 140px; height: 140px;">
+            <div class="orb-inner-glow"></div>
+          </div>
+        </div>
+        
+        <div style="font-size: 0.75rem; color: var(--text-muted);">
+          PostPilot AI © 2026. Todos os direitos reservados.
+        </div>
+      </div>
+      
+      <div class="auth-form-side">
+        <h2 id="auth-title" style="font-size: 1.6rem; margin-bottom: 8px;">Entrar no App</h2>
+        <p id="auth-desc" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 30px;">
+          Entre com suas credenciais para gerenciar sua fila de posts.
+        </p>
+        
+        <form id="auth-form">
+          <div class="form-group">
+            <label class="form-label">E-mail</label>
+            <input type="email" required class="form-input" placeholder="seu@email.com" value="admin@postpilot.ai">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Senha</label>
+            <input type="password" required class="form-input" placeholder="••••••••" value="senha123">
+          </div>
+          
+          <button type="submit" id="auth-submit-btn" class="btn btn-gradient" style="width: 100%; margin-top: 10px;">
+            Entrar
+          </button>
+        </form>
+        
+        <p style="font-size: 0.8rem; text-align: center; margin-top: 24px; color: var(--text-secondary);">
+          <span id="auth-switch-prompt">Novo por aqui? </span>
+          <a href="#" id="auth-switch-link" style="color: var(--accent-magenta); text-decoration: none; font-weight: 600;">Criar Conta</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       APP WORKSPACE CONTAINER (Initially Hidden, managed by JS)
+       ========================================================================== -->
+  <div class="app-wrapper" id="app-container" style="display: none;">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="app-sidebar" id="app-sidebar">
+      <div style="display:flex; flex-direction:column; gap:20px;">
+        <a href="index.html" class="app-logo">
+          <div class="orb-logo"></div>
+          <div class="logo-text">POSTPILOT<span>/AI</span></div>
+        </a>
+
+        <nav class="app-nav">
+          <a href="#" class="nav-link active" data-tab="fila">
+            <span>📬</span> Fila de Aprovação
+          </a>
+          <a href="#" class="nav-link" data-tab="ready">
+            <span>✓</span> Posts Prontos
+          </a>
+          <a href="#" class="nav-link" data-tab="settings">
+            <span>⚙️</span> Ajustes do Sistema
+          </a>
+        </nav>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="user-profile">
+          <div class="user-avatar">PP</div>
+          <div class="user-info">
+            <span class="user-name">João Rodrigues</span>
+            <span class="user-role">Criador Tech</span>
+          </div>
+        </div>
+        <button class="btn-logout" id="btn-logout" title="Sair da Conta">
+          🚪
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="app-content">
+      
+      <!-- Content Top Header -->
+      <header class="content-header">
+        <div class="page-title-wrap">
+          <span class="page-subtitle" id="content-subtitle">PostPilot AI Workspace</span>
+          <h1 class="page-title" id="content-title">Fila de Aprovação</h1>
+        </div>
+        
+        <button class="btn-scan" id="btn-scan">
+          <i>🔄</i> Varrer agora
+        </button>
+      </header>
+
+      <!-- Panel 1: Fila de Aprovação -->
+      <section id="panel-fila" style="display: block;">
+        <div class="posts-grid" id="fila-grid">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- Panel 2: Posts Prontos -->
+      <section id="panel-ready" style="display: none;">
+        <div style="display:flex; justify-content:flex-end; margin-bottom:20px; align-items:center; gap:12px;">
+          <span style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-title); letter-spacing:0.05em;">FILTRAR:</span>
+          <select id="ready-filter" class="footer-lang-select" style="padding: 8px 16px; border-radius: 8px;">
+            <option value="todos">Todos</option>
+            <option value="pendentes">Pendentes de publicação</option>
+            <option value="copiados">Já postados</option>
+          </select>
+        </div>
+        <div class="posts-grid" id="ready-grid">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- Panel 3: Ajustes -->
+      <section id="panel-settings" style="display: none;">
+        <div class="settings-container">
+          
+          <!-- RSS Feeds Settings -->
+          <div class="glass-panel settings-section-card">
+            <h3 class="settings-sec-title">Fontes RSS Monitoradas</h3>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 20px;">
+              O PostPilot AI varrerá essas fontes a cada 3h para encontrar novas oportunidades de conteúdo.
+            </p>
+            
+            <div id="rss-feed-list" style="margin-bottom: 24px;">
+              <!-- Populated by JS -->
+            </div>
+            
+            <form id="feed-add-form" style="display:grid; grid-template-columns: 1fr 2fr auto; gap: 12px; align-items: flex-end;">
+              <div>
+                <label class="form-label" style="font-size: 0.65rem;">Apelido</label>
+                <input type="text" id="feed-name-new" required class="input-underline" placeholder="TC Artificial Intelligence" style="padding: 6px 0;">
+              </div>
+              <div>
+                <label class="form-label" style="font-size: 0.65rem;">URL do Feed</label>
+                <input type="url" id="feed-url-new" required class="input-underline" placeholder="https://techcrunch.com/feed" style="padding: 6px 0;">
+              </div>
+              <button type="submit" class="btn btn-gradient" style="padding: 10px 20px; font-size: 0.75rem;">Adicionar</button>
+            </form>
+          </div>
+
+          <!-- Telegram Bot Settings -->
+          <div class="glass-panel settings-section-card">
+            <h3 class="settings-sec-title">Notificações no Telegram</h3>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 20px;">
+              Seja notificado no celular assim que a IA estruturar um novo post pronto para aprovação.
+            </p>
+            
+            <div class="toggle-group" style="margin-bottom: 20px; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 16px;">
+              <div>
+                <strong style="font-size: 0.85rem; color: var(--text-primary); display:block; margin-bottom:4px;">Ativar notificações via Bot</strong>
+                <span style="font-size: 0.7rem; color: var(--text-muted);">Envia alertas imediatos quando novos rascunhos são gerados.</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="tg-toggle">
+                <span class="slider"></span>
+              </label>
+            </div>
+            
+            <div class="input-underline-group" id="tg-token-wrap" style="display: none;">
+              <label class="form-label">Telegram Bot Token (API)</label>
+              <input type="text" id="tg-token" class="input-underline" placeholder="6894726485:AAF9cKjS..." value="6894726485:AAF9cKjS-vY24jGhn122hsaF">
+            </div>
+            
+            <div class="input-underline-group" id="tg-chat-wrap" style="display: none;">
+              <label class="form-label">ID do Chat do Telegram (Chat ID)</label>
+              <input type="text" id="tg-chat-id" class="input-underline" placeholder="-1002384728" value="98234827">
+            </div>
+          </div>
+
+          <!-- Brand Template & Preferences -->
+          <div class="glass-panel settings-section-card">
+            <h3 class="settings-sec-title">Preferências & Template de Marca</h3>
+            
+            <div class="toggle-group" style="margin-bottom: 20px;">
+              <div>
+                <strong style="font-size: 0.85rem; color: var(--text-primary); display:block; margin-bottom:4px;">Priorizar Fotos Reais</strong>
+                <span style="font-size: 0.7rem; color: var(--text-muted);">Usa imagens de bancos como Pexels/Unsplash. Se desativado, usará imagens geradas (Flux).</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="pref-image-real" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            
+            <div class="input-underline-group">
+              <label class="form-label">Nome da Marca para Template</label>
+              <input type="text" class="input-underline" value="PostPilot AI">
+            </div>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+              <div>
+                <label class="form-label">Cor Principal da Marca</label>
+                <input type="color" class="input-underline" value="#A020F0" style="height:40px; padding:0; border:none; cursor:pointer;">
+              </div>
+              <div>
+                <label class="form-label">Tipografia do Template</label>
+                <select class="footer-lang-select" style="width:100%; height:40px; border-radius:8px; margin-top:5px;">
+                  <option>Space Grotesk</option>
+                  <option>Inter</option>
+                  <option>Poppins</option>
+                  <option>Outfit</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ==========================================================================
+         EDIT DRAWER (Slide-in right sidebar)
+         ========================================================================== -->
+    <div class="app-drawer-overlay" id="drawer-overlay"></div>
+    <div class="app-drawer" id="edit-drawer">
+      <div class="drawer-header">
+        <h3 class="drawer-title">Editar Candidato</h3>
+        <button class="btn-close-drawer" id="btn-close-drawer">✕</button>
+      </div>
+      
+      <div class="drawer-body">
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label class="form-label">Legenda do Post</label>
+          <textarea class="textarea-caption" id="edit-caption"></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Arte Composta do Post</label>
+          <div class="drawer-image-preview" id="edit-image-preview">
+            <button class="btn btn-ghost" id="btn-regen-image" style="padding: 8px 12px; font-size: 0.65rem; background:rgba(0,0,0,0.6); backdrop-filter:blur(5px); border-radius:6px;">
+              🔄 Alternar Imagem
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <div style="display:flex; gap:16px;">
+        <button class="btn btn-ghost" onclick="document.getElementById('drawer-overlay').click()" style="flex:1;">Cancelar</button>
+        <button class="btn btn-gradient" id="btn-save-edit" style="flex:1.5;">Salvar Alterações</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="toast">Ação executada com sucesso!</div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

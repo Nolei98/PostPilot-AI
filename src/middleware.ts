@@ -35,15 +35,16 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isLoginPage = request.nextUrl.pathname.startsWith("/login");
+  const isRootPage = request.nextUrl.pathname === "/";
 
-  // Sem sessão e fora do /login → manda para o login
-  if (!user && !isLoginPage) {
+  // Sem sessão e fora de rotas públicas (/) e (/login) → manda para o login
+  if (!user && !isLoginPage && !isRootPage) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Já logado e tentando abrir /login → manda para o dashboard
-  if (user && isLoginPage) {
-    return NextResponse.redirect(new URL("/", request.url));
+  // Já logado e tentando abrir /login ou a landing page (/) → manda para /fila
+  if (user && (isLoginPage || isRootPage)) {
+    return NextResponse.redirect(new URL("/fila", request.url));
   }
 
   return response;
@@ -55,6 +56,6 @@ export const config = {
   // de sessão, era redirecionado pro /login e o pagamento nunca
   // sincronizava), assets estáticos e favicon.
   matcher: [
-    "/((?!api/inngest|api/stripe/webhook|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api/inngest|api/stripe/webhook|_next/static|_next/image|favicon.ico|support.js|image-slot.js|uploads).*)",
   ],
 };

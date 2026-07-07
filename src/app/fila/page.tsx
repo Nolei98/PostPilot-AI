@@ -43,8 +43,8 @@ export default async function DashboardPage() {
     .maybeSingle();
 
   const profile: IgProfile = {
-    handle: config?.ig_handle ?? "seuperfil.ia",
-    displayName: config?.ig_display_name ?? "Seu Perfil de IA",
+    handle: config?.ig_handle ?? "seuperfil",
+    displayName: config?.ig_display_name ?? "Seu Perfil",
     avatarUrl: config?.ig_avatar_url ?? null,
     verified: config?.ig_verified ?? false,
     showProfileChip: config?.show_profile_chip ?? true,
@@ -56,7 +56,7 @@ export default async function DashboardPage() {
     colorAccent: config?.color_accent ?? "#7C5CFF",
     colorText: config?.color_text ?? "#FFFFFF",
     colorKeywordBox: config?.color_keyword_box ?? "#7C5CFF",
-    keyword: config?.tpl_keyword ?? "IA",
+    keyword: config?.tpl_keyword ?? "TECNOLOGIA",
     topText: config?.tpl_top_text ?? "A NOVIDADE DE",
     bottomText: config?.tpl_bottom_text ?? "QUE MUDA TUDO",
     ctaEnabled: config?.tpl_cta_enabled ?? false,
@@ -64,7 +64,11 @@ export default async function DashboardPage() {
   const posts = (queue ?? []) as PostWithNews[];
 
   return (
-    <AppShell readyCount={readyCount ?? 0}>
+    <AppShell
+      readyCount={readyCount ?? 0}
+      brandName={config?.brand_name}
+      logoUrl={config?.logo_url}
+    >
       {/* Cabeçalho da tela: título + ação de varredura */}
       <div className="mb-5 flex items-center justify-between">
         <div>
@@ -107,7 +111,7 @@ export default async function DashboardPage() {
         </div>
       ) : (
         /* ===== Fila: cards entram escalonados ===== */
-        <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
           {posts.map((post, i) => (
             <div key={post.id} style={{ animationDelay: `${i * 60}ms` }} className="animate-fade-up">
               <PostCard

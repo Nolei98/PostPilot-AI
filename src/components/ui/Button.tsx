@@ -8,7 +8,7 @@
 // ============================================================
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 
-type Variant = "primary" | "secondary" | "ghost" | "success" | "danger";
+type Variant = "primary" | "secondary" | "ghost" | "success" | "danger" | "warning";
 type Size = "sm" | "md";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -19,18 +19,20 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANTS: Record<Variant, string> = {
   primary:
-    "bg-primary text-white hover:bg-primary-hover hover:shadow-glow",
+    "bg-gradient-to-br from-[#E0219C] via-[#A020F0] to-[#7B2FF7] text-white font-title font-semibold tracking-wider shadow-[0_0_34px_rgba(224,33,156,0.35)] hover:shadow-[0_0_50px_rgba(224,33,156,0.6)] hover:-translate-y-[2px] active:translate-y-0 transition-all duration-200",
   secondary:
-    "bg-surface-2 text-content border border-line hover:border-primary/50 hover:bg-surface-2/70",
-  ghost: "bg-transparent text-muted hover:text-content hover:bg-surface-2",
-  success: "bg-success text-white hover:brightness-110",
+    "bg-transparent text-content border border-white/20 hover:border-[#E0219C] hover:text-[#E0219C] active:scale-[0.97] transition-all duration-200",
+  ghost: "bg-transparent text-muted hover:text-content hover:bg-surface-2 active:scale-[0.97] transition-all duration-150",
+  success: "bg-[#46E5B7]/12 border border-[#46E5B7]/50 text-[#46E5B7] hover:bg-[#46E5B7]/20 active:scale-[0.97] transition-all duration-150 font-title font-semibold tracking-wider uppercase text-micro",
   danger:
-    "bg-surface-2 text-error border border-line hover:border-error/60 hover:bg-error/10",
+    "bg-transparent border border-[#FF5C7A]/45 text-[#FF5C7A] hover:bg-[#FF5C7A]/10 active:scale-[0.97] transition-all duration-150 font-title font-semibold tracking-wider uppercase text-micro",
+  warning:
+    "bg-transparent border border-[#F5B93B]/45 text-[#F5B93B] hover:bg-[#F5B93B]/10 active:scale-[0.97] transition-all duration-150 font-title font-semibold tracking-wider uppercase text-micro",
 };
 
 const SIZES: Record<Size, string> = {
-  sm: "px-3 py-1.5 text-caption",
-  md: "px-4 py-2.5 text-body font-medium",
+  sm: "px-3 py-1.5 text-caption rounded-[10px]",
+  md: "px-5 py-3.5 text-body font-medium",
 };
 
 /** Spinner minimalista para o estado loading */

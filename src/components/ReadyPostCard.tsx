@@ -13,9 +13,11 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardActions } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { CarouselPreview } from "@/components/CarouselPreview";
+import { useToast } from "@/components/ui/Toast";
 import type { PostWithNews } from "@/lib/types";
 
 export function ReadyPostCard({ post }: { post: PostWithNews }) {
+  const toast = useToast();
   const pages = [post.image_url, post.closing_image_url].filter(
     (u): u is string => !!u
   );
@@ -44,6 +46,7 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
   async function copyText() {
     await navigator.clipboard.writeText(fullText);
     setCopied(true);
+    toast("⧉ Legenda copiada para a área de transferência.");
     setTimeout(() => setCopied(false), 2000);
   }
 
@@ -71,6 +74,7 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
       const res = await fetch(post.image_url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       triggerDownload(await res.blob(), `post-${post.id}.jpg`);
+      toast("↓ Arte baixada.");
     } catch {
       window.open(post.image_url, "_blank");
     } finally {
@@ -93,6 +97,7 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
       );
       const blob = await zip.generateAsync({ type: "blob" });
       triggerDownload(blob, `post-${post.id}-carrossel.zip`);
+      toast("↓ Arte baixada em .zip.");
     } catch {
       // Fallback: abre cada imagem em nova aba para salvar manualmente
       pages.forEach((url) => window.open(url, "_blank"));
@@ -101,12 +106,14 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
     }
   }
 
+  const isPosted = post.status === "published";
+
+  /** Marca como postado — o card fica na aba "Postados", só muda de estado */
   function handlePosted() {
-    setExiting(true);
-    setTimeout(() => {
-      setGone(true);
-      startTransition(() => markAsPosted(post.id));
-    }, 400);
+    startTransition(async () => {
+      await markAsPosted(post.id);
+      toast("✓ Marcado como postado. Bom trabalho!");
+    });
   }
 
   if (gone) return null;
@@ -114,7 +121,7 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
   return (
     <>
     <Card
-      className={`overflow-hidden ${exiting ? "animate-exit-right" : ""}`}
+      className={`overflow-hidden ${exiting ? "animate-exit-right" : ""} ${isPosted ? "opacity-60" : ""}`}
     >
       <div className="flex gap-3 p-3">
         <CarouselPreview
@@ -122,7 +129,12 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
           alt={post.hook}
           className="h-28 w-[89.6px] shrink-0 rounded-control"
         />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
+          {isPosted && (
+            <span className="mb-1 inline-block rounded-full border border-success/50 bg-[#0D0418]/70 px-2.5 py-0.5 text-micro tracking-wider text-success">
+              ✓ POSTADO
+            </span>
+          )}
           <p className="mb-1 text-body font-semibold leading-snug">
             {post.hook}
           </p>
@@ -137,7 +149,7 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
         </div>
       </div>
 
-      <CardActions className="grid grid-cols-3">
+      <CardActions className={isPosted ? "grid grid-cols-2" : "grid grid-cols-3"}>
         <Button variant="secondary" size="sm" onClick={copyText}>
           {copied ? (
             <span className="animate-pop text-success">✓ Copiado!</span>
@@ -154,27 +166,31 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
         >
           {isCarousel ? "Baixar .zip" : "Baixar arte"}
         </Button>
-        <Button
-          variant="success"
-          size="sm"
-          loading={isPending}
-          disabled={exiting}
-          onClick={handlePosted}
-        >
-          ✓ Postei
-        </Button>
+        {!isPosted && (
+          <Button
+            variant="success"
+            size="sm"
+            loading={isPending}
+            disabled={exiting}
+            onClick={handlePosted}
+          >
+            ✓ Postei
+          </Button>
+        )}
       </CardActions>
 
-      {/* Desistir da aprovação (com confirmação) */}
-      <div className="border-t border-line px-3 py-2 text-center">
-        <button
-          onClick={() => setGivingUp(true)}
-          disabled={isPending || exiting}
-          className="text-caption text-subtle transition-colors hover:text-error disabled:opacity-50"
-        >
-          ↩ Desistir deste post
-        </button>
-      </div>
+      {/* Desistir da aprovação (com confirmação) — só faz sentido antes de postar */}
+      {!isPosted && (
+        <div className="border-t border-line px-3 py-2 text-center">
+          <button
+            onClick={() => setGivingUp(true)}
+            disabled={isPending || exiting}
+            className="text-caption text-subtle transition-colors hover:text-error disabled:opacity-50"
+          >
+            ↩ Desistir deste post
+          </button>
+        </div>
+      )}
     </Card>
 
     {/* Modal de confirmação do Desistir */}

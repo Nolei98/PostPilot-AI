@@ -5,10 +5,25 @@
 // do usuário (RLS garante que só mexe nos próprios dados).
 // ============================================================
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inngest } from "@/inngest/client";
-import type { IgProfile, VisualIdentity } from "@/lib/types";
+import type { BrandTemplate, IgProfile, VisualIdentity } from "@/lib/types";
+import { resolvePostFontFamily } from "@/lib/font-data";
+
+/** Monta o template de marca (fonte + logo) a partir de uma linha de notification_configs */
+function buildBrand(config: {
+  post_font_family?: string | null;
+  logo_url?: string | null;
+  show_brand_logo?: boolean | null;
+} | null): BrandTemplate {
+  return {
+    fontFamily: resolvePostFontFamily(config?.post_font_family),
+    logoUrl: config?.logo_url ?? null,
+    showLogo: config?.show_brand_logo ?? true,
+  };
+}
 
 // ------------------------------------------------------------
 // SINCRONIZAÇÃO: sempre que o perfil ou a identidade visual são
@@ -22,7 +37,7 @@ import type { IgProfile, VisualIdentity } from "@/lib/types";
  * fila do usuário. Chamada sempre que o perfil é salvo em Ajustes —
  * corrige o chip desatualizado em posts já gerados antes da mudança.
  */
-async function resyncChipOnPendingPosts(userId: string, profile: IgProfile) {
+async function resyncChipOnPendingPosts(userId: string, profile: IgProfile, brand: BrandTemplate) {
   const supabase = createClient();
   const { data: posts, error: postsError } = await supabase
     .from("posts")
@@ -54,7 +69,7 @@ async function resyncChipOnPendingPosts(userId: string, profile: IgProfile) {
     // (posts gerados antes desse recurso não têm base; ficam como estão)
     let newContentUrl: string | null = null;
     try {
-      newContentUrl = await regenerateContentImage(post.id, post.hook, profile, watermark);
+      newContentUrl = await regenerateContentImage(post.id, post.hook, profile, watermark, brand);
     } catch (err) {
       console.error(`[resyncChipOnPendingPosts] erro ao regenerar conteúdo do post ${post.id}:`, err);
     }
@@ -77,7 +92,8 @@ async function resyncChipOnPendingPosts(userId: string, profile: IgProfile) {
         post.id,
         identity,
         profile,
-        watermark
+        watermark,
+        brand
       );
     }
 
@@ -104,7 +120,8 @@ async function resyncIdentityOnUnmodifiedPendingPosts(
   oldIdentity: VisualIdentity,
   newIdentity: VisualIdentity,
   profile: IgProfile,
-  force: boolean
+  force: boolean,
+  brand: BrandTemplate
 ) {
   const supabase = createClient();
   const { data: posts, error: postsError } = await supabase
@@ -144,7 +161,8 @@ async function resyncIdentityOnUnmodifiedPendingPosts(
       post.id,
       newIdentity,
       profile,
-      watermark
+      watermark,
+      brand
     );
     await supabase
       .from("posts")
@@ -217,7 +235,7 @@ export async function updatePost(
   if (post && post.hook !== fields.hook) {
     const { data: config } = await supabase
       .from("notification_configs")
-      .select("ig_handle, ig_display_name, ig_avatar_url, ig_verified, show_profile_chip")
+      .select("*")
       .eq("user_id", user.id)
       .maybeSingle();
     const profile: IgProfile = {
@@ -230,7 +248,7 @@ export async function updatePost(
     const { getUserPlan } = await import("@/lib/subscription");
     const watermark = (await getUserPlan(user.id)) === "free";
     const { regenerateContentImage } = await import("@/lib/image");
-    const newImageUrl = await regenerateContentImage(postId, fields.hook, profile, watermark);
+    const newImageUrl = await regenerateContentImage(postId, fields.hook, profile, watermark, buildBrand(config));
     if (newImageUrl) updates.image_url = newImageUrl;
   }
 
@@ -295,7 +313,8 @@ export async function uploadPostImage(
       post.hook,
       profile,
       watermark,
-      buf
+      buf,
+      buildBrand(notif)
     );
 
     const { error } = await supabase
@@ -524,7 +543,7 @@ export async function saveIgProfile(formData: FormData) {
   // sem isso, um post gerado antes da mudança ficaria com dado velho.
   const { data: freshConfig } = await supabase
     .from("notification_configs")
-    .select("ig_handle, ig_display_name, ig_avatar_url, ig_verified, show_profile_chip")
+    .select("*")
     .eq("user_id", user.id)
     .single();
   if (freshConfig) {
@@ -535,7 +554,7 @@ export async function saveIgProfile(formData: FormData) {
       verified: freshConfig.ig_verified,
       showProfileChip: freshConfig.show_profile_chip,
     };
-    await resyncChipOnPendingPosts(user.id, profile);
+    await resyncChipOnPendingPosts(user.id, profile, buildBrand(freshConfig));
   }
 
   revalidatePath("/settings");
@@ -630,12 +649,155 @@ export async function saveVisualIdentity(formData: FormData) {
       oldIdentity,
       newIdentity,
       profile,
-      mode === "all" // modo 'all' sincroniza tudo, sem checar customização
+      mode === "all", // modo 'all' sincroniza tudo, sem checar customização
+      buildBrand(oldConfig)
     );
   }
 
   revalidatePath("/settings");
   revalidatePath("/");
+}
+
+/**
+ * Salva o Template da marca (logo + fonte das artes) e re-sincroniza
+ * os posts ainda na fila com a nova fonte/logo/cor — mesmo mecanismo
+ * de resync do perfil (regenera a partir da imagem BASE salva, sem
+ * chamar o Flux de novo).
+ */
+export async function saveBrandTemplate(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const postFontFamily = String(formData.get("post_font_family") ?? "inter");
+  const brandName = String(formData.get("brand_name") ?? "").trim();
+  const brandColorRaw = String(formData.get("brand_color") ?? "").trim();
+  const brandColor = /^#[0-9a-fA-F]{6}$/.test(brandColorRaw) ? brandColorRaw : null;
+  const showBrandLogo = formData.get("show_brand_logo") === "on";
+
+  // Upload da logo (opcional) — mesmo bucket público 'avatars' usado
+  // pela foto de perfil, com sufixo próprio no nome do arquivo.
+  let logoUrl: string | undefined;
+  const file = formData.get("logo") as File | null;
+  if (file && file.size > 0) {
+    if (file.size > 2 * 1024 * 1024) {
+      console.warn(`[saveBrandTemplate] logo rejeitada (${file.size} bytes > 2MB)`);
+    } else {
+      const ext = file.type === "image/png" ? "png" : "jpg";
+      const path = `${user.id}-logo.${ext}`;
+      const admin = createAdminClient();
+      const { error: uploadError } = await admin.storage
+        .from("avatars")
+        .upload(path, file, { contentType: file.type, upsert: true });
+      if (uploadError) {
+        console.error("[saveBrandTemplate] falha no upload da logo:", uploadError.message);
+      } else {
+        const { data } = admin.storage.from("avatars").getPublicUrl(path);
+        logoUrl = `${data.publicUrl}?v=${Date.now()}`;
+      }
+    }
+  }
+
+  // Captura o default ANTIGO — necessário pra resincronizar a cor da
+  // contra-capa nos posts ainda não customizados (mesma lógica de
+  // saveVisualIdentity).
+  const { data: oldConfig } = await supabase
+    .from("notification_configs")
+    .select("*")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const { error } = await supabase.from("notification_configs").upsert(
+    {
+      user_id: user.id,
+      post_font_family: postFontFamily,
+      show_brand_logo: showBrandLogo,
+      ...(brandName && { brand_name: brandName }),
+      ...(logoUrl && { logo_url: logoUrl }),
+      ...(brandColor && { color_accent: brandColor, color_keyword_box: brandColor }),
+    },
+    { onConflict: "user_id" }
+  );
+  if (error) throw new Error(error.message);
+
+  const { data: freshConfig } = await supabase
+    .from("notification_configs")
+    .select("*")
+    .eq("user_id", user.id)
+    .single();
+  if (freshConfig) {
+    const profile: IgProfile = {
+      handle: freshConfig.ig_handle,
+      displayName: freshConfig.ig_display_name,
+      avatarUrl: freshConfig.ig_avatar_url,
+      verified: freshConfig.ig_verified,
+      showProfileChip: freshConfig.show_profile_chip,
+    };
+    const brand = buildBrand(freshConfig);
+    await resyncChipOnPendingPosts(user.id, profile, brand);
+
+    if (brandColor && oldConfig) {
+      const oldIdentity: VisualIdentity = {
+        colorBackground: oldConfig.color_background,
+        colorAccent: oldConfig.color_accent,
+        colorText: oldConfig.color_text,
+        colorKeywordBox: oldConfig.color_keyword_box,
+        keyword: oldConfig.tpl_keyword,
+        topText: oldConfig.tpl_top_text,
+        bottomText: oldConfig.tpl_bottom_text,
+        ctaEnabled: oldConfig.tpl_cta_enabled ?? false,
+      };
+      const newIdentity: VisualIdentity = { ...oldIdentity, colorAccent: brandColor, colorKeywordBox: brandColor };
+      await resyncIdentityOnUnmodifiedPendingPosts(user.id, oldIdentity, newIdentity, profile, false, brand);
+    }
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/");
+}
+
+/**
+ * Salva o nicho do negócio (Ajustes) — direciona o tom dos posts
+ * gerados e o critério de triagem viral (ver lib/ai/generate.ts e
+ * lib/ai/triage.ts). Não re-renderiza posts existentes: só afeta
+ * conteúdo gerado dali pra frente.
+ */
+export async function saveNiche(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const niche = String(formData.get("niche") ?? "").trim() || null;
+
+  const { error } = await supabase.from("notification_configs").upsert(
+    { user_id: user.id, niche },
+    { onConflict: "user_id" }
+  );
+  if (error) throw new Error(error.message);
+
+  // Semeia as fontes RSS curadas do nicho — sem isso, trocar o nicho
+  // em Ajustes não trazia nenhuma fonte nova pra fila gerar conteúdo.
+  // ignoreDuplicates: fontes que o usuário já tem (mesma feed_url) não
+  // duplicam nem sobrescrevem o threshold customizado.
+  const { sourcesForNiche } = await import("@/lib/niche-sources");
+  const rows = sourcesForNiche(niche).map((s) => ({
+    user_id: user.id,
+    name: s.name,
+    feed_url: s.feed_url,
+    threshold: s.threshold,
+  }));
+  const { error: sourcesError } = await supabase
+    .from("source_configs")
+    .upsert(rows, { onConflict: "user_id,feed_url", ignoreDuplicates: true });
+  if (sourcesError) {
+    console.error("[saveNiche] falha ao semear fontes do nicho:", sourcesError.message);
+  }
+
+  revalidatePath("/settings");
 }
 
 /**
@@ -674,7 +836,7 @@ export async function applyTemplateToPost(
   // Perfil para o chip (mesma fonte da geração)
   const { data: config } = await supabase
     .from("notification_configs")
-    .select("ig_handle, ig_display_name, ig_avatar_url, ig_verified, show_profile_chip")
+    .select("*")
     .maybeSingle();
 
   const identity: VisualIdentity = {
@@ -705,7 +867,8 @@ export async function applyTemplateToPost(
     postId,
     identity,
     profile,
-    watermark
+    watermark,
+    buildBrand(config)
   );
 
   const { error } = await supabase
@@ -773,5 +936,10 @@ export async function revertApproval(
 export async function signOut() {
   const supabase = createClient();
   await supabase.auth.signOut();
-  revalidatePath("/");
+  revalidatePath("/", "layout");
+  // redirect() lança internamente — sem isso o form action só invalida
+  // cache e o client fica preso na página protegida até a próxima
+  // navegação manual "pescar" o middleware. Com redirect(), a troca
+  // pro /login é imediata (mesma resposta do server action).
+  redirect("/login");
 }
