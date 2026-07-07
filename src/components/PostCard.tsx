@@ -362,7 +362,7 @@ export function PostCard({
         {/* ===== Ações — 1 clique, sem manual ===== */}
         <CardActions>
           <Button
-            variant="success"
+            variant="primary"
             className="flex-1"
             disabled={isPending || exit !== null}
             onClick={() =>

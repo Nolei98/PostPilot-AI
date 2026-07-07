@@ -76,7 +76,13 @@ export async function getMonthlyQuota(userId: string): Promise<{
     plan,
     used,
     limit,
-    remaining: unlimited ? Infinity : Math.max(0, limit - used),
+    // Number.MAX_SAFE_INTEGER, não Infinity: este valor passa pelo
+    // step.run do Inngest (generate-post.ts), que serializa o retorno
+    // em JSON pra memoização/replay — JSON.stringify(Infinity) vira
+    // "null", e "quota.remaining <= 0" com null (coagido a 0) dava
+    // TRUE, bloqueando a geração de posts em contas ilimitadas mesmo
+    // com used bem abaixo do limite nominal do plano.
+    remaining: unlimited ? Number.MAX_SAFE_INTEGER : Math.max(0, limit - used),
     unlimited,
   };
 }
