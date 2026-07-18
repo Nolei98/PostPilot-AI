@@ -144,8 +144,8 @@ visual). Brief completo + prompt mestre no arquivo linkado acima. **Ainda não i
 - [ ] **B9** — Overrides manuais na fila por card (`layout` → `carousel_cards`), re-render só do card. *(UI — pro teu retorno; precisa migration de `carousel_cards.layout`.)*
 - [x] **B10** — Integrado no `generate-carousel` (card 0 = capa via `isCover`); passa wordmark/handle/keywords/brand_mark; best-effort se 027 ausente.
 - [x] **B11** — `templates` (presets sistema + custom por cliente) + `brand_kits.template_selection` (migration 028) + tipos `Template`/`Surface`/`TemplateSpec` + RLS (sistema público, custom por dono). 2 testes RLS.
-- [ ] **B12** — Renderer dirigido por spec (`renderFromSpec`) generaliza B8. *(pro teu retorno — desenho do mapeamento elemento→SVG se beneficia do editor B14 junto.)*
-- [ ] **B13** — Seed ≥4 presets por superfície. *(design visual — pro teu retorno.)*
+- [x] **B12** — `renderFromSpec` (`src/lib/template-render.ts`): desenha a spec (anchor/offset/style/bind → SVG), resolve cor auto/accent + legibilidade, wrap, z-order, visible. `template-presets.ts` = cover+card como spec. **Verificado visualmente**: capa por spec == capa hardcode do B8. Testes.
+- [ ] **B13** — Seed ≥4 presets/superfície no banco (os 2 base já existem como spec em `template-presets.ts`; falta variar marca×cor×fundo e inserir em `templates`). *(design visual — pro teu retorno.)*
 - [ ] **B14** — Editor visual interativo (drag+resize, snapping, camadas, undo/redo, live preview server-side). *(UI grande, precisa iteração visual — pro teu retorno.)*
 - [ ] **B15** — Pipeline usa `template_selection` por superfície. *(depende de B12/B13.)*
 - **Decisões travadas:** fonte = **Geist** (falta o arquivo .ttf p/ embutir no resvg); editor = **preview server-side**.
