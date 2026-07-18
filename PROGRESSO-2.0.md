@@ -134,6 +134,23 @@ Backend pronto e testado; falta a camada de UI e o gatilho.
 - **SPRINT B COMPLETO** ✅ — gera, mostra, edita, baixa, aprova; gatilho por cliente.
 - Runtime confirmado: RPC `find_duplicate_caption` casta `text→vector` no Supabase real.
 
+### 4.2b SPRINT B+ — Acabamento @0verlens + Template Studio  📄 [HANDOFF-overlens-template.md](./HANDOFF-overlens-template.md)
+Extensão do Carousel Engine: capas/cards com acabamento sofisticado (estilo @0verlens),
+**legibilidade adaptativa** ao fundo e **Template Studio** (galeria de modelos + editor
+visual). Brief completo + prompt mestre no arquivo linkado acima. **Ainda não iniciado.**
+- [ ] **B6** — Estender Brand Kit: `handle`, `keywords`, `wordmark`, `font_heading_url`, paleta, `template_defaults` + UI em `settings/brand` + preview. (migration nova)
+- [ ] **B7** — Motor de legibilidade adaptativa (`resolveLegibility` via `sharp`: luminância+desvio por faixa → cor/posição/scrim; auto-hide; override vence). Unit tests.
+- [ ] **B8** — `CapaTemplate` (divisor wordmark `———— OVERLENS® ————`) + `CardTemplate` (marca variável) em Satori; fonte embutida; scrim=gradient; blur real via sharp.
+- [ ] **B9** — Overrides manuais na fila por card (`labelPosition`/`showLabel`/`textColor`/`scrim`/`blur`/`showDivider` → `carousel_cards.layout`), re-render só do card.
+- [ ] **B10** — Integrar no `generate-carousel` (card 0 = capa) + imagem única; mock.
+- [ ] **B11** — Tabela `templates` (presets do sistema + custom por cliente) + `brand_kits.template_selection`. RLS.
+- [ ] **B12** — Renderer dirigido por spec (`renderFromSpec`) generaliza B8.
+- [ ] **B13** — Seed ≥4 presets por superfície (cover_image / video_cover / carousel_page / carousel_last), variando marca × cor × fundo.
+- [ ] **B14** — Editor visual interativo (drag+resize, snapping, camadas, toolbar, undo/redo, live preview server-side).
+- [ ] **B15** — Pipeline usa `template_selection` por superfície (carrossel, imagem única, vídeo).
+- **Decisões pendentes:** (1) **fonte** da headline p/ embutir no Satori — Geist / General Sans / Space Grotesk / Archivo (grátis) ou Neue Montreal/Söhne (paga). (2) **Editor** = preview renderizado no servidor (mesma engine B12, debounce) em vez de imitar em CSS — confirmar.
+- Depende de: Sprint D (Remotion) para a montagem de vídeo do `video_cover` (aqui só o branding/legenda).
+
 ### 4.3 SPRINT C — Graph API (publicação auto + fecha o loop de métricas)
 - [ ] OAuth de conta IG Business/Creator por cliente (token por `client_id`).
 - [ ] Publicação automática (single + carrossel) + agendamento via `scheduled_for`
