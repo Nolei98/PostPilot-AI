@@ -139,16 +139,18 @@ Extensão do Carousel Engine: capas/cards com acabamento sofisticado (estilo @0v
 **legibilidade adaptativa** ao fundo e **Template Studio** (galeria de modelos + editor
 visual). Brief completo + prompt mestre no arquivo linkado acima. **Ainda não iniciado.**
 - [x] **B6** — Estender Brand Kit (migration 027): `keywords`, `wordmark`, `font_heading_url`, `brand_mark`, `template_defaults` (reusa `ig_handle` como handle) + tipos `BrandMark`/`TemplateDefaults` + seção "Identidade de rótulo" em Ajustes (`BrandLabelForm`) com **preview ao vivo** + `saveBrandLabel` + teste de schema (pglite). *Fonte Geist (`font_heading_url` upload) fica no B8 quando embutir no Satori.* Decisões: **Geist** + editor **server-side**.
-- [ ] **B7** — Motor de legibilidade adaptativa (`resolveLegibility` via `sharp`: luminância+desvio por faixa → cor/posição/scrim; auto-hide; override vence). Unit tests.
-- [ ] **B8** — `CapaTemplate` (divisor wordmark `———— OVERLENS® ————`) + `CardTemplate` (marca variável) em Satori; fonte embutida; scrim=gradient; blur real via sharp.
-- [ ] **B9** — Overrides manuais na fila por card (`labelPosition`/`showLabel`/`textColor`/`scrim`/`blur`/`showDivider` → `carousel_cards.layout`), re-render só do card.
-- [ ] **B10** — Integrar no `generate-carousel` (card 0 = capa) + imagem única; mock.
-- [ ] **B11** — Tabela `templates` (presets do sistema + custom por cliente) + `brand_kits.template_selection`. RLS.
-- [ ] **B12** — Renderer dirigido por spec (`renderFromSpec`) generaliza B8.
-- [ ] **B13** — Seed ≥4 presets por superfície (cover_image / video_cover / carousel_page / carousel_last), variando marca × cor × fundo.
-- [ ] **B14** — Editor visual interativo (drag+resize, snapping, camadas, toolbar, undo/redo, live preview server-side).
-- [ ] **B15** — Pipeline usa `template_selection` por superfície (carrossel, imagem única, vídeo).
-- **Decisões pendentes:** (1) **fonte** da headline p/ embutir no Satori — Geist / General Sans / Space Grotesk / Archivo (grátis) ou Neue Montreal/Söhne (paga). (2) **Editor** = preview renderizado no servidor (mesma engine B12, debounce) em vez de imitar em CSS — confirmar.
+- [x] **B7** — Motor de legibilidade adaptativa (`src/lib/legibility.ts`): `contrastRatio` (WCAG), `measureBands` (sharp: L+desvio por faixa), `decideLegibility` (puro: cor/posição/scrim/auto-hide/override), `resolveLegibility`. 13 testes.
+- [x] **B8** — Render @0verlens via **SVG+resvg** (decisão: NÃO introduzi Satori às cegas — reuso o pipeline que já renderiza): `buildCoverSvg` (divisor `———— WORDMARK ————` + headline auto-fit + "DESLIZE PARA VER") + `brandLabelText`/label nos cards por `brand_mark`. **Verificado visualmente** (capa sai bonita). Fonte: usa a família atual (Geist entra quando o .ttf for fornecido).
+- [ ] **B9** — Overrides manuais na fila por card (`layout` → `carousel_cards`), re-render só do card. *(UI — pro teu retorno; precisa migration de `carousel_cards.layout`.)*
+- [x] **B10** — Integrado no `generate-carousel` (card 0 = capa via `isCover`); passa wordmark/handle/keywords/brand_mark; best-effort se 027 ausente.
+- [x] **B11** — `templates` (presets sistema + custom por cliente) + `brand_kits.template_selection` (migration 028) + tipos `Template`/`Surface`/`TemplateSpec` + RLS (sistema público, custom por dono). 2 testes RLS.
+- [ ] **B12** — Renderer dirigido por spec (`renderFromSpec`) generaliza B8. *(pro teu retorno — desenho do mapeamento elemento→SVG se beneficia do editor B14 junto.)*
+- [ ] **B13** — Seed ≥4 presets por superfície. *(design visual — pro teu retorno.)*
+- [ ] **B14** — Editor visual interativo (drag+resize, snapping, camadas, undo/redo, live preview server-side). *(UI grande, precisa iteração visual — pro teu retorno.)*
+- [ ] **B15** — Pipeline usa `template_selection` por superfície. *(depende de B12/B13.)*
+- **Decisões travadas:** fonte = **Geist** (falta o arquivo .ttf p/ embutir no resvg); editor = **preview server-side**.
+- **Migrations a aplicar quando voltar:** `027_brand_label_identity.sql` (✅ já aplicou), `028_templates.sql` (pendente — aditiva, código não depende dela em runtime ainda).
+- **Decisão de engenharia (autônoma):** o brief pedia Satori; usei o render **SVG+resvg** que já existe e funciona (evita dep nova + risco). O contrato `spec` (B12) pode ser desenhado sobre esse mesmo render. Reverter pra Satori é possível se você preferir.
 - Depende de: Sprint D (Remotion) para a montagem de vídeo do `video_cover` (aqui só o branding/legenda).
 
 ### 4.3 SPRINT C — Graph API (publicação auto + fecha o loop de métricas)
