@@ -4,6 +4,7 @@
 // svg-render) e sobe no Storage. O builder do SVG é puro e testável;
 // a rasterização/upload usa infra nativa (não roda em unit test).
 // ============================================================
+import sharp from "sharp";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rasterizeSvg } from "@/lib/svg-render";
 import type { CarouselCard } from "@/lib/ai/carousel";
@@ -98,32 +99,42 @@ function coverHeadlineSize(headline: string): { size: number; lineH: number; max
  * o WORDMARK (———— WORDMARK ————) no topo do bloco + headline grande
  * centralizada (auto-fit, máx ~5 linhas). Fundo sólido da marca.
  */
-export function buildCoverSvg(card: CarouselCard, brand: CardBrand): string {
+export function buildCoverSvg(card: CarouselCard, brand: CardBrand, transparent = false): string {
   const family = brand.fontFamily || "Inter";
   const bg = brand.colorBackground || "#0B0B12";
   const accent = brand.colorAccent || "#7C5CFF";
   const text = brand.colorText || "#FFFFFF";
-  const pad = 110;
+  const pad = 90;
   const cx = CARD_W / 2;
 
   const wm = (brand.wordmark || brand.brandName || "").toUpperCase();
   const { size, lineH, maxChars } = coverHeadlineSize(card.headline ?? "");
   const lines = wrapText(card.headline ?? "", maxChars).slice(0, 5);
-  const headStartY = 560 - ((lines.length - 1) * lineH) / 2;
 
-  // Divisor: régua — WORDMARK — régua. As réguas ficam FORA do texto
-  // (meia-largura do wordmark + folga), pra não riscar o wordmark.
-  const dividerY = headStartY - 160;
-  const halfText = wm ? (wm.length * 22) / 2 + 28 : 0; // ~22px/char (fonte 26 + tracking 6)
-  const ruleLen = 150;
+  // Divisor NO TOPO; réguas preenchem até as bordas (margem `pad`), com
+  // folga pequena ao redor do wordmark centralizado.
+  const dividerY = 300;
+  const headStartY = dividerY + 150; // headline logo ABAIXO do divisor
+  const halfText = wm ? (wm.length * 22) / 2 + 24 : 0;
   const divider = wm
-    ? `<line x1="${cx - halfText - ruleLen}" y1="${dividerY}" x2="${cx - halfText}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.45" stroke-width="1.5"/>
-  <line x1="${cx + halfText}" y1="${dividerY}" x2="${cx + halfText + ruleLen}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.45" stroke-width="1.5"/>
+    ? `<line x1="${pad}" y1="${dividerY}" x2="${cx - halfText}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.4" stroke-width="1.5"/>
+  <line x1="${cx + halfText}" y1="${dividerY}" x2="${CARD_W - pad}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.4" stroke-width="1.5"/>
   <text x="${cx}" y="${dividerY + 8}" font-family="${family}" font-weight="600" font-size="26" letter-spacing="6" fill="${accent}" text-anchor="middle">${escapeXml(wm)}</text>`
     : "";
 
+  // Com foto (transparent), um scrim vertical suave reforça a legibilidade
+  // do texto sem tapar a foto inteira.
+  const scrim = transparent
+    ? `<defs><linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000" stop-opacity="0.15"/>
+      <stop offset="0.4" stop-color="#000" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.15"/>
+    </linearGradient></defs>
+  <rect width="${CARD_W}" height="${CARD_H}" fill="url(#scrim)"/>`
+    : `<rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>`;
+
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
-  <rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>
+  ${scrim}
   <rect x="0" y="0" width="${CARD_W}" height="14" fill="${accent}"/>
   ${divider}
   <text font-family="${family}" font-weight="800" font-size="${size}" fill="${text}" text-anchor="middle" letter-spacing="-1">
@@ -138,7 +149,7 @@ export function buildCoverSvg(card: CarouselCard, brand: CardBrand): string {
  * SVG do card (string). role define o layout: hook = headline grande
  * centralizado; cta = faixa de destaque; value = headline + body.
  */
-export function buildCardSvg(card: CarouselCard, brand: CardBrand): string {
+export function buildCardSvg(card: CarouselCard, brand: CardBrand, transparent = false): string {
   const family = brand.fontFamily || "Inter";
   const bg = brand.colorBackground || "#0B0B12";
   const accent = brand.colorAccent || "#7C5CFF";
@@ -159,8 +170,12 @@ export function buildCardSvg(card: CarouselCard, brand: CardBrand): string {
     : "PostPilot";
   const label = brandLabelText(brand);
 
+  const cardBg = transparent
+    ? `<rect width="${CARD_W}" height="${CARD_H}" fill="#000" fill-opacity="0.42"/>`
+    : `<rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>`;
+
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
-  <rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>
+  ${cardBg}
   <rect x="0" y="0" width="${CARD_W}" height="14" fill="${accent}"/>
   ${label ? `<text x="${pad}" y="130" font-family="${family}" font-weight="600" font-size="24" letter-spacing="3" fill="${text}" fill-opacity="0.7">${escapeXml(label)}</text>` : ""}
   ${isCta ? `<rect x="${pad}" y="${headStartY - 120}" width="${CARD_W - pad * 2}" height="${headLineH * headlineLines.length + 80}" rx="28" fill="${accent}" opacity="0.16"/>` : ""}
@@ -183,14 +198,37 @@ export function buildCardSvg(card: CarouselCard, brand: CardBrand): string {
  * Rasteriza o card e sobe no bucket post-images. Retorna a URL pública.
  * Usa service role (job) — não roda em unit test.
  */
+/** Compõe o card sobre uma FOTO: resize + blur + escurece; texto por cima. */
+async function composePhotoBg(photo: Buffer, svg: string): Promise<Buffer> {
+  const base = await sharp(photo)
+    .resize(CARD_W, CARD_H, { fit: "cover", position: "attention" })
+    .blur(8) // blur real do fundo (o texto fica nítido por cima)
+    .modulate({ brightness: 0.55 }) // escurece p/ o texto branco ficar legível
+    .toBuffer();
+  const overlay = rasterizeSvg(svg); // PNG transparente (scrim + texto)
+  return sharp(base)
+    .composite([{ input: overlay, top: 0, left: 0 }])
+    .png()
+    .toBuffer();
+}
+
 export async function renderAndUploadCard(
   postId: string,
   card: CarouselCard,
   brand: CardBrand,
-  isCover = false
+  isCover = false,
+  bgImage: Buffer | null = null
 ): Promise<string> {
-  const svg = isCover ? buildCoverSvg(card, brand) : buildCardSvg(card, brand);
-  const png = rasterizeSvg(svg);
+  let png: Buffer;
+  if (bgImage) {
+    // Foto de fundo: texto branco sobre foto borrada/escurecida (@0verlens).
+    const onPhoto: CardBrand = { ...brand, colorText: "#FFFFFF" };
+    const svg = isCover ? buildCoverSvg(card, onPhoto, true) : buildCardSvg(card, onPhoto, true);
+    png = await composePhotoBg(bgImage, svg);
+  } else {
+    const svg = isCover ? buildCoverSvg(card, brand) : buildCardSvg(card, brand);
+    png = rasterizeSvg(svg);
+  }
   const supabase = createAdminClient();
   const path = `${postId}-card-${card.idx}.png`;
   const { error } = await supabase.storage

@@ -32,8 +32,8 @@ export interface CarouselInput {
   niche?: string | null;
 }
 
-export const MIN_CARDS = 7;
-export const MAX_CARDS = 10;
+export const MIN_CARDS = 5;
+export const MAX_CARDS = 7; // 7º card = contracapa (CTA/fechamento)
 
 const LANGUAGE_NAMES: Record<string, string> = {
   "pt-BR": "português do Brasil",
@@ -74,8 +74,7 @@ function mockCarousel(input: CarouselInput): CarouselPackage {
     { idx: 3, role: "value", headline: "O detalhe que ninguém viu", body: "Um ponto que muda a leitura da notícia." },
     { idx: 4, role: "value", headline: "O que fazer agora", body: "3 passos práticos para sair na frente." },
     { idx: 5, role: "value", headline: "O erro comum", body: "O que a maioria vai fazer errado." },
-    { idx: 6, role: "value", headline: "O futuro próximo", body: "Para onde isso caminha nos próximos meses." },
-    { idx: 7, role: "cta", headline: "Salve e siga 👇", body: "Me segue para não perder a próxima novidade." },
+    { idx: 6, role: "cta", headline: "Salve e siga 👇", body: "Me segue para não perder a próxima novidade." },
   ];
   return {
     caption: `[MOCK] ${t}\n\nO fio completo está nos cards. 🧵\n\n👉 Salva para ler depois e me segue!`,

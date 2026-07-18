@@ -109,12 +109,33 @@ export const generateCarousel = inngest.createFunction(
       return data.id as string;
     });
 
+    // Foto de fundo da capa = imagem da notícia (se houver). Base64 porque
+    // resultados de step são serializados em JSON.
+    const coverPhotoB64 = await step.run("fetch-cover-photo", async () => {
+      if (!news.image_url) return null;
+      try {
+        const r = await fetch(news.image_url);
+        if (!r.ok) return null;
+        return Buffer.from(await r.arrayBuffer()).toString("base64");
+      } catch {
+        return null;
+      }
+    });
+    const coverPhoto = coverPhotoB64 ? Buffer.from(coverPhotoB64, "base64") : null;
+
     // Renderiza e grava cada card (step por card = retry independente).
     const cardUrls: string[] = [];
     for (const card of pkg.cards) {
       const url = await step.run(`card-${card.idx}`, async () => {
-        // card 0 = capa (divisor wordmark @0verlens); demais = card interior.
-        const imageUrl = await renderAndUploadCard(postId, card, prefs.card, card.idx === 0);
+        // card 0 = capa (divisor wordmark @0verlens, sobre a foto da notícia
+        // borrada/escurecida quando houver); demais = card interior.
+        const imageUrl = await renderAndUploadCard(
+          postId,
+          card,
+          prefs.card,
+          card.idx === 0,
+          card.idx === 0 ? coverPhoto : null
+        );
         const { error } = await supabase.from("carousel_cards").insert({
           post_id: postId,
           idx: card.idx,

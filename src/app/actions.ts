@@ -40,7 +40,7 @@ async function resyncCarouselOnPendingPosts(clientId: string, cardBrand: CardBra
   const supabase = createClient();
   const { data: posts } = await supabase
     .from("posts")
-    .select("id")
+    .select("id, news_item_id")
     .eq("client_id", clientId)
     .eq("status", "pending_approval")
     .eq("format", "carousel");
@@ -48,6 +48,22 @@ async function resyncCarouselOnPendingPosts(clientId: string, cardBrand: CardBra
 
   const { renderAndUploadCard } = await import("@/lib/carousel-render");
   for (const post of posts) {
+    // Foto de fundo da capa = imagem da notícia de origem (se houver).
+    let coverPhoto: Buffer | null = null;
+    const { data: news } = await supabase
+      .from("news_items")
+      .select("image_url")
+      .eq("id", post.news_item_id)
+      .maybeSingle();
+    if (news?.image_url) {
+      try {
+        const r = await fetch(news.image_url);
+        if (r.ok) coverPhoto = Buffer.from(await r.arrayBuffer());
+      } catch {
+        /* sem foto → capa sólida */
+      }
+    }
+
     const { data: cards } = await supabase
       .from("carousel_cards")
       .select("id, idx, role, headline, body")
@@ -68,7 +84,8 @@ async function resyncCarouselOnPendingPosts(clientId: string, cardBrand: CardBra
             body: c.body ?? "",
           },
           cardBrand,
-          isCover
+          isCover,
+          isCover ? coverPhoto : null
         );
         await supabase.from("carousel_cards").update({ image_url: url }).eq("id", c.id);
         if (isCover) coverUrl = url;
