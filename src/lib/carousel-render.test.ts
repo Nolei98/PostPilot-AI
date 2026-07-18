@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { buildCardSvg, wrapText, CARD_W, CARD_H, type CardBrand } from "@/lib/carousel-render";
+import {
+  buildCardSvg,
+  buildCoverSvg,
+  brandLabelText,
+  wrapText,
+  CARD_W,
+  CARD_H,
+  type CardBrand,
+} from "@/lib/carousel-render";
 import type { CarouselCard } from "@/lib/ai/carousel";
 
 const brand: CardBrand = {
@@ -48,5 +56,47 @@ describe("buildCardSvg", () => {
     const svg = buildCardSvg({ ...card, idx: 4 }, brand);
     expect(svg).toContain("Marca Teste");
     expect(svg).toContain(">5<"); // idx 4 → card 5
+  });
+});
+
+describe("brandLabelText", () => {
+  const b = (over: Partial<CardBrand>): CardBrand => ({ ...brand, ...over });
+
+  it("brandMark 'handle' → @handle", () => {
+    expect(brandLabelText(b({ brandMark: "handle", handle: "0verlens" }))).toBe("@0verlens");
+  });
+  it("brandMark 'wordmark' → WORDMARK", () => {
+    expect(brandLabelText(b({ brandMark: "wordmark", wordmark: "Overlens" }))).toBe("OVERLENS");
+  });
+  it("brandMark 'wordmark+handle' junta os dois", () => {
+    const r = brandLabelText(b({ brandMark: "wordmark+handle", wordmark: "Ov", handle: "h" }));
+    expect(r).toContain("OV");
+    expect(r).toContain("@h");
+  });
+  it("brandMark 'auto' mostra @handle + keywords", () => {
+    const r = brandLabelText(b({ brandMark: "auto", handle: "h", keywords: ["ARTE", "TECH"] }));
+    expect(r).toContain("@h");
+    expect(r).toContain("ARTE, TECH");
+  });
+  it("brandMark 'none' e 'icon' → null", () => {
+    expect(brandLabelText(b({ brandMark: "none" }))).toBeNull();
+    expect(brandLabelText(b({ brandMark: "icon" }))).toBeNull();
+  });
+});
+
+describe("buildCoverSvg", () => {
+  const cover: CarouselCard = { idx: 0, role: "hook", headline: "Diga adeus às fake news", body: "" };
+
+  it("tem dimensões e mostra o wordmark no divisor", () => {
+    const svg = buildCoverSvg(cover, { ...brand, wordmark: "Overlens" });
+    expect(svg).toContain(`width="${CARD_W}"`);
+    expect(svg).toContain(`height="${CARD_H}"`);
+    expect(svg).toContain("OVERLENS"); // wordmark em caixa alta
+    expect(svg).toContain("<line"); // réguas do divisor
+  });
+
+  it("sem wordmark, não desenha as réguas do divisor", () => {
+    const svg = buildCoverSvg(cover, { ...brand, wordmark: null, brandName: null });
+    expect(svg).not.toContain("<line");
   });
 });

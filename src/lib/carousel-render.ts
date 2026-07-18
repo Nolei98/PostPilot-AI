@@ -7,6 +7,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rasterizeSvg } from "@/lib/svg-render";
 import type { CarouselCard } from "@/lib/ai/carousel";
+import type { BrandMark } from "@/lib/types";
 
 export const CARD_W = 1080;
 export const CARD_H = 1350;
@@ -18,6 +19,11 @@ export interface CardBrand {
   colorText: string;
   fontFamily: string; // família já resolvida (ver resolvePostFontFamily)
   brandName: string | null;
+  // Identidade de rótulo @0verlens (Sprint B+, opcional).
+  wordmark?: string | null; // divisor da capa
+  handle?: string | null; // @ do perfil
+  keywords?: string[] | null; // rótulo dos cards
+  brandMark?: BrandMark; // tratamento de marca dos cards interiores
 }
 
 function escapeXml(s: string): string {
@@ -56,6 +62,78 @@ function tspans(lines: string[], x: number, startY: number, lineH: number): stri
     .join("");
 }
 
+/** Rótulo de marca dos cards interiores, conforme brandMark. null = sem rótulo. */
+export function brandLabelText(brand: CardBrand): string | null {
+  const bm = brand.brandMark ?? "auto";
+  if (bm === "none" || bm === "icon") return null;
+  const handle = brand.handle ? `@${brand.handle}` : null;
+  const wm = brand.wordmark ? brand.wordmark.toUpperCase() : null;
+  const kws =
+    brand.keywords && brand.keywords.length
+      ? brand.keywords.join(", ").toUpperCase()
+      : null;
+  const parts: string[] = [];
+  if (bm === "wordmark" || bm === "wordmark+handle") {
+    if (wm) parts.push(wm);
+  }
+  if (bm === "handle" || bm === "wordmark+handle" || bm === "auto") {
+    if (handle) parts.push(handle);
+  }
+  if (bm === "auto") {
+    if (kws) parts.push(kws);
+  }
+  return parts.length ? parts.join("  ·  ") : null;
+}
+
+/** Tamanho de fonte da headline da capa por comprimento (auto-fit simples). */
+function coverHeadlineSize(headline: string): { size: number; lineH: number; maxChars: number } {
+  const n = headline.length;
+  if (n <= 36) return { size: 94, lineH: 104, maxChars: 15 };
+  if (n <= 64) return { size: 76, lineH: 86, maxChars: 19 };
+  return { size: 60, lineH: 70, maxChars: 25 };
+}
+
+/**
+ * SVG da CAPA (card 0 / imagem única) no estilo @0verlens: divisor com
+ * o WORDMARK (———— WORDMARK ————) no topo do bloco + headline grande
+ * centralizada (auto-fit, máx ~5 linhas). Fundo sólido da marca.
+ */
+export function buildCoverSvg(card: CarouselCard, brand: CardBrand): string {
+  const family = brand.fontFamily || "Inter";
+  const bg = brand.colorBackground || "#0B0B12";
+  const accent = brand.colorAccent || "#7C5CFF";
+  const text = brand.colorText || "#FFFFFF";
+  const pad = 110;
+  const cx = CARD_W / 2;
+
+  const wm = (brand.wordmark || brand.brandName || "").toUpperCase();
+  const { size, lineH, maxChars } = coverHeadlineSize(card.headline ?? "");
+  const lines = wrapText(card.headline ?? "", maxChars).slice(0, 5);
+  const headStartY = 560 - ((lines.length - 1) * lineH) / 2;
+
+  // Divisor: régua — WORDMARK — régua. As réguas ficam FORA do texto
+  // (meia-largura do wordmark + folga), pra não riscar o wordmark.
+  const dividerY = headStartY - 160;
+  const halfText = wm ? (wm.length * 22) / 2 + 28 : 0; // ~22px/char (fonte 26 + tracking 6)
+  const ruleLen = 150;
+  const divider = wm
+    ? `<line x1="${cx - halfText - ruleLen}" y1="${dividerY}" x2="${cx - halfText}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.45" stroke-width="1.5"/>
+  <line x1="${cx + halfText}" y1="${dividerY}" x2="${cx + halfText + ruleLen}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.45" stroke-width="1.5"/>
+  <text x="${cx}" y="${dividerY + 8}" font-family="${family}" font-weight="600" font-size="26" letter-spacing="6" fill="${accent}" text-anchor="middle">${escapeXml(wm)}</text>`
+    : "";
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
+  <rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>
+  <rect x="0" y="0" width="${CARD_W}" height="14" fill="${accent}"/>
+  ${divider}
+  <text font-family="${family}" font-weight="800" font-size="${size}" fill="${text}" text-anchor="middle" letter-spacing="-1">
+    ${tspans(lines, cx, headStartY, lineH)}
+  </text>
+  <text x="${cx}" y="${CARD_H - 120}" font-family="${family}" font-weight="600" font-size="26" letter-spacing="4" fill="${text}" fill-opacity="0.75" text-anchor="middle">DESLIZE PARA VER →</text>
+  <text x="${pad}" y="${CARD_H - 60}" font-family="${family}" font-weight="600" font-size="28" fill="${accent}">${escapeXml(brand.brandName || "PostPilot")}</text>
+</svg>`;
+}
+
 /**
  * SVG do card (string). role define o layout: hook = headline grande
  * centralizado; cta = faixa de destaque; value = headline + body.
@@ -79,10 +157,12 @@ export function buildCardSvg(card: CarouselCard, brand: CardBrand): string {
   const footerLabel = brand.brandName
     ? escapeXml(brand.brandName)
     : "PostPilot";
+  const label = brandLabelText(brand);
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
   <rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>
   <rect x="0" y="0" width="${CARD_W}" height="14" fill="${accent}"/>
+  ${label ? `<text x="${pad}" y="130" font-family="${family}" font-weight="600" font-size="24" letter-spacing="3" fill="${text}" fill-opacity="0.7">${escapeXml(label)}</text>` : ""}
   ${isCta ? `<rect x="${pad}" y="${headStartY - 120}" width="${CARD_W - pad * 2}" height="${headLineH * headlineLines.length + 80}" rx="28" fill="${accent}" opacity="0.16"/>` : ""}
   <text font-family="${family}" font-weight="700" font-size="${headSize}" fill="${text}" text-anchor="${isHook || isCta ? "middle" : "start"}">
     ${tspans(headlineLines, isHook || isCta ? CARD_W / 2 : pad, headStartY, headLineH)}
@@ -106,9 +186,11 @@ export function buildCardSvg(card: CarouselCard, brand: CardBrand): string {
 export async function renderAndUploadCard(
   postId: string,
   card: CarouselCard,
-  brand: CardBrand
+  brand: CardBrand,
+  isCover = false
 ): Promise<string> {
-  const png = rasterizeSvg(buildCardSvg(card, brand));
+  const svg = isCover ? buildCoverSvg(card, brand) : buildCardSvg(card, brand);
+  const png = rasterizeSvg(svg);
   const supabase = createAdminClient();
   const path = `${postId}-card-${card.idx}.png`;
   const { error } = await supabase.storage

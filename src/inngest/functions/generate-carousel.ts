@@ -62,6 +62,11 @@ export const generateCarousel = inngest.createFunction(
         colorText: data?.color_text ?? "#FFFFFF",
         fontFamily: resolvePostFontFamily(data?.post_font_family),
         brandName: data?.brand_name ?? null,
+        // Identidade de rótulo @0verlens (migration 027; best-effort se ausente).
+        wordmark: (data?.wordmark as string | null | undefined) ?? null,
+        handle: (data?.ig_handle as string | null | undefined) ?? null,
+        keywords: (data?.keywords as string[] | null | undefined) ?? null,
+        brandMark: (data?.brand_mark as CardBrand["brandMark"]) ?? "auto",
       };
       return {
         language: (data?.post_language as string | undefined) ?? "pt-BR",
@@ -108,7 +113,8 @@ export const generateCarousel = inngest.createFunction(
     const cardUrls: string[] = [];
     for (const card of pkg.cards) {
       const url = await step.run(`card-${card.idx}`, async () => {
-        const imageUrl = await renderAndUploadCard(postId, card, prefs.card);
+        // card 0 = capa (divisor wordmark @0verlens); demais = card interior.
+        const imageUrl = await renderAndUploadCard(postId, card, prefs.card, card.idx === 0);
         const { error } = await supabase.from("carousel_cards").insert({
           post_id: postId,
           idx: card.idx,
