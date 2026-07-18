@@ -26,6 +26,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Input, Textarea } from "@/components/ui/Input";
 import { CarouselPreview } from "@/components/CarouselPreview";
 import { CarouselDownload } from "@/components/CarouselDownload";
+import { CarouselEditor } from "@/components/CarouselEditor";
 import { resizeImageForUpload } from "@/lib/resizeImageClient";
 import { useToast } from "@/components/ui/Toast";
 import type { IgProfile, PostWithNews, VisualIdentity } from "@/lib/types";
@@ -51,6 +52,7 @@ export function PostCard({
   const HANDLE = profile.handle;
   const toast = useToast();
   const [editing, setEditing] = useState(false);
+  const [cardsOpen, setCardsOpen] = useState(false);
   const [hook, setHook] = useState(post.hook);
   const [caption, setCaption] = useState(post.caption);
   const [hashtags, setHashtags] = useState(post.hashtags);
@@ -318,7 +320,16 @@ export function PostCard({
             <p className="mt-1 text-secondary">{hashtags}</p>
           </div>
           {isCarousel && (
-            <div className="px-3 pb-3">
+            <div className="flex flex-col gap-2 px-3 pb-3">
+              {(post.carousel_cards?.length ?? 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCardsOpen(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-control bg-surface-2 px-3 py-2 text-caption text-muted transition-colors hover:text-content"
+                >
+                  ✎ Editar cards
+                </button>
+              )}
               <CarouselDownload
                 images={previewImages}
                 name={`carrossel-${post.id.slice(0, 8)}`}
@@ -467,6 +478,19 @@ export function PostCard({
             </Button>
           </div>
         </div>
+      </Drawer>
+
+      {/* ===== Drawer de edição dos cards do carrossel ===== */}
+      <Drawer
+        open={cardsOpen}
+        onClose={() => setCardsOpen(false)}
+        title="Editar cards do carrossel"
+      >
+        <p className="mb-3 text-caption text-muted">
+          Ajuste o texto de cada card. Salvar re-renderiza só aquele card
+          com as cores/fonte da marca.
+        </p>
+        <CarouselEditor cards={post.carousel_cards ?? []} />
       </Drawer>
 
       {/* ===== Modal da contra-capa (por post) ===== */}

@@ -22,7 +22,7 @@ export default async function DashboardPage() {
   const { data: queue } = await supabase
     .from("posts")
     .select(
-      "*, news_items(title, url, viral_score, image_url, image_license_hint), carousel_cards(idx, image_url)"
+      "*, news_items(title, url, viral_score, image_url, image_license_hint), carousel_cards(id, idx, role, headline, body, image_url)"
     )
     .eq("status", "pending_approval")
     .eq("client_id", clientId ?? "")

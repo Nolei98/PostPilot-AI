@@ -109,14 +109,17 @@ Backend pronto e testado; falta a camada de UI e o gatilho.
       contra-capa) escondidos. `image_url` do post = card do gancho → aparece como
       thumbnail em Prontos/Telegram sem mudar nada lá. Guardado por `format` → posts
       single intactos.
-- [ ] **UI de aprovação (v2)**: editar o texto de 1 card e re-renderizar só ele;
-      download zip dos PNGs; galeria dedicada na tela Prontos. *(precisa da UI aberta)*
+- [x] **UI de aprovação (v2)**: download zip dos PNGs (`CarouselDownload`, jszip) +
+      editar o texto de 1 card e re-renderizar só ele (`CarouselEditor` +
+      `updateCarouselCard`). e2e cobre galeria + download + editor.
 - [x] **Gatilho (v1)**: preferência por cliente `brand_kits.default_format`
       (single|carousel, default single). O `scan-news` despacha `generate-post` ou
       `generate-carousel` conforme o cliente. Ajustes tem o seletor "Formato dos posts".
-      Leitura best-effort no scan (se 026 não aplicada → tudo single = hoje).
-      **⚠️ Aplicar migration `026_default_format.sql`** para o seletor/gatilho valerem.
-- **Aceite (restante):** editar/baixar um carrossel pela UI (v2).
+      Migration 026 aplicada.
+- [ ] *(opcional)* galeria/edição de carrossel também na tela Prontos (hoje mostra o
+      card do gancho como thumbnail — funcional).
+- **SPRINT B COMPLETO** ✅ — gera, mostra, edita, baixa, aprova; gatilho por cliente.
+- Runtime confirmado: RPC `find_duplicate_caption` casta `text→vector` no Supabase real.
 
 ### 4.3 SPRINT C — Graph API (publicação auto + fecha o loop de métricas)
 - [ ] OAuth de conta IG Business/Creator por cliente (token por `client_id`).

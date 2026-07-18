@@ -973,6 +973,67 @@ export async function revertApproval(
 }
 
 /**
+ * Edita o texto de UM card de carrossel e re-renderiza só ele (SVG →
+ * PNG com o Brand Kit do cliente do post). Não toca nos outros cards.
+ */
+export async function updateCarouselCard(
+  cardId: string,
+  fields: { headline: string; body: string }
+) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  // RLS garante posse (via post). Pega o card + o cliente do post.
+  const { data: card, error: cardErr } = await supabase
+    .from("carousel_cards")
+    .select("id, post_id, idx, role")
+    .eq("id", cardId)
+    .single();
+  if (cardErr || !card) throw new Error("Card não encontrado");
+
+  const { data: post } = await supabase
+    .from("posts")
+    .select("client_id")
+    .eq("id", card.post_id)
+    .single();
+  const { data: bk } = await supabase
+    .from("brand_kits")
+    .select("*")
+    .eq("client_id", post?.client_id ?? "")
+    .maybeSingle();
+
+  const { resolvePostFontFamily } = await import("@/lib/font-data");
+  const { renderAndUploadCard } = await import("@/lib/carousel-render");
+  const imageUrl = await renderAndUploadCard(
+    card.post_id,
+    {
+      idx: card.idx,
+      role: card.role as "hook" | "value" | "cta",
+      headline: fields.headline,
+      body: fields.body,
+    },
+    {
+      colorBackground: bk?.color_background ?? "#0B0B12",
+      colorAccent: bk?.color_accent ?? "#7C5CFF",
+      colorText: bk?.color_text ?? "#FFFFFF",
+      fontFamily: resolvePostFontFamily(bk?.post_font_family),
+      brandName: bk?.brand_name ?? null,
+    }
+  );
+
+  const { error } = await supabase
+    .from("carousel_cards")
+    .update({ headline: fields.headline, body: fields.body, image_url: imageUrl })
+    .eq("id", cardId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+  revalidatePath("/ready");
+}
+
+/**
  * Salva o formato padrão de geração do cliente ativo (single | carousel).
  * O scan-news usa isso para decidir qual job disparar em cada candidata.
  */

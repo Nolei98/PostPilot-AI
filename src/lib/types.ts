@@ -189,5 +189,8 @@ export interface PostWithNews extends Post {
     "title" | "url" | "viral_score" | "image_url" | "image_license_hint"
   >;
   // Presente só em posts format='carousel' (embed do PostgREST).
-  carousel_cards?: Pick<CarouselCardRow, "idx" | "image_url">[];
+  carousel_cards?: Pick<
+    CarouselCardRow,
+    "id" | "idx" | "role" | "headline" | "body" | "image_url"
+  >[];
 }

@@ -20,4 +20,10 @@ test("carrossel aparece como galeria e esconde controles single", async ({ page 
 
   // Botão de baixar o carrossel em zip (3 imagens).
   await expect(page.getByRole("button", { name: /Baixar carrossel/ })).toBeVisible();
+
+  // Editor de cards: abre o drawer e mostra os 3 cards.
+  await page.getByRole("button", { name: /Editar cards/ }).click();
+  await expect(page.getByText("Editar cards do carrossel")).toBeVisible();
+  await expect(page.getByText("Card 1 ·")).toBeVisible();
+  await expect(page.getByText("Card 3 ·")).toBeVisible();
 });
