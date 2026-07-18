@@ -25,6 +25,18 @@ export interface GenerateInput {
   language?: string;
   /** Nicho do usuário (ver src/lib/niches.ts) — direciona o tom do perfil. Default: tecnologia/IA */
   niche?: string | null;
+  /**
+   * Instrução extra para regenerar num ângulo DIFERENTE quando o
+   * guardrail anti-duplicata detecta legenda parecida demais.
+   */
+  angleHint?: string;
+}
+
+/** Sufixo de instrução do "novo ângulo", vazio quando não há hint. */
+function angleSuffix(input: GenerateInput): string {
+  return input.angleHint
+    ? `\n\n⚠️ IMPORTANTE: ${input.angleHint} Use um gancho e uma abordagem NOVOS, não repita a estrutura anterior.`
+    : "";
 }
 
 /** Descrição do perfil usada no prompt, de acordo com o nicho escolhido em Ajustes/cadastro */
@@ -56,9 +68,12 @@ export interface PostPackage {
  */
 function mockGenerate(input: GenerateInput): PostPackage {
   const shortTitle = input.title.slice(0, 80);
+  // angleHint muda o texto de forma determinística — permite ao guardrail
+  // anti-duplicata "regenerar diferente" também em modo mock.
+  const angle = input.angleHint ? "[ÂNGULO 2] " : "";
   return {
-    hook: `🚨 ${shortTitle}`,
-    caption: `[MOCK] ${shortTitle}\n\nIsso muda TUDO no mundo da IA. 🤯\n\nA notícia completa está na fonte — mas o resumo é: o jogo virou, e quem não acompanhar vai ficar para trás.\n\n👉 Me segue para não perder nenhuma novidade de IA!\n\nFonte: ${input.url}`,
+    hook: `🚨 ${angle}${shortTitle}`,
+    caption: `[MOCK] ${angle}${shortTitle}\n\nIsso muda TUDO no mundo da IA. 🤯\n\nA notícia completa está na fonte — mas o resumo é: o jogo virou, e quem não acompanhar vai ficar para trás.\n\n👉 Me segue para não perder nenhuma novidade de IA!\n\nFonte: ${input.url}`,
     hashtags:
       "#inteligenciaartificial #ia #ai #tecnologia #chatgpt #inovacao #futuro #tech",
     image_prompt:
@@ -106,7 +121,7 @@ REGRAS DO PACOTE:
     messages: [
       {
         role: "user",
-        content: `Crie o pacote de post para esta notícia:\n\nTítulo: ${input.title}\nResumo: ${input.summary ?? "(sem resumo)"}\nFonte: ${input.url}`,
+        content: `Crie o pacote de post para esta notícia:\n\nTítulo: ${input.title}\nResumo: ${input.summary ?? "(sem resumo)"}\nFonte: ${input.url}${angleSuffix(input)}`,
       },
     ],
     output_config: {
@@ -187,7 +202,7 @@ async function geminiGenerate(input: GenerateInput): Promise<PostPackage> {
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
-    contents: `Crie o pacote de post para esta notícia:\n\nTítulo: ${input.title}\nResumo: ${input.summary ?? "(sem resumo)"}\nFonte: ${input.url}`,
+    contents: `Crie o pacote de post para esta notícia:\n\nTítulo: ${input.title}\nResumo: ${input.summary ?? "(sem resumo)"}\nFonte: ${input.url}${angleSuffix(input)}`,
     config: {
       systemInstruction: buildSystemPrompt(lang, input.niche),
       responseMimeType: "application/json",
@@ -224,7 +239,7 @@ async function pollinationsGenerate(input: GenerateInput): Promise<PostPackage> 
         { role: "system", content: buildSystemPrompt(lang, input.niche) },
         {
           role: "user",
-          content: `Crie o pacote de post para esta notícia:\n\nTítulo: ${input.title}\nResumo: ${input.summary ?? "(sem resumo)"}\nFonte: ${input.url}\n\nResponda APENAS com o JSON do pacote (hook, caption, hashtags, image_prompt), sem texto antes ou depois.`,
+          content: `Crie o pacote de post para esta notícia:\n\nTítulo: ${input.title}\nResumo: ${input.summary ?? "(sem resumo)"}\nFonte: ${input.url}${angleSuffix(input)}\n\nResponda APENAS com o JSON do pacote (hook, caption, hashtags, image_prompt), sem texto antes ou depois.`,
         },
       ],
       response_format: { type: "json_object" },
