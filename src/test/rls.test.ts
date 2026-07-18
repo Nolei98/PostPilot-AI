@@ -141,6 +141,45 @@ describe("RLS: isolamento entre tenants", () => {
   });
 });
 
+describe("RLS templates (028): sistema público, custom por dono", () => {
+  const SPEC = `'{"surface":"cover_image","canvas":{"w":1080,"h":1350},"elements":[]}'::jsonb`;
+
+  it("preset do sistema é legível por qualquer usuário; custom só do dono", async () => {
+    const a = await signup(db, { email: "a-tpl@x.com" });
+    const b = await signup(db, { email: "b-tpl@x.com" });
+    const ca = await clientOf(a);
+
+    // preset do sistema (admin/service role): client_id null, is_system true
+    await db.query(
+      `insert into templates (client_id, surface, name, spec, is_system) values (null, 'cover_image', 'Prisma', ${SPEC}, true)`
+    );
+    // template custom do A
+    await db.query(
+      `insert into templates (client_id, surface, name, spec) values ($1, 'cover_image', 'Meu', ${SPEC})`,
+      [ca]
+    );
+
+    // B enxerga o preset do sistema, mas NÃO o custom de A
+    const seenByB = await asUser(db, b, () =>
+      db.query<{ name: string }>("select name from templates order by name")
+    );
+    const names = seenByB.rows.map((r) => r.name);
+    expect(names).toContain("Prisma");
+    expect(names).not.toContain("Meu");
+  });
+
+  it("usuário não consegue criar um preset do sistema (client_id null)", async () => {
+    const a = await signup(db, { email: "a-tpl2@x.com" });
+    await expect(
+      asUser(db, a, () =>
+        db.query(
+          `insert into templates (client_id, surface, name, spec, is_system) values (null, 'cover_image', 'Hack', ${SPEC}, true)`
+        )
+      )
+    ).rejects.toThrow();
+  });
+});
+
 describe("RLS: escrita cruzada bloqueada (with check)", () => {
   it("A não consegue criar client para o usuário B", async () => {
     const a = await signup(db, { email: "a-w1@x.com" });

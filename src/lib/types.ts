@@ -63,6 +63,55 @@ export interface BrandKit {
   font_heading_url: string | null; // fonte embutida no Satori
   brand_mark: BrandMark; // tratamento de marca padrão dos cards
   template_defaults: TemplateDefaults;
+  template_selection: Partial<Record<Surface, string>>; // modelo escolhido por superfície (migration 028)
+  created_at: string;
+}
+
+/** Superfície de peça no Template Studio (migration 028). */
+export type Surface = "cover_image" | "video_cover" | "carousel_page" | "carousel_last";
+
+/** Tipo de elemento posicionável num template (ver HANDOFF seção 6B.3). */
+export type TemplateElementType =
+  | "wordmark" | "divider" | "handleLabel" | "headline" | "body"
+  | "cta" | "badge" | "dots" | "logo" | "media" | "shape";
+
+export type TemplateAnchor =
+  | "top-left" | "top-center" | "top-right"
+  | "center-left" | "center" | "center-right"
+  | "bottom-left" | "bottom-center" | "bottom-right";
+
+export interface TemplateElement {
+  id: string;
+  type: TemplateElementType;
+  anchor: TemplateAnchor;
+  offset: { x: number; y: number }; // 0–1 relativo ao canvas
+  size?: { fontSize?: number; maxWidth?: number };
+  style?: {
+    color?: string; font?: string; weight?: number; tracking?: number;
+    lineHeight?: number; align?: "left" | "center" | "right";
+    case?: "upper" | "none"; opacity?: number;
+  };
+  bind?: string; // de onde vem o conteúdo (ex.: content.headline)
+  z?: number;
+  visible?: boolean;
+  locked?: boolean;
+}
+
+export interface TemplateSpec {
+  surface: Surface;
+  canvas: { w: number; h: number };
+  elements: TemplateElement[];
+}
+
+/** Modelo do Template Studio (preset do sistema ou custom do cliente). */
+export interface Template {
+  id: string;
+  client_id: string | null; // null = preset do sistema
+  surface: Surface;
+  name: string;
+  spec: TemplateSpec;
+  thumbnail_url: string | null;
+  is_system: boolean;
   created_at: string;
 }
 
