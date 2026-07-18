@@ -1,0 +1,28 @@
+name: CI
+
+# Roda em todo push e PR. Tudo em MODO MOCK: nenhum secret/chave de
+# API é exposto ao job — a suíte tem que passar verde sem custo.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests (mock)
+        run: npm test

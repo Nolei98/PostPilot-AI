@@ -17,6 +17,7 @@ import { IdentityForm } from "@/components/IdentityForm";
 import { AvatarFileInput } from "@/components/AvatarFileInput";
 import { BrandColorPicker } from "@/components/BrandColorPicker";
 import { AppShell } from "@/components/ui/AppShell";
+import { getShellData } from "@/lib/shell";
 import { Card } from "@/components/ui/Card";
 import { DeleteSourceButton } from "@/components/DeleteSourceButton";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -24,12 +25,13 @@ import { getMonthlyQuota } from "@/lib/subscription";
 import { PLANS } from "@/lib/plans";
 import { POST_FONTS } from "@/lib/font-data";
 import { NICHES } from "@/lib/niches";
-import type { NotificationConfig, SourceConfig } from "@/lib/types";
+import type { BrandKit, NotificationConfig, SourceConfig } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const supabase = createClient();
+  const shell = await getShellData();
 
   const {
     data: { user },
@@ -47,6 +49,7 @@ export default async function SettingsPage() {
   const { data: sources } = await supabase
     .from("source_configs")
     .select("*")
+    .eq("client_id", shell.activeClientId ?? "")
     .order("created_at");
 
   const { data: notif } = await supabase
@@ -54,22 +57,27 @@ export default async function SettingsPage() {
     .select("*")
     .maybeSingle();
 
-  const { count: readyCount } = await supabase
-    .from("posts")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "approved");
+  // Identidade de marca vem do brand_kit do cliente ATIVO (por tenant).
+  const { data: bk } = await supabase
+    .from("brand_kits")
+    .select("*")
+    .eq("client_id", shell.activeClientId ?? "")
+    .maybeSingle();
 
   const sourceList = (sources ?? []) as SourceConfig[];
   const notifConfig = notif as NotificationConfig | null;
+  const brandKit = bk as BrandKit | null;
 
   const fieldClasses =
     "w-full rounded-control border border-line bg-surface-2 px-3 py-2.5 text-body text-content placeholder:text-subtle outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25";
 
   return (
     <AppShell
-      readyCount={readyCount ?? 0}
-      brandName={notifConfig?.brand_name}
-      logoUrl={notifConfig?.logo_url}
+      readyCount={shell.readyCount}
+      brandName={brandKit?.brand_name}
+      logoUrl={brandKit?.logo_url}
+      clients={shell.clients}
+      activeClientId={shell.activeClientId}
     >
       <div className="mb-5">
         <h1 className="text-display">Ajustes</h1>
@@ -113,9 +121,9 @@ export default async function SettingsPage() {
           <form action={saveIgProfile} className="space-y-4">
             {/* Preview ao vivo do header do post */}
             <div className="flex items-center gap-3 rounded-control bg-black p-3">
-              {notifConfig?.ig_avatar_url ? (
+              {brandKit?.ig_avatar_url ? (
                 <img
-                  src={notifConfig.ig_avatar_url}
+                  src={brandKit.ig_avatar_url}
                   alt="Foto de perfil"
                   className="h-11 w-11 rounded-full object-cover ring-2 ring-line"
                 />
@@ -126,8 +134,8 @@ export default async function SettingsPage() {
               )}
               <div className="min-w-0 leading-tight">
                 <p className="flex items-center gap-1 truncate text-body font-semibold">
-                  {notifConfig?.ig_display_name ?? "Seu Perfil de IA"}
-                  {notifConfig?.ig_verified && (
+                  {brandKit?.ig_display_name ?? "Seu Perfil de IA"}
+                  {brandKit?.ig_verified && (
                     /* selo azul de verificado */
                     <svg width="14" height="14" viewBox="0 0 24 24" aria-label="Verificado">
                       <circle cx="12" cy="12" r="11" fill="#3897F0" />
@@ -136,7 +144,7 @@ export default async function SettingsPage() {
                   )}
                 </p>
                 <p className="truncate text-caption text-muted">
-                  @{notifConfig?.ig_handle ?? "seuperfil.ia"}
+                  @{brandKit?.ig_handle ?? "seuperfil.ia"}
                 </p>
               </div>
             </div>
@@ -149,7 +157,7 @@ export default async function SettingsPage() {
               <input
                 id="ig_display_name"
                 name="ig_display_name"
-                defaultValue={notifConfig?.ig_display_name ?? ""}
+                defaultValue={brandKit?.ig_display_name ?? ""}
                 placeholder="Ex: João da IA"
                 className={fieldClasses}
               />
@@ -161,7 +169,7 @@ export default async function SettingsPage() {
               <input
                 id="ig_handle"
                 name="ig_handle"
-                defaultValue={notifConfig?.ig_handle ?? ""}
+                defaultValue={brandKit?.ig_handle ?? ""}
                 placeholder="Ex: joaodaia (sem @)"
                 className={fieldClasses}
               />
@@ -171,7 +179,7 @@ export default async function SettingsPage() {
               <input
                 type="checkbox"
                 name="ig_verified"
-                defaultChecked={notifConfig?.ig_verified ?? false}
+                defaultChecked={brandKit?.ig_verified ?? false}
                 className="h-4 w-4 accent-[#3897F0]"
               />
               <span className="text-body">
@@ -185,7 +193,7 @@ export default async function SettingsPage() {
               <input
                 type="checkbox"
                 name="show_profile_chip"
-                defaultChecked={notifConfig?.show_profile_chip ?? true}
+                defaultChecked={brandKit?.show_profile_chip ?? true}
                 className="h-4 w-4 accent-[#7C5CFF]"
               />
               <span className="text-body">
@@ -210,17 +218,17 @@ export default async function SettingsPage() {
             action={saveVisualIdentity}
             fieldClasses={fieldClasses}
             initial={{
-              colorBackground: notifConfig?.color_background ?? "#0B0B12",
-              colorAccent: notifConfig?.color_accent ?? "#7C5CFF",
-              colorText: notifConfig?.color_text ?? "#FFFFFF",
-              colorKeywordBox: notifConfig?.color_keyword_box ?? "#7C5CFF",
-              keyword: notifConfig?.tpl_keyword ?? "IA",
-              topText: notifConfig?.tpl_top_text ?? "A NOVIDADE DE",
-              bottomText: notifConfig?.tpl_bottom_text ?? "QUE MUDA TUDO",
-              ctaEnabled: notifConfig?.tpl_cta_enabled ?? false,
+              colorBackground: brandKit?.color_background ?? "#0B0B12",
+              colorAccent: brandKit?.color_accent ?? "#7C5CFF",
+              colorText: brandKit?.color_text ?? "#FFFFFF",
+              colorKeywordBox: brandKit?.color_keyword_box ?? "#7C5CFF",
+              keyword: brandKit?.tpl_keyword ?? "IA",
+              topText: brandKit?.tpl_top_text ?? "A NOVIDADE DE",
+              bottomText: brandKit?.tpl_bottom_text ?? "QUE MUDA TUDO",
+              ctaEnabled: brandKit?.tpl_cta_enabled ?? false,
             }}
             initialMode={
-              notifConfig?.template_apply_mode === "on_approval"
+              brandKit?.template_apply_mode === "on_approval"
                 ? "on_approval"
                 : "all"
             }
@@ -240,7 +248,7 @@ export default async function SettingsPage() {
               <input
                 id="brand_name"
                 name="brand_name"
-                defaultValue={notifConfig?.brand_name ?? ""}
+                defaultValue={brandKit?.brand_name ?? ""}
                 placeholder="Ex: Sua Marca"
                 className={fieldClasses}
               />
@@ -249,9 +257,9 @@ export default async function SettingsPage() {
               </p>
             </div>
             <div className="flex items-center gap-4">
-              {notifConfig?.logo_url ? (
+              {brandKit?.logo_url ? (
                 <img
-                  src={notifConfig.logo_url}
+                  src={brandKit.logo_url}
                   alt="Logo da marca"
                   className="h-14 w-14 rounded-full object-cover ring-2 ring-line"
                 />
@@ -271,7 +279,7 @@ export default async function SettingsPage() {
               <input
                 type="checkbox"
                 name="show_brand_logo"
-                defaultChecked={notifConfig?.show_brand_logo ?? true}
+                defaultChecked={brandKit?.show_brand_logo ?? true}
                 className="h-4 w-4 accent-[#7C5CFF]"
               />
               <span className="text-body">
@@ -281,7 +289,7 @@ export default async function SettingsPage() {
                 </span>
               </span>
             </label>
-            <BrandColorPicker initial={notifConfig?.color_accent ?? "#E0219C"} />
+            <BrandColorPicker initial={brandKit?.color_accent ?? "#E0219C"} />
             <div className="space-y-1.5">
               <label htmlFor="post_font_family" className="block text-caption text-muted">
                 Fonte das artes
@@ -289,7 +297,7 @@ export default async function SettingsPage() {
               <select
                 id="post_font_family"
                 name="post_font_family"
-                defaultValue={notifConfig?.post_font_family ?? "inter"}
+                defaultValue={brandKit?.post_font_family ?? "inter"}
                 className={fieldClasses}
               >
                 {POST_FONTS.map((f) => (
@@ -399,7 +407,7 @@ export default async function SettingsPage() {
               <select
                 id="niche"
                 name="niche"
-                defaultValue={notifConfig?.niche ?? NICHES[0].key}
+                defaultValue={brandKit?.niche ?? NICHES[0].key}
                 className={fieldClasses}
               >
                 {NICHES.map((n) => (
@@ -426,7 +434,7 @@ export default async function SettingsPage() {
               <select
                 id="post_language"
                 name="post_language"
-                defaultValue={notifConfig?.post_language ?? "pt-BR"}
+                defaultValue={brandKit?.post_language ?? "pt-BR"}
                 className={fieldClasses}
               >
                 <option value="pt-BR">Português (Brasil)</option>
@@ -459,7 +467,7 @@ export default async function SettingsPage() {
               <select
                 id="text_provider"
                 name="text_provider"
-                defaultValue={notifConfig?.text_provider ?? "gemini"}
+                defaultValue={brandKit?.text_provider ?? "gemini"}
                 className={fieldClasses}
               >
                 <option value="gemini">Gemini (Google AI Studio)</option>
@@ -474,7 +482,7 @@ export default async function SettingsPage() {
               <select
                 id="image_provider"
                 name="image_provider"
-                defaultValue={notifConfig?.image_provider ?? "stock"}
+                defaultValue={brandKit?.image_provider ?? "stock"}
                 className={fieldClasses}
               >
                 <option value="stock">Fotos reais (Pexels/Unsplash) — recomendado</option>

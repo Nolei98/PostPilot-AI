@@ -9,12 +9,15 @@ import { FirstScanKickoff } from "@/components/FirstScanKickoff";
 import { PostCard } from "@/components/PostCard";
 import { ScanButton } from "@/components/ScanButton";
 import { AppShell } from "@/components/ui/AppShell";
+import { getShellData } from "@/lib/shell";
 import type { IgProfile, PostWithNews, VisualIdentity } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const supabase = createClient();
+  const shell = await getShellData();
+  const clientId = shell.activeClientId;
 
   const { data: queue } = await supabase
     .from("posts")
@@ -22,24 +25,22 @@ export default async function DashboardPage() {
       "*, news_items(title, url, viral_score, image_url, image_license_hint)"
     )
     .eq("status", "pending_approval")
+    .eq("client_id", clientId ?? "")
     .order("created_at", { ascending: false });
 
-  const { count: readyCount } = await supabase
-    .from("posts")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "approved");
-
-  // Usuário NOVO = nunca teve nenhum post (qualquer status).
+  // Usuário NOVO neste cliente = nunca teve nenhum post (qualquer status).
   // Distingue "acabou de chegar" (onboarding) de "fila vazia normal".
   const { count: totalPosts } = await supabase
     .from("posts")
-    .select("id", { count: "exact", head: true });
+    .select("id", { count: "exact", head: true })
+    .eq("client_id", clientId ?? "");
   const isNewUser = (totalPosts ?? 0) === 0;
 
-  // Perfil do IG exibido no header dos previews (config em Ajustes)
+  // Perfil do IG exibido no header dos previews — brand_kit do cliente ativo
   const { data: config } = await supabase
-    .from("notification_configs")
+    .from("brand_kits")
     .select("*")
+    .eq("client_id", clientId ?? "")
     .maybeSingle();
 
   const profile: IgProfile = {
@@ -65,9 +66,11 @@ export default async function DashboardPage() {
 
   return (
     <AppShell
-      readyCount={readyCount ?? 0}
-      brandName={config?.brand_name}
-      logoUrl={config?.logo_url}
+      readyCount={shell.readyCount}
+      brandName={shell.brandName}
+      logoUrl={shell.logoUrl}
+      clients={shell.clients}
+      activeClientId={shell.activeClientId}
     >
       {/* Cabeçalho da tela: título + ação de varredura */}
       <div className="mb-5 flex items-center justify-between">

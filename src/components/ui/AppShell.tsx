@@ -10,6 +10,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { signOut } from "@/app/actions";
+import { ClientSwitcher } from "@/components/ClientSwitcher";
+
+interface ClientLite {
+  id: string;
+  name: string;
+}
 
 interface NavItem {
   href: string;
@@ -88,11 +94,15 @@ export function AppShell({
   readyCount = 0,
   brandName,
   logoUrl,
+  clients = [],
+  activeClientId = null,
   children,
 }: {
   readyCount?: number;
   brandName?: string | null;
   logoUrl?: string | null;
+  clients?: ClientLite[];
+  activeClientId?: string | null;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -102,8 +112,11 @@ export function AppShell({
     <div className="min-h-screen lg:pl-[230px] flex flex-col w-full">
       {/* ===== SIDEBAR (desktop lg+) ===== */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-[230px] flex-col border-r border-white/7 bg-[#150726] px-4 py-[26px] lg:flex">
-        <div className="mb-6 px-[10px]">
+        <div className="mb-5 px-[10px]">
           <Logo />
+        </div>
+        <div className="mb-5 px-[6px]">
+          <ClientSwitcher clients={clients} activeClientId={activeClientId} />
         </div>
         <nav className="flex-1 space-y-1.5">
           {items.map((item) => {
@@ -184,6 +197,11 @@ export function AppShell({
           </nav>
         </div>
       </header>
+
+      {/* ===== BARRA DE CLIENTE (mobile) ===== */}
+      <div className="sticky top-[57px] z-10 border-b border-white/7 bg-[#150726]/85 px-4 py-2 backdrop-blur lg:hidden">
+        <ClientSwitcher clients={clients} activeClientId={activeClientId} />
+      </div>
 
       {/* ===== CONTEÚDO ===== */}
       <main className="flex-1 p-4 pb-24 pt-4 md:p-[34px_38px_80px] min-w-0 max-w-[1240px] mx-auto w-full">

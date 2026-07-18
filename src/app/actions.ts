@@ -6,6 +6,7 @@
 // ============================================================
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inngest } from "@/inngest/client";
@@ -37,14 +38,19 @@ function buildBrand(config: {
  * fila do usuário. Chamada sempre que o perfil é salvo em Ajustes —
  * corrige o chip desatualizado em posts já gerados antes da mudança.
  */
-async function resyncChipOnPendingPosts(userId: string, profile: IgProfile, brand: BrandTemplate) {
+async function resyncChipOnPendingPosts(
+  userId: string,
+  clientId: string,
+  profile: IgProfile,
+  brand: BrandTemplate
+) {
   const supabase = createClient();
   const { data: posts, error: postsError } = await supabase
     .from("posts")
     .select(
       "id, hook, template_applied, tpl_keyword, tpl_top_text, tpl_bottom_text, tpl_cta_enabled, tpl_color_background, tpl_color_accent, tpl_color_text, tpl_color_keyword_box"
     )
-    .eq("user_id", userId)
+    .eq("client_id", clientId)
     .eq("status", "pending_approval");
   if (postsError) {
     // Não deixa a sincronização falhar em silêncio — se a migration não
@@ -117,6 +123,7 @@ async function resyncChipOnPendingPosts(userId: string, profile: IgProfile, bran
  */
 async function resyncIdentityOnUnmodifiedPendingPosts(
   userId: string,
+  clientId: string,
   oldIdentity: VisualIdentity,
   newIdentity: VisualIdentity,
   profile: IgProfile,
@@ -129,7 +136,7 @@ async function resyncIdentityOnUnmodifiedPendingPosts(
     .select(
       "id, tpl_keyword, tpl_top_text, tpl_bottom_text, tpl_cta_enabled, tpl_color_background, tpl_color_accent, tpl_color_text, tpl_color_keyword_box"
     )
-    .eq("user_id", userId)
+    .eq("client_id", clientId)
     .eq("status", "pending_approval")
     .eq("template_applied", true);
   if (postsError) {
@@ -222,7 +229,7 @@ export async function updatePost(
 
   const { data: post } = await supabase
     .from("posts")
-    .select("hook")
+    .select("hook, client_id")
     .eq("id", postId)
     .single();
 
@@ -234,9 +241,9 @@ export async function updatePost(
 
   if (post && post.hook !== fields.hook) {
     const { data: config } = await supabase
-      .from("notification_configs")
+      .from("brand_kits")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("client_id", post.client_id)
       .maybeSingle();
     const profile: IgProfile = {
       handle: config?.ig_handle ?? "seuperfil.ia",
@@ -284,16 +291,16 @@ export async function uploadPostImage(
 
   const { data: post } = await supabase
     .from("posts")
-    .select("id, hook")
+    .select("id, hook, client_id")
     .eq("id", postId)
     .eq("user_id", user.id)
     .maybeSingle();
   if (!post) return { ok: false, error: "Post não encontrado." };
 
   const { data: notif } = await supabase
-    .from("notification_configs")
+    .from("brand_kits")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("client_id", post.client_id)
     .maybeSingle();
   const profile: IgProfile = {
     handle: notif?.ig_handle ?? "seuperfil.ia",
@@ -369,16 +376,19 @@ export async function triggerScan(): Promise<{
   if (!user) return { ok: false, error: "Não autenticado" };
 
   try {
+    const { getActiveClientId } = await import("@/lib/client-context");
+    const clientId = await getActiveClientId();
     const { data: run, error } = await supabase
       .from("scan_runs")
-      .insert({ requested_by: user.id, status: "running" })
+      .insert({ requested_by: user.id, client_id: clientId, status: "running" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
 
     await inngest.send({
       name: "news/scan.requested",
-      data: { scanRunId: run.id as string },
+      // clientId → scan manual varre só as fontes do cliente ativo.
+      data: { scanRunId: run.id as string, clientId: clientId ?? undefined },
     });
     return { ok: true, scanRunId: run.id as string };
   } catch (err) {
@@ -419,8 +429,13 @@ export async function addSource(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Não autenticado");
 
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
+
   const { error } = await supabase.from("source_configs").insert({
     user_id: user.id,
+    client_id: clientId,
     name: String(formData.get("name") ?? "").trim(),
     feed_url: String(formData.get("feed_url") ?? "").trim(),
     threshold: Number(formData.get("threshold") ?? 70),
@@ -464,18 +479,27 @@ export async function saveTelegramChatId(formData: FormData) {
       ? imageProviderRaw
       : "stock";
 
-  // upsert: cria a config se não existir, atualiza se existir
+  // Telegram é per-usuário (notifica o dono, não a marca).
   const { error } = await supabase.from("notification_configs").upsert(
-    {
-      user_id: user.id,
-      telegram_chat_id: chatId,
-      post_language: postLanguage,
-      text_provider: textProvider,
-      image_provider: imageProvider,
-    },
+    { user_id: user.id, telegram_chat_id: chatId },
     { onConflict: "user_id" }
   );
   if (error) throw new Error(error.message);
+
+  // Idioma + providers são do cliente ativo (config de geração da marca).
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (clientId) {
+    const { error: bkError } = await supabase
+      .from("brand_kits")
+      .update({
+        post_language: postLanguage,
+        text_provider: textProvider,
+        image_provider: imageProvider,
+      })
+      .eq("client_id", clientId);
+    if (bkError) throw new Error(bkError.message);
+  }
   revalidatePath("/settings");
 }
 
@@ -489,6 +513,10 @@ export async function saveIgProfile(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Não autenticado");
+
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
 
   const handle = String(formData.get("ig_handle") ?? "")
     .trim()
@@ -504,7 +532,7 @@ export async function saveIgProfile(formData: FormData) {
       console.warn(`[saveIgProfile] foto rejeitada (${file.size} bytes > 2MB)`);
     } else {
       const ext = file.type === "image/png" ? "png" : "jpg";
-      const path = `${user.id}.${ext}`;
+      const path = `${clientId}.${ext}`; // avatar por cliente (tenant)
       // Upload via client ADMIN (service role): esta server action roda só
       // no servidor e o nome do arquivo é o user_id autenticado — seguro,
       // e dispensa policies de storage para o usuário comum.
@@ -526,25 +554,24 @@ export async function saveIgProfile(formData: FormData) {
   const verified = formData.get("ig_verified") === "on";
   const showChip = formData.get("show_profile_chip") === "on";
 
-  const { error } = await supabase.from("notification_configs").upsert(
-    {
-      user_id: user.id,
+  const { error } = await supabase
+    .from("brand_kits")
+    .update({
       ...(handle && { ig_handle: handle }),
       ...(displayName && { ig_display_name: displayName }),
       ...(avatarUrl && { ig_avatar_url: avatarUrl }),
       ig_verified: verified,
       show_profile_chip: showChip,
-    },
-    { onConflict: "user_id" }
-  );
+    })
+    .eq("client_id", clientId);
   if (error) throw new Error(error.message);
 
   // Sincroniza o chip (foto/nome/@/selo) nos posts ainda na fila —
   // sem isso, um post gerado antes da mudança ficaria com dado velho.
   const { data: freshConfig } = await supabase
-    .from("notification_configs")
+    .from("brand_kits")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("client_id", clientId)
     .single();
   if (freshConfig) {
     const profile: IgProfile = {
@@ -554,7 +581,7 @@ export async function saveIgProfile(formData: FormData) {
       verified: freshConfig.ig_verified,
       showProfileChip: freshConfig.show_profile_chip,
     };
-    await resyncChipOnPendingPosts(user.id, profile, buildBrand(freshConfig));
+    await resyncChipOnPendingPosts(user.id, clientId, profile, buildBrand(freshConfig));
   }
 
   revalidatePath("/settings");
@@ -586,14 +613,18 @@ export async function saveVisualIdentity(formData: FormData) {
   const mode =
     formData.get("template_apply_mode") === "on_approval" ? "on_approval" : "all";
 
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
+
   // Captura o default ANTIGO antes de sobrescrever — usado para
   // detectar quais posts na fila ainda não foram customizados
   // individualmente (esses sim são re-sincronizados; os editados
   // manualmente são preservados).
   const { data: oldConfig } = await supabase
-    .from("notification_configs")
+    .from("brand_kits")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("client_id", clientId)
     .maybeSingle();
 
   const newIdentity: VisualIdentity = {
@@ -607,9 +638,9 @@ export async function saveVisualIdentity(formData: FormData) {
     ctaEnabled: formData.get("tpl_cta_enabled") === "on",
   };
 
-  const { error } = await supabase.from("notification_configs").upsert(
-    {
-      user_id: user.id,
+  const { error } = await supabase
+    .from("brand_kits")
+    .update({
       color_background: newIdentity.colorBackground,
       color_accent: newIdentity.colorAccent,
       color_text: newIdentity.colorText,
@@ -619,9 +650,8 @@ export async function saveVisualIdentity(formData: FormData) {
       tpl_bottom_text: newIdentity.bottomText,
       tpl_cta_enabled: newIdentity.ctaEnabled,
       template_apply_mode: mode,
-    },
-    { onConflict: "user_id" }
-  );
+    })
+    .eq("client_id", clientId);
   if (error) throw new Error(error.message);
 
   // Sincroniza os posts na fila que ainda usam o default (não
@@ -646,6 +676,7 @@ export async function saveVisualIdentity(formData: FormData) {
     };
     await resyncIdentityOnUnmodifiedPendingPosts(
       user.id,
+      clientId,
       oldIdentity,
       newIdentity,
       profile,
@@ -671,6 +702,10 @@ export async function saveBrandTemplate(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Não autenticado");
 
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
+
   const postFontFamily = String(formData.get("post_font_family") ?? "inter");
   const brandName = String(formData.get("brand_name") ?? "").trim();
   const brandColorRaw = String(formData.get("brand_color") ?? "").trim();
@@ -686,7 +721,7 @@ export async function saveBrandTemplate(formData: FormData) {
       console.warn(`[saveBrandTemplate] logo rejeitada (${file.size} bytes > 2MB)`);
     } else {
       const ext = file.type === "image/png" ? "png" : "jpg";
-      const path = `${user.id}-logo.${ext}`;
+      const path = `${clientId}-logo.${ext}`; // logo por cliente (tenant)
       const admin = createAdminClient();
       const { error: uploadError } = await admin.storage
         .from("avatars")
@@ -704,28 +739,27 @@ export async function saveBrandTemplate(formData: FormData) {
   // contra-capa nos posts ainda não customizados (mesma lógica de
   // saveVisualIdentity).
   const { data: oldConfig } = await supabase
-    .from("notification_configs")
+    .from("brand_kits")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("client_id", clientId)
     .maybeSingle();
 
-  const { error } = await supabase.from("notification_configs").upsert(
-    {
-      user_id: user.id,
+  const { error } = await supabase
+    .from("brand_kits")
+    .update({
       post_font_family: postFontFamily,
       show_brand_logo: showBrandLogo,
       ...(brandName && { brand_name: brandName }),
       ...(logoUrl && { logo_url: logoUrl }),
       ...(brandColor && { color_accent: brandColor, color_keyword_box: brandColor }),
-    },
-    { onConflict: "user_id" }
-  );
+    })
+    .eq("client_id", clientId);
   if (error) throw new Error(error.message);
 
   const { data: freshConfig } = await supabase
-    .from("notification_configs")
+    .from("brand_kits")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("client_id", clientId)
     .single();
   if (freshConfig) {
     const profile: IgProfile = {
@@ -736,7 +770,7 @@ export async function saveBrandTemplate(formData: FormData) {
       showProfileChip: freshConfig.show_profile_chip,
     };
     const brand = buildBrand(freshConfig);
-    await resyncChipOnPendingPosts(user.id, profile, brand);
+    await resyncChipOnPendingPosts(user.id, clientId, profile, brand);
 
     if (brandColor && oldConfig) {
       const oldIdentity: VisualIdentity = {
@@ -750,7 +784,7 @@ export async function saveBrandTemplate(formData: FormData) {
         ctaEnabled: oldConfig.tpl_cta_enabled ?? false,
       };
       const newIdentity: VisualIdentity = { ...oldIdentity, colorAccent: brandColor, colorKeywordBox: brandColor };
-      await resyncIdentityOnUnmodifiedPendingPosts(user.id, oldIdentity, newIdentity, profile, false, brand);
+      await resyncIdentityOnUnmodifiedPendingPosts(user.id, clientId, oldIdentity, newIdentity, profile, false, brand);
     }
   }
 
@@ -773,10 +807,14 @@ export async function saveNiche(formData: FormData) {
 
   const niche = String(formData.get("niche") ?? "").trim() || null;
 
-  const { error } = await supabase.from("notification_configs").upsert(
-    { user_id: user.id, niche },
-    { onConflict: "user_id" }
-  );
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
+
+  const { error } = await supabase
+    .from("brand_kits")
+    .update({ niche })
+    .eq("client_id", clientId);
   if (error) throw new Error(error.message);
 
   // Semeia as fontes RSS curadas do nicho — sem isso, trocar o nicho
@@ -786,13 +824,14 @@ export async function saveNiche(formData: FormData) {
   const { sourcesForNiche } = await import("@/lib/niche-sources");
   const rows = sourcesForNiche(niche).map((s) => ({
     user_id: user.id,
+    client_id: clientId,
     name: s.name,
     feed_url: s.feed_url,
     threshold: s.threshold,
   }));
   const { error: sourcesError } = await supabase
     .from("source_configs")
-    .upsert(rows, { onConflict: "user_id,feed_url", ignoreDuplicates: true });
+    .upsert(rows, { onConflict: "client_id,feed_url", ignoreDuplicates: true });
   if (sourcesError) {
     console.error("[saveNiche] falha ao semear fontes do nicho:", sourcesError.message);
   }
@@ -828,15 +867,16 @@ export async function applyTemplateToPost(
   // Confirma que o post é do usuário (RLS já garante, mas o erro fica claro)
   const { data: post, error: postError } = await supabase
     .from("posts")
-    .select("id")
+    .select("id, client_id")
     .eq("id", postId)
     .single();
   if (postError || !post) throw new Error("Post não encontrado");
 
-  // Perfil para o chip (mesma fonte da geração)
+  // Perfil para o chip (mesma fonte da geração) — brand_kit do cliente do post
   const { data: config } = await supabase
-    .from("notification_configs")
+    .from("brand_kits")
     .select("*")
+    .eq("client_id", post.client_id)
     .maybeSingle();
 
   const identity: VisualIdentity = {
@@ -930,6 +970,80 @@ export async function revertApproval(
   if (error) throw new Error(error.message);
   revalidatePath("/");
   revalidatePath("/ready");
+}
+
+/**
+ * Troca o cliente (tenant) ativo — grava o id num cookie que
+ * getActiveClient() lê. Valida que o cliente pertence ao usuário
+ * antes de gravar (a RLS já filtra, mas evita cookie com id alheio).
+ */
+export async function setActiveClient(clientId: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { data: owned } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (!owned) throw new Error("Cliente não encontrado");
+
+  // Persiste o ativo no banco também — o cron (sem cookie/sessão) usa
+  // active_client_id para saber pra qual cliente gerar (fan-out 1x).
+  await supabase
+    .from("notification_configs")
+    .update({ active_client_id: clientId })
+    .eq("user_id", user.id);
+
+  const { ACTIVE_CLIENT_COOKIE } = await import("@/lib/client-context");
+  cookies().set(ACTIVE_CLIENT_COOKIE, clientId, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 365,
+  });
+  revalidatePath("/", "layout");
+}
+
+/** Cria um novo cliente (tenant) e o torna ativo. */
+export async function createClientTenant(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const name = String(formData.get("name") ?? "").trim() || "Nova Marca";
+  const { data: client, error } = await supabase
+    .from("clients")
+    .insert({ owner_user_id: user.id, name })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  // Todo cliente precisa de um Brand Kit (defaults do schema).
+  const { error: bkError } = await supabase
+    .from("brand_kits")
+    .insert({ client_id: client.id, brand_name: name });
+  if (bkError) throw new Error(bkError.message);
+
+  // Torna o novo cliente o ativo (cookie + banco p/ o cron).
+  await supabase
+    .from("notification_configs")
+    .update({ active_client_id: client.id })
+    .eq("user_id", user.id);
+
+  const { ACTIVE_CLIENT_COOKIE } = await import("@/lib/client-context");
+  cookies().set(ACTIVE_CLIENT_COOKIE, client.id as string, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 365,
+  });
+  revalidatePath("/", "layout");
 }
 
 /** Logout */
