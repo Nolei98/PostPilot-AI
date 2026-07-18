@@ -26,9 +26,9 @@ migrations aplicadas no Supabase. Além dele, foi feita a base de testes.
 - [x] **Fan-out "só cliente ativo"** (custo 1x): o cron gera só para o cliente
   ativo de cada dono (`notification_configs.active_client_id`); o scan manual
   ("Varrer agora") varre só o cliente ativo.
-- [x] **Base de testes** (34 verdes): unit (mock) + integração RLS (pglite) +
-  uniqueness. **e2e** (Playwright, 2 verdes) contra a stack real. **CI** em
-  GitHub Actions (mock, sem secrets).
+- [x] **Base de testes** (67 verdes): unit (mock) + integração RLS/uniqueness/pgvector
+  (pglite). **e2e** (Playwright, 3 verdes: multi-tenant + carrossel) contra a stack real.
+  **CI** em GitHub Actions (mock, sem secrets).
 
 ### Migrations aplicadas no Supabase
 - [x] `020_multitenant_brand_kit.sql` — clients + brand_kits + client_id + backfill + RLS + trigger.
@@ -37,33 +37,38 @@ migrations aplicadas no Supabase. Além dele, foi feita a base de testes.
 - [x] `023_caption_embedding.sql` — pgvector + `posts.caption_embedding` + RPC `find_duplicate_caption`.
 - [x] `024_drop_migrated_brand_columns.sql` — remove de notification_configs as colunas migradas p/ brand_kit.
 - [x] `025_carousel.sql` — `posts.format` + `carousel_cards` + RLS.
-- [ ] `026_default_format.sql` — **pendente de aplicar** — `brand_kits.default_format`
-      (gatilho single/carousel por cliente). Código é resiliente sem ela (tudo single).
+- [x] `026_default_format.sql` — `brand_kits.default_format` (gatilho single/carousel por cliente).
 
-### Também já pronto (backend + testes)
-- [x] **Anti-duplicata por embedding** (pgvector): generate-post embeda a legenda, acha post do mesmo cliente parecido demais e regenera 1x com "novo ângulo". Mock determinístico ($0).
+**Todas as migrations (020–026) aplicadas no Supabase.**
+
+### Também já pronto (backend + UI + testes)
+- [x] **Anti-duplicata por embedding** (pgvector): generate-post embeda a legenda, acha post do mesmo cliente parecido demais e regenera 1x com "novo ângulo". Mock determinístico ($0). **Runtime confirmado** (RPC casta text→vector no Supabase real).
 - [x] **Limpeza**: notification_configs enxuto (só telegram + active_client_id).
-- [x] **Carousel Engine (backend)**: geração da estrutura (7–10 cards, mock+real), render de card por SVG+Brand Kit → PNG (resvg), job `generate-carousel` registrado. **Falta a UI de aprovação** e decidir o gatilho (ver 4.2).
+- [x] **Carousel Engine COMPLETO**: estrutura (7–10 cards, mock+real) + render SVG+Brand Kit → PNG (resvg) + job `generate-carousel` + **UI na fila (galeria, editar card, baixar zip)** + gatilho por cliente. **Rodou ponta a ponta em runtime**: scan → generate-carousel → notify (COMPLETED); cards renderizam com a marca (verificado visualmente).
 
-### Commits (branch feat/multi-tenant-brand-kit)
-- `2a9cc35` multi-tenant + Brand Kit · `4842bc9` e2e · `ea7b124` docs
-- `+` anti-duplicata (pgvector) · limpeza notification_configs · Carousel Engine backend
-- **Testes: 66 verdes** (unit + integração pglite + e2e).
+### Commits (branch feat/multi-tenant-brand-kit, no origin)
+- `2a9cc35` multi-tenant + Brand Kit · `4842bc9` e2e · `ea7b124` docs · pgvector · limpeza · carousel backend · carousel UI · carousel e2e · gatilho · carousel v2 (editar/zip).
+- **Testes: 67 (unit+pglite) + 3 e2e**, todos verdes.
 
 ---
 
 ## 2. Como rodar e testar
 
 ```bash
-npm run dev         # app em http://localhost:3000
-npm test            # unit + integração RLS + uniqueness (mock, sem chaves)
-npm run test:e2e    # Playwright (LOCAL only — cria/apaga usuário efêmero no Supabase real)
-npx tsc --noEmit    # typecheck
+npm run dev              # app em http://localhost:3000
+npx inngest-cli@latest dev -u http://localhost:3000/api/inngest   # jobs (OBRIGATÓRIO no dev)
+npm test                 # unit + integração RLS/uniqueness/pgvector (mock, sem chaves)
+npm run test:e2e         # Playwright (LOCAL only — cria/apaga usuário efêmero no Supabase real)
+npx tsc --noEmit         # typecheck
 ```
 
+- **⚠️ Inngest local:** qualquer coisa que dispare job (Varrer agora, gerar post/carrossel)
+  precisa do **Inngest Dev Server** rodando junto (`npx inngest-cli dev`). Sem ele:
+  `ECONNREFUSED` → "Não foi possível iniciar a varredura". Dashboard: `localhost:8288`.
+  Em produção (Vercel) é o contrário: setar `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY`.
 - **CI** (`.github/workflows/ci.yml`): roda `tsc` + `npm test` em todo push/PR, em modo mock.
 - **e2e não roda no CI** (precisa Supabase real; o CI é mock). É local-only.
-- Testes de RLS usam **pglite** (Postgres em WASM, sem Docker) aplicando as migrations reais.
+- Testes de RLS/pgvector usam **pglite** (Postgres em WASM, sem Docker) aplicando as migrations reais.
 
 ---
 
@@ -78,18 +83,26 @@ npx tsc --noEmit    # typecheck
 | Server actions (marca, troca de cliente, fontes) | `src/app/actions.ts` |
 | Geração (lê brand_kit do cliente da notícia) | `src/inngest/functions/generate-post.ts` |
 | Scan + fan-out por cliente ativo | `src/inngest/functions/scan-news.ts` |
+| Anti-duplicata (embedding + RPC) | `src/lib/ai/embedding.ts` |
+| Carrossel: estrutura IA | `src/lib/ai/carousel.ts` |
+| Carrossel: render SVG→PNG | `src/lib/carousel-render.ts` |
+| Carrossel: job Inngest | `src/inngest/functions/generate-carousel.ts` |
+| Carrossel: UI (galeria/editar/baixar) | `src/components/PostCard.tsx`, `CarouselEditor.tsx`, `CarouselDownload.tsx` |
 | Harness de teste (pglite + migrations reais) | `src/test/pg.ts` |
-| Testes RLS / uniqueness | `src/test/rls.test.ts`, `src/test/uniqueness.test.ts` |
+| Testes (RLS, uniqueness, pgvector, carousel) | `src/test/*.test.ts` |
 | e2e | `e2e/*.ts`, `playwright.config.ts` |
 
 ---
 
 ## 4. O que falta (em ordem)
 
-### 4.0 Verificação em produção (rápido, você)
-- [ ] Trocar de cliente no app não dá erro; **Varrer agora** só traz notícia do cliente ativo.
-- [ ] Editar marca (logo/cor/nicho) num cliente e conferir que **não vaza** para outro.
+### 4.0 Verificação — ✅ FEITA
+- [x] Multi-tenant testado no app (troca/cria cliente, isolamento). Migrations aplicadas.
+- [x] Pipeline rodou em runtime (scan → carrossel → notify) e renderizou com a marca.
+- Nota: erro de hidratação + "carrossel sem imagem" que apareceram no browser do dono
+  eram **extensão do browser** (não reproduz em aba anônima / Chromium limpo). App correta.
 - [ ] (Opcional) Abrir o PR: https://github.com/Nolei98/PostPilot-AI/pull/new/feat/multi-tenant-brand-kit
+- [ ] (Opcional) Merge de `feat/multi-tenant-brand-kit` na `main` quando quiser.
 
 ### 4.1 Limpeza pós-verificação — ✅ FEITO
 - [x] Dropar de `notification_configs` as colunas migradas (migration 024, aplicada).
@@ -172,8 +185,9 @@ demais de outra, **regenerar com "novo ângulo"** — evitando conteúdo repetid
    o prompt), então dedup **entre** clientes é discutível — cada um *deve* falar do mesmo
    fato à sua maneira. O ganho real seria evitar repetição **dentro** do mesmo cliente.
 
-**Decisão a tomar:** implementar o guardrail de similaridade (só intra-cliente, com stub
-no mock) — **sim / não / depois**. Se sim, entra provavelmente junto do Sprint E.
+**Status:** ✅ implementado (intra-cliente, stub no mock, runtime confirmado). Migration 023.
+Extensão futura possível: guardrail *cross-cliente* — deferido (cada cliente deve poder
+falar do mesmo fato à sua voz).
 
 ---
 
