@@ -1034,6 +1034,39 @@ export async function updateCarouselCard(
 }
 
 /**
+ * Salva a identidade de rótulo do Brand Kit (Sprint B+, @0verlens):
+ * wordmark (divisor da capa), keywords do rótulo e o tratamento de
+ * marca padrão dos cards (brand_mark).
+ */
+export async function saveBrandLabel(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
+
+  const wordmark = String(formData.get("wordmark") ?? "").trim() || null;
+  const keywordsRaw = String(formData.get("keywords") ?? "").trim();
+  const keywords = keywordsRaw
+    ? keywordsRaw.split(",").map((k) => k.trim()).filter(Boolean)
+    : null;
+  const marks = ["wordmark", "handle", "icon", "wordmark+handle", "none", "auto"];
+  const bm = String(formData.get("brand_mark") ?? "auto");
+  const brandMark = marks.includes(bm) ? bm : "auto";
+
+  const { error } = await supabase
+    .from("brand_kits")
+    .update({ wordmark, keywords, brand_mark: brandMark })
+    .eq("client_id", clientId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+}
+
+/**
  * Salva o formato padrão de geração do cliente ativo (single | carousel).
  * O scan-news usa isso para decidir qual job disparar em cada candidata.
  */

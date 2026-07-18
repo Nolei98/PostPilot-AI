@@ -51,6 +51,23 @@ async function insertCard(postId: string, idx: number, role = "value") {
   );
 }
 
+describe("brand_kits identidade de rótulo (027)", () => {
+  it("defaults no signup: brand_mark='auto', template_defaults={} e check do brand_mark", async () => {
+    const uid = await signup(db, { email: "label027@x.com" });
+    const { rows } = await db.query<{ id: string; brand_mark: string; template_defaults: unknown }>(
+      "select bk.id, bk.brand_mark, bk.template_defaults from brand_kits bk join clients cl on cl.id = bk.client_id where cl.owner_user_id = $1",
+      [uid]
+    );
+    expect(rows[0].brand_mark).toBe("auto");
+    expect(rows[0].template_defaults).toEqual({});
+
+    await db.query("update brand_kits set brand_mark = 'wordmark' where id = $1", [rows[0].id]);
+    await expect(
+      db.query("update brand_kits set brand_mark = 'sticker' where id = $1", [rows[0].id])
+    ).rejects.toThrow();
+  });
+});
+
 describe("brand_kits.default_format (026)", () => {
   it("default é 'single' no signup e aceita 'carousel'; rejeita inválido", async () => {
     const uid = await signup(db, { email: "deffmt@x.com" });

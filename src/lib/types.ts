@@ -56,7 +56,43 @@ export interface BrandKit {
   logo_url: string | null;
   show_brand_logo: boolean;
   post_font_family: string;
+  // identidade de rótulo/tipografia (Sprint B+, @0verlens) — migration 027.
+  // O handle do rótulo reusa ig_handle acima.
+  keywords: string[] | null; // {DESIGN, ARTE, TECH}
+  wordmark: string | null; // OVERLENS® (divisor da capa)
+  font_heading_url: string | null; // fonte embutida no Satori
+  brand_mark: BrandMark; // tratamento de marca padrão dos cards
+  template_defaults: TemplateDefaults;
   created_at: string;
+}
+
+/** Tratamento de marca de um card/capa (ver HANDOFF-overlens-template.md). */
+export type BrandMark =
+  | "wordmark"
+  | "handle"
+  | "icon"
+  | "wordmark+handle"
+  | "none"
+  | "auto";
+
+/**
+ * Contrato de layout (template_defaults no Brand Kit; layout por card
+ * sobrescreve). Campos opcionais — o renderer aplica defaults sensatos.
+ * Ver HANDOFF-overlens-template.md seção 5.
+ */
+export interface TemplateDefaults {
+  background?: "image" | "solid" | "gradient";
+  colorGrade?: { enabled: boolean; darken: number; desaturate: number };
+  labelPosition?: "auto" | "top" | "bottom";
+  showLabel?: "auto" | true | false;
+  textColor?: "auto" | "light" | "dark";
+  scrim?: "auto" | "on" | "off";
+  scrimMaxAlpha?: number;
+  blur?: "off" | "on";
+  brandMark?: BrandMark;
+  colorScheme?: "brand" | "inverse" | "mono-light" | "mono-dark" | "accent";
+  showDivider?: boolean;
+  contrastTarget?: number;
 }
 
 export interface SourceConfig {

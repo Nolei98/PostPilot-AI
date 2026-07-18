@@ -138,7 +138,7 @@ Backend pronto e testado; falta a camada de UI e o gatilho.
 Extensão do Carousel Engine: capas/cards com acabamento sofisticado (estilo @0verlens),
 **legibilidade adaptativa** ao fundo e **Template Studio** (galeria de modelos + editor
 visual). Brief completo + prompt mestre no arquivo linkado acima. **Ainda não iniciado.**
-- [ ] **B6** — Estender Brand Kit: `handle`, `keywords`, `wordmark`, `font_heading_url`, paleta, `template_defaults` + UI em `settings/brand` + preview. (migration nova)
+- [x] **B6** — Estender Brand Kit (migration 027): `keywords`, `wordmark`, `font_heading_url`, `brand_mark`, `template_defaults` (reusa `ig_handle` como handle) + tipos `BrandMark`/`TemplateDefaults` + seção "Identidade de rótulo" em Ajustes (`BrandLabelForm`) com **preview ao vivo** + `saveBrandLabel` + teste de schema (pglite). *Fonte Geist (`font_heading_url` upload) fica no B8 quando embutir no Satori.* Decisões: **Geist** + editor **server-side**.
 - [ ] **B7** — Motor de legibilidade adaptativa (`resolveLegibility` via `sharp`: luminância+desvio por faixa → cor/posição/scrim; auto-hide; override vence). Unit tests.
 - [ ] **B8** — `CapaTemplate` (divisor wordmark `———— OVERLENS® ————`) + `CardTemplate` (marca variável) em Satori; fonte embutida; scrim=gradient; blur real via sharp.
 - [ ] **B9** — Overrides manuais na fila por card (`labelPosition`/`showLabel`/`textColor`/`scrim`/`blur`/`showDivider` → `carousel_cards.layout`), re-render só do card.

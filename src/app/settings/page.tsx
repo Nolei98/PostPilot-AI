@@ -15,6 +15,7 @@ import {
   saveVisualIdentity,
 } from "@/app/actions";
 import { IdentityForm } from "@/components/IdentityForm";
+import { BrandLabelForm } from "@/components/BrandLabelForm";
 import { AvatarFileInput } from "@/components/AvatarFileInput";
 import { BrandColorPicker } from "@/components/BrandColorPicker";
 import { AppShell } from "@/components/ui/AppShell";
@@ -315,6 +316,23 @@ export default async function SettingsPage() {
               Salvar template da marca
             </SubmitButton>
           </form>
+        </Card>
+      </section>
+
+      {/* ===== Identidade de rótulo (@0verlens / Sprint B+) ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Identidade de rótulo</h2>
+        <Card className="p-4">
+          <BrandLabelForm
+            fieldClasses={fieldClasses}
+            handle={brandKit?.ig_handle ?? "seuperfil.ia"}
+            accent={brandKit?.color_accent ?? "#7C5CFF"}
+            initial={{
+              wordmark: brandKit?.wordmark ?? "",
+              keywords: (brandKit?.keywords ?? []).join(", "),
+              brandMark: brandKit?.brand_mark ?? "auto",
+            }}
+          />
         </Card>
       </section>
 
