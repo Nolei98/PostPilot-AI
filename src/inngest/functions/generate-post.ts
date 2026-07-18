@@ -75,10 +75,11 @@ export const generatePost = inngest.createFunction(
 
     // 2. Preferências: idioma + perfil (chip) + identidade visual + modo
     const prefs = await step.run("fetch-prefs", async () => {
+      // Config de marca/geração vem do brand_kit do cliente da notícia.
       const { data } = await supabase
-        .from("notification_configs")
+        .from("brand_kits")
         .select("*")
-        .eq("user_id", userId)
+        .eq("client_id", news.client_id)
         .maybeSingle();
       const profile: IgProfile = {
         handle: data?.ig_handle ?? "seuperfil.ia",
@@ -155,6 +156,7 @@ export const generatePost = inngest.createFunction(
         .insert({
           news_item_id: newsItemId,
           user_id: userId,
+          client_id: news.client_id, // herda o tenant da notícia
           hook: pkg.hook,
           caption: pkg.caption,
           hashtags: pkg.hashtags,

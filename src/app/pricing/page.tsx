@@ -5,6 +5,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getMonthlyQuota } from "@/lib/subscription";
 import { AppShell } from "@/components/ui/AppShell";
+import { getShellData } from "@/lib/shell";
 import { PricingCards } from "@/components/PricingCards";
 import { PLANS } from "@/lib/plans";
 
@@ -22,16 +23,15 @@ export default async function PricingPage() {
 
   const pct = Math.min(100, Math.round((quota.used / quota.limit) * 100));
 
-  const { data: config } = await supabase
-    .from("notification_configs")
-    .select("brand_name, logo_url")
-    .maybeSingle();
+  const shell = await getShellData();
 
   return (
     <AppShell
-      readyCount={0}
-      brandName={config?.brand_name}
-      logoUrl={config?.logo_url}
+      readyCount={shell.readyCount}
+      brandName={shell.brandName}
+      logoUrl={shell.logoUrl}
+      clients={shell.clients}
+      activeClientId={shell.activeClientId}
     >
       <div className="mx-auto max-w-4xl">
         <div className="mb-8 text-center">

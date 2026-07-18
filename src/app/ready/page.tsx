@@ -5,12 +5,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { ReadyTabs } from "@/components/ReadyTabs";
 import { AppShell } from "@/components/ui/AppShell";
+import { getShellData } from "@/lib/shell";
 import type { PostWithNews } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReadyPage() {
   const supabase = createClient();
+  const shell = await getShellData();
 
   // "Prontos" cobre os dois estados pós-fila: aprovados (aguardando
   // publicação) e publicados (histórico) — a aba filtra client-side.
@@ -18,21 +20,18 @@ export default async function ReadyPage() {
     .from("posts")
     .select("*, news_items(title, url, viral_score)")
     .in("status", ["approved", "published"])
+    .eq("client_id", shell.activeClientId ?? "")
     .order("approved_at", { ascending: false });
 
   const posts = (data ?? []) as PostWithNews[];
-  const readyCount = posts.filter((p) => p.status === "approved").length;
-
-  const { data: config } = await supabase
-    .from("notification_configs")
-    .select("brand_name, logo_url")
-    .maybeSingle();
 
   return (
     <AppShell
-      readyCount={readyCount}
-      brandName={config?.brand_name}
-      logoUrl={config?.logo_url}
+      readyCount={shell.readyCount}
+      brandName={shell.brandName}
+      logoUrl={shell.logoUrl}
+      clients={shell.clients}
+      activeClientId={shell.activeClientId}
     >
       <div className="mb-5">
         <h1 className="text-display">Prontos</h1>

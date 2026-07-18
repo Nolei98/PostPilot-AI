@@ -13,9 +13,55 @@ export type PostStatus =
   | "scheduled"
   | "published";
 
+/** Cliente (tenant). Um usuário-dono pode ter N clientes. */
+export interface Client {
+  id: string;
+  owner_user_id: string;
+  name: string;
+  created_at: string;
+}
+
+/**
+ * Brand Kit — config de conteúdo/marca por cliente. Espelha as
+ * colunas migradas de notification_configs (ver migration 020).
+ * É a fonte da verdade da identidade de cada cliente.
+ */
+export interface BrandKit {
+  id: string;
+  client_id: string;
+  // geração
+  post_language: string;
+  text_provider: "claude" | "gemini" | "pollinations";
+  image_provider: "fal" | "gemini" | "pollinations" | "stock";
+  niche: string | null;
+  // perfil IG
+  ig_handle: string;
+  ig_display_name: string;
+  ig_avatar_url: string | null;
+  ig_verified: boolean;
+  show_profile_chip: boolean;
+  // identidade visual (contra-capa)
+  color_background: string;
+  color_accent: string;
+  color_text: string;
+  color_keyword_box: string;
+  tpl_keyword: string;
+  tpl_top_text: string;
+  tpl_bottom_text: string;
+  tpl_cta_enabled: boolean;
+  template_apply_mode: TemplateApplyMode;
+  // template da marca
+  brand_name: string | null;
+  logo_url: string | null;
+  show_brand_logo: boolean;
+  post_font_family: string;
+  created_at: string;
+}
+
 export interface SourceConfig {
   id: string;
   user_id: string;
+  client_id: string;
   name: string;
   feed_url: string;
   threshold: number; // score mínimo (0-100) para virar candidato
@@ -92,6 +138,7 @@ export interface VisualIdentity {
 export interface NewsItem {
   id: string;
   source_id: string;
+  client_id: string;
   url: string;
   title: string;
   summary: string | null;
@@ -111,6 +158,7 @@ export interface Post {
   id: string;
   news_item_id: string;
   user_id: string;
+  client_id: string;
   hook: string;
   caption: string;
   hashtags: string;
