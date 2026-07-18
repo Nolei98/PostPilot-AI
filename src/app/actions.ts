@@ -11,7 +11,76 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inngest } from "@/inngest/client";
 import type { BrandTemplate, IgProfile, VisualIdentity } from "@/lib/types";
+import type { CardBrand } from "@/lib/carousel-render";
 import { resolvePostFontFamily } from "@/lib/font-data";
+
+/** Monta o CardBrand (render de carrossel) a partir de uma linha de brand_kits. */
+function buildCardBrand(bk: Record<string, unknown> | null): CardBrand {
+  return {
+    colorBackground: (bk?.color_background as string) ?? "#0B0B12",
+    colorAccent: (bk?.color_accent as string) ?? "#7C5CFF",
+    colorText: (bk?.color_text as string) ?? "#FFFFFF",
+    fontFamily: resolvePostFontFamily(bk?.post_font_family as string | null | undefined),
+    brandName: (bk?.brand_name as string | null) ?? null,
+    wordmark: (bk?.wordmark as string | null) ?? null,
+    handle: (bk?.ig_handle as string | null) ?? null,
+    keywords: (bk?.keywords as string[] | null) ?? null,
+    brandMark: (bk?.brand_mark as CardBrand["brandMark"]) ?? "auto",
+  };
+}
+
+/**
+ * Re-renderiza os cards dos carrosséis PENDENTES do cliente com o
+ * Brand Kit atual — chamado ao salvar identidade/template, para o novo
+ * visual (@0verlens) aparecer nos carrosséis já na fila (não só nos
+ * próximos). Card 0 = capa (divisor). Atualiza image_url dos cards + o
+ * do post (thumbnail = capa).
+ */
+async function resyncCarouselOnPendingPosts(clientId: string, cardBrand: CardBrand) {
+  const supabase = createClient();
+  const { data: posts } = await supabase
+    .from("posts")
+    .select("id")
+    .eq("client_id", clientId)
+    .eq("status", "pending_approval")
+    .eq("format", "carousel");
+  if (!posts || posts.length === 0) return;
+
+  const { renderAndUploadCard } = await import("@/lib/carousel-render");
+  for (const post of posts) {
+    const { data: cards } = await supabase
+      .from("carousel_cards")
+      .select("id, idx, role, headline, body")
+      .eq("post_id", post.id)
+      .order("idx");
+    if (!cards || cards.length === 0) continue;
+
+    let coverUrl: string | null = null;
+    for (const c of cards) {
+      const isCover = c.idx === 0;
+      try {
+        const url = await renderAndUploadCard(
+          post.id,
+          {
+            idx: c.idx,
+            role: c.role as "hook" | "value" | "cta",
+            headline: c.headline ?? "",
+            body: c.body ?? "",
+          },
+          cardBrand,
+          isCover
+        );
+        await supabase.from("carousel_cards").update({ image_url: url }).eq("id", c.id);
+        if (isCover) coverUrl = url;
+      } catch (err) {
+        console.error(`[resyncCarousel] falha no card ${c.idx} do post ${post.id}:`, err);
+      }
+    }
+    if (coverUrl) {
+      await supabase.from("posts").update({ image_url: coverUrl }).eq("id", post.id);
+    }
+  }
+}
 
 /** Monta o template de marca (fonte + logo) a partir de uma linha de notification_configs */
 function buildBrand(config: {
@@ -771,6 +840,8 @@ export async function saveBrandTemplate(formData: FormData) {
     };
     const brand = buildBrand(freshConfig);
     await resyncChipOnPendingPosts(user.id, clientId, profile, brand);
+    // Carrosséis pendentes também re-renderizam com a nova fonte/logo/cor.
+    await resyncCarouselOnPendingPosts(clientId, buildCardBrand(freshConfig));
 
     if (brandColor && oldConfig) {
       const oldIdentity: VisualIdentity = {
@@ -1063,7 +1134,17 @@ export async function saveBrandLabel(formData: FormData) {
     .update({ wordmark, keywords, brand_mark: brandMark })
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
+
+  // Re-renderiza os carrosséis pendentes com a nova identidade.
+  const { data: bk } = await supabase
+    .from("brand_kits")
+    .select("*")
+    .eq("client_id", clientId)
+    .maybeSingle();
+  await resyncCarouselOnPendingPosts(clientId, buildCardBrand(bk));
+
   revalidatePath("/settings");
+  revalidatePath("/");
 }
 
 /**
