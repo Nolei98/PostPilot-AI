@@ -34,10 +34,19 @@ migrations aplicadas no Supabase. Além dele, foi feita a base de testes.
 - [x] `020_multitenant_brand_kit.sql` — clients + brand_kits + client_id + backfill + RLS + trigger.
 - [x] `021_active_client.sql` — `active_client_id` (fan-out).
 - [x] `022_client_scoped_uniques.sql` — unique `(client_id, feed_url)` em fontes; `unique(client_id, news_item_id)` em posts (idempotência).
+- [x] `023_caption_embedding.sql` — pgvector + `posts.caption_embedding` + RPC `find_duplicate_caption`.
+- [x] `024_drop_migrated_brand_columns.sql` — remove de notification_configs as colunas migradas p/ brand_kit.
+- [x] `025_carousel.sql` — `posts.format` + `carousel_cards` + RLS.
 
-### Commits
-- `2a9cc35` feat: multi-tenant + Brand Kit por cliente
-- `4842bc9` test(e2e): Playwright multi-tenant contra a stack real
+### Também já pronto (backend + testes)
+- [x] **Anti-duplicata por embedding** (pgvector): generate-post embeda a legenda, acha post do mesmo cliente parecido demais e regenera 1x com "novo ângulo". Mock determinístico ($0).
+- [x] **Limpeza**: notification_configs enxuto (só telegram + active_client_id).
+- [x] **Carousel Engine (backend)**: geração da estrutura (7–10 cards, mock+real), render de card por SVG+Brand Kit → PNG (resvg), job `generate-carousel` registrado. **Falta a UI de aprovação** e decidir o gatilho (ver 4.2).
+
+### Commits (branch feat/multi-tenant-brand-kit)
+- `2a9cc35` multi-tenant + Brand Kit · `4842bc9` e2e · `ea7b124` docs
+- `+` anti-duplicata (pgvector) · limpeza notification_configs · Carousel Engine backend
+- **Testes: 66 verdes** (unit + integração pglite + e2e).
 
 ---
 
@@ -80,24 +89,27 @@ npx tsc --noEmit    # typecheck
 - [ ] Editar marca (logo/cor/nicho) num cliente e conferir que **não vaza** para outro.
 - [ ] (Opcional) Abrir o PR: https://github.com/Nolei98/PostPilot-AI/pull/new/feat/multi-tenant-brand-kit
 
-### 4.1 Limpeza pós-verificação (PR pequeno)
-- [ ] Dropar de `notification_configs` as colunas de marca já migradas para `brand_kits`
-      (ig_*, cores, tpl_*, brand_name, logo_url, show_brand_logo, post_font_family,
-      niche, providers, post_language). **Só depois** de confirmar que nada mais lê elas.
-- **Aceite:** app funciona igual; `grep` não acha leitura dessas colunas em `notification_configs`.
+### 4.1 Limpeza pós-verificação — ✅ FEITO
+- [x] Dropar de `notification_configs` as colunas migradas (migration 024, aplicada).
+      Type `NotificationConfig` enxuto; teste de guard de schema no pglite.
 
-### 4.2 SPRINT B — Carousel Engine (primeiro formato novo)
-- [ ] `posts.format` (`single | carousel | video`) + tabela `carousel_cards`
-      (post_id, idx, role hook|value|cta, headline, body, image_url).
-- [ ] Prompt do Sonnet → JSON estrito (7–10 cards, card 0 = gancho, último = CTA,
-      usa `tone_of_voice`/nicho do brand_kit; retry se JSON inválido).
-- [ ] Render dos cards 1080×1350 com **Satori + resvg** (já instalado), aplicando o
-      Brand Kit (cores/fonte/logo/chip); upload no Storage.
-- [ ] Função Inngest `generate-carousel` (reusa o padrão de `generate-post`);
-      **modo mock** ($0) com texto fixo + card gradiente.
-- [ ] Fila/Prontos: galeria com swipe; editar 1 card re-renderiza só ele; download zip.
-- [ ] **Testes**: parse do JSON (unit), idempotência do carrossel, mock verde.
-- **Aceite:** um tema gera carrossel de 7–10 cards de marca, aprovável/editável/baixável; roda em mock.
+### 4.2 SPRINT B — Carousel Engine
+Backend pronto e testado; falta a camada de UI e o gatilho.
+- [x] `posts.format` + `carousel_cards` (migration 025, aplicada) + RLS.
+- [x] Estrutura via IA (`src/lib/ai/carousel.ts`): 7–10 cards, card 0 = gancho,
+      último = CTA, mock + real (claude/gemini/pollinations), validação + retry.
+- [x] Render do card (`src/lib/carousel-render.ts`): SVG 1080×1350 com Brand Kit →
+      PNG via resvg (`rasterizeSvg`), upload no bucket `post-images`. `buildCardSvg`
+      é puro/testado; smoke test rasteriza PNG real.
+- [x] Job `generate-carousel` (Inngest) registrado em `api/inngest/route.ts`; roda mock.
+- [ ] **UI de aprovação** na fila/Prontos: renderizar o carrossel como galeria (swipe),
+      editar texto de 1 card → re-render só dele, download zip dos PNGs. *(mexe na
+      fila existente — deixado para fazer com a UI aberta)*
+- [ ] **Gatilho**: decidir quando gerar carrossel vs single. Hoje `generate-carousel`
+      é disparável só por evento (`post/generate-carousel.requested`); não está no cron.
+      Opções: botão manual "gerar como carrossel" na notícia/fila, ou uma regra no
+      pipeline. *(decisão de produto)*
+- **Aceite (restante):** aprovar/editar/baixar um carrossel pela UI; gatilho definido.
 
 ### 4.3 SPRINT C — Graph API (publicação auto + fecha o loop de métricas)
 - [ ] OAuth de conta IG Business/Creator por cliente (token por `client_id`).
@@ -129,6 +141,11 @@ npx tsc --noEmit    # typecheck
 ---
 
 ## 5. Decisões pendentes
+
+### pgvector / anti-duplicata — ✅ IMPLEMENTADO (intra-cliente)
+Feito conforme descrito abaixo, mas **só intra-cliente** e com **stub no mock**
+(mantém a suíte a $0). Ver `src/lib/ai/embedding.ts` + migration 023 +
+`find_duplicate_caption`. Explicação mantida abaixo para referência.
 
 ### pgvector / anti-duplicata por embedding — **o que é**
 `pgvector` é uma extensão do Postgres que guarda **vetores** (listas de números) e

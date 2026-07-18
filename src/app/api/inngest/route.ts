@@ -9,9 +9,10 @@ import { serve } from "inngest/next";
 import { inngest } from "@/inngest/client";
 import { scanNews } from "@/inngest/functions/scan-news";
 import { generatePost } from "@/inngest/functions/generate-post";
+import { generateCarousel } from "@/inngest/functions/generate-carousel";
 import { notifyPostReady } from "@/inngest/functions/notify";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [scanNews, generatePost, notifyPostReady],
+  functions: [scanNews, generatePost, generateCarousel, notifyPostReady],
 });
