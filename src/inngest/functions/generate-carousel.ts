@@ -109,42 +109,65 @@ export const generateCarousel = inngest.createFunction(
       return data.id as string;
     });
 
-    // Foto de fundo da capa = imagem da notícia (se houver). Base64 porque
-    // resultados de step são serializados em JSON.
-    const coverPhotoB64 = await step.run("fetch-cover-photo", async () => {
-      if (!news.image_url) return null;
-      try {
-        const r = await fetch(news.image_url);
-        if (!r.ok) return null;
-        return Buffer.from(await r.arrayBuffer()).toString("base64");
-      } catch {
-        return null;
+    // Resolve o fundo de cada card: CAPA sempre tem imagem (notícia → banco
+    // → pollinations); internos tentam o banco (opcional). Retorna as URLs
+    // (serializável); o buffer é baixado no step de cada card.
+    const bgUrls = await step.run("resolve-backgrounds", async () => {
+      const { getCardBg } = await import("@/lib/card-bg");
+      const exclude = new Set<string>();
+      const out: (string | null)[] = [];
+      for (const card of pkg.cards) {
+        const isCover = card.idx === 0;
+        const bg = await getCardBg({
+          newsImageUrl: isCover ? news.image_url : null,
+          niche: prefs.niche,
+          headline: card.headline,
+          excludeIds: exclude,
+          allowGen: isCover, // capa: pollinations garante imagem
+        });
+        out.push(bg?.url ?? null);
       }
+      return out;
     });
-    const coverPhoto = coverPhotoB64 ? Buffer.from(coverPhotoB64, "base64") : null;
 
     // Renderiza e grava cada card (step por card = retry independente).
     const cardUrls: string[] = [];
     for (const card of pkg.cards) {
       const url = await step.run(`card-${card.idx}`, async () => {
-        // card 0 = capa (divisor wordmark @0verlens, sobre a foto da notícia
-        // borrada/escurecida quando houver); demais = card interior.
-        const imageUrl = await renderAndUploadCard(
-          postId,
-          card,
-          prefs.card,
-          card.idx === 0,
-          card.idx === 0 ? coverPhoto : null
-        );
-        const { error } = await supabase.from("carousel_cards").insert({
-          post_id: postId,
-          idx: card.idx,
-          role: card.role,
-          headline: card.headline,
-          body: card.body,
-          image_url: imageUrl,
-        });
+        const bgUrl = bgUrls[card.idx] ?? null;
+        let bgBuf: Buffer | null = null;
+        if (bgUrl) {
+          try {
+            const r = await fetch(bgUrl);
+            if (r.ok) bgBuf = Buffer.from(await r.arrayBuffer());
+          } catch {
+            /* sem foto → fundo sólido */
+          }
+        }
+        // card 0 = capa (divisor @0verlens); demais = card interior. bgBuf
+        // presente → texto sobre foto borrada/escurecida.
+        const imageUrl = await renderAndUploadCard(postId, card, prefs.card, card.idx === 0, bgBuf);
+        const { data: inserted, error } = await supabase
+          .from("carousel_cards")
+          .insert({
+            post_id: postId,
+            idx: card.idx,
+            role: card.role,
+            headline: card.headline,
+            body: card.body,
+            image_url: imageUrl,
+          })
+          .select("id")
+          .single();
         if (error) throw new Error(`Erro ao gravar card ${card.idx}: ${error.message}`);
+        // bg_url best-effort (migration 029): permite o resync reusar a foto.
+        if (bgUrl && inserted) {
+          const { error: bgErr } = await supabase
+            .from("carousel_cards")
+            .update({ bg_url: bgUrl })
+            .eq("id", inserted.id);
+          if (bgErr) console.warn("[generate-carousel] bg_url não salvo (migration 029?):", bgErr.message);
+        }
         return imageUrl;
       });
       cardUrls.push(url);

@@ -48,25 +48,19 @@ async function resyncCarouselOnPendingPosts(clientId: string, cardBrand: CardBra
 
   const { renderAndUploadCard } = await import("@/lib/carousel-render");
   for (const post of posts) {
-    // Foto de fundo da capa = imagem da notícia de origem (se houver).
-    let coverPhoto: Buffer | null = null;
+    // Fallback: imagem da notícia p/ a capa quando o card não tem bg_url salvo.
+    let newsImg: string | null = null;
     const { data: news } = await supabase
       .from("news_items")
       .select("image_url")
       .eq("id", post.news_item_id)
       .maybeSingle();
-    if (news?.image_url) {
-      try {
-        const r = await fetch(news.image_url);
-        if (r.ok) coverPhoto = Buffer.from(await r.arrayBuffer());
-      } catch {
-        /* sem foto → capa sólida */
-      }
-    }
+    newsImg = news?.image_url ?? null;
 
+    // select "*" p/ pegar bg_url sem quebrar se a migration 029 não rodou.
     const { data: cards } = await supabase
       .from("carousel_cards")
-      .select("id, idx, role, headline, body")
+      .select("*")
       .eq("post_id", post.id)
       .order("idx");
     if (!cards || cards.length === 0) continue;
@@ -74,6 +68,17 @@ async function resyncCarouselOnPendingPosts(clientId: string, cardBrand: CardBra
     let coverUrl: string | null = null;
     for (const c of cards) {
       const isCover = c.idx === 0;
+      // Reusa a foto salva (bg_url); capa sem bg_url cai na imagem da notícia.
+      const bgUrl = (c.bg_url as string | null) ?? (isCover ? newsImg : null);
+      let bgBuf: Buffer | null = null;
+      if (bgUrl) {
+        try {
+          const r = await fetch(bgUrl);
+          if (r.ok) bgBuf = Buffer.from(await r.arrayBuffer());
+        } catch {
+          /* sem foto → sólido */
+        }
+      }
       try {
         const url = await renderAndUploadCard(
           post.id,
@@ -85,7 +90,7 @@ async function resyncCarouselOnPendingPosts(clientId: string, cardBrand: CardBra
           },
           cardBrand,
           isCover,
-          isCover ? coverPhoto : null
+          bgBuf
         );
         await supabase.from("carousel_cards").update({ image_url: url }).eq("id", c.id);
         if (isCover) coverUrl = url;
