@@ -31,6 +31,7 @@ export function ClientSwitcher({
       </label>
 
       <select
+        data-testid="client-select"
         value={activeClientId ?? ""}
         disabled={pending}
         onChange={(e) => {
@@ -57,6 +58,7 @@ export function ClientSwitcher({
         >
           <input
             name="name"
+            data-testid="new-client-name"
             autoFocus
             required
             placeholder="Nome da marca"
@@ -64,6 +66,7 @@ export function ClientSwitcher({
           />
           <button
             type="submit"
+            data-testid="new-client-create"
             className="shrink-0 rounded-control bg-primary/80 px-2.5 py-1.5 font-title text-[10px] font-semibold uppercase tracking-wider text-white transition-colors hover:bg-primary"
           >
             Criar
@@ -72,6 +75,7 @@ export function ClientSwitcher({
       ) : (
         <button
           type="button"
+          data-testid="new-client-btn"
           onClick={() => setAdding(true)}
           className="w-full rounded-control border border-dashed border-white/15 py-1.5 font-title text-[10px] font-semibold uppercase tracking-wider text-[#B9A9D6] transition-colors hover:border-white/30 hover:text-white"
         >
