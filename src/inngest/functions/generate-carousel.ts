@@ -105,8 +105,9 @@ export const generateCarousel = inngest.createFunction(
     });
 
     // Renderiza e grava cada card (step por card = retry independente).
+    const cardUrls: string[] = [];
     for (const card of pkg.cards) {
-      await step.run(`card-${card.idx}`, async () => {
+      const url = await step.run(`card-${card.idx}`, async () => {
         const imageUrl = await renderAndUploadCard(postId, card, prefs.card);
         const { error } = await supabase.from("carousel_cards").insert({
           post_id: postId,
@@ -117,14 +118,18 @@ export const generateCarousel = inngest.createFunction(
           image_url: imageUrl,
         });
         if (error) throw new Error(`Erro ao gravar card ${card.idx}: ${error.message}`);
-        return null;
+        return imageUrl;
       });
+      cardUrls.push(url);
     }
 
     await step.run("mark-ready", async () => {
       const { error } = await supabase
         .from("posts")
-        .update({ status: "pending_approval" })
+        // image_url = card do gancho: faz o carrossel aparecer como
+        // thumbnail nos lugares que mostram uma imagem só (Prontos,
+        // Telegram). A galeria completa vem de carousel_cards.
+        .update({ status: "pending_approval", image_url: cardUrls[0] ?? null })
         .eq("id", postId);
       if (error) throw new Error(`Erro ao finalizar carrossel: ${error.message}`);
     });

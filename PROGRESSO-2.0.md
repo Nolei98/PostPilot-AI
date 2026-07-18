@@ -102,9 +102,13 @@ Backend pronto e testado; falta a camada de UI e o gatilho.
       PNG via resvg (`rasterizeSvg`), upload no bucket `post-images`. `buildCardSvg`
       é puro/testado; smoke test rasteriza PNG real.
 - [x] Job `generate-carousel` (Inngest) registrado em `api/inngest/route.ts`; roda mock.
-- [ ] **UI de aprovação** na fila/Prontos: renderizar o carrossel como galeria (swipe),
-      editar texto de 1 card → re-render só dele, download zip dos PNGs. *(mexe na
-      fila existente — deixado para fazer com a UI aberta)*
+- [x] **UI de aprovação (v1)** na fila: post `format='carousel'` mostra a galeria dos
+      cards (reusa `CarouselPreview`); controles single-only (prompt de imagem,
+      contra-capa) escondidos. `image_url` do post = card do gancho → aparece como
+      thumbnail em Prontos/Telegram sem mudar nada lá. Guardado por `format` → posts
+      single intactos.
+- [ ] **UI de aprovação (v2)**: editar o texto de 1 card e re-renderizar só ele;
+      download zip dos PNGs; galeria dedicada na tela Prontos. *(precisa da UI aberta)*
 - [ ] **Gatilho**: decidir quando gerar carrossel vs single. Hoje `generate-carousel`
       é disparável só por evento (`post/generate-carousel.requested`); não está no cron.
       Opções: botão manual "gerar como carrossel" na notícia/fila, ou uma regra no

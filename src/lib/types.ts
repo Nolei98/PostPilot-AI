@@ -133,11 +133,26 @@ export interface NewsItem {
   created_at: string;
 }
 
+export type PostFormat = "single" | "carousel" | "video";
+
+/** Card de um post do tipo carrossel (ver carousel_cards) */
+export interface CarouselCardRow {
+  id: string;
+  post_id: string;
+  idx: number;
+  role: "hook" | "value" | "cta";
+  headline: string | null;
+  body: string | null;
+  image_url: string | null;
+  created_at: string;
+}
+
 export interface Post {
   id: string;
   news_item_id: string;
   user_id: string;
   client_id: string;
+  format: PostFormat;
   hook: string;
   caption: string;
   hashtags: string;
@@ -172,4 +187,6 @@ export interface PostWithNews extends Post {
     NewsItem,
     "title" | "url" | "viral_score" | "image_url" | "image_license_hint"
   >;
+  // Presente só em posts format='carousel' (embed do PostgREST).
+  carousel_cards?: Pick<CarouselCardRow, "idx" | "image_url">[];
 }

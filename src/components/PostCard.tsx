@@ -151,6 +151,21 @@ export function PostCard({
   const shortCaption =
     caption.length > 120 && !expanded ? caption.slice(0, 120) + "…" : caption;
 
+  // Carrossel (format='carousel'): a galeria são os cards renderizados,
+  // em ordem. Post single: página de conteúdo + contra-capa (se houver).
+  const isCarousel = post.format === "carousel";
+  const cardImages = (post.carousel_cards ?? [])
+    .slice()
+    .sort((a, b) => a.idx - b.idx)
+    .map((c) => c.image_url)
+    .filter((u): u is string => !!u);
+  const previewImages =
+    isCarousel && cardImages.length > 0
+      ? cardImages
+      : [post.image_url, post.closing_image_url].filter(
+          (u): u is string => !!u
+        );
+
   /** Toca a animação de saída e só então executa a action */
   function exitAndRun(direction: Exclude<ExitDirection, null>, action: () => Promise<void>) {
     setExit(direction);
@@ -226,9 +241,8 @@ export function PostCard({
           </div>
         )}
 
-        {/* Prompt de imagem (gerado junto com o post) — copie e cole no
-            Gemini/nano banana pra criar a arte manualmente, depois suba
-            o resultado aqui pra substituir a imagem atual do post. */}
+        {/* Single: prompt de imagem + upload manual (carrossel não usa). */}
+        {!isCarousel && (
         <div className="space-y-1.5 border-b border-line px-4 py-2.5">
           <div className="flex items-center justify-between gap-2">
             <span className="text-micro text-subtle">🎨 Prompt de imagem</span>
@@ -267,16 +281,16 @@ export function PostCard({
           </label>
           {uploadError && <p className="text-micro text-error">{uploadError}</p>}
         </div>
+        )}
 
         {/* ===== Preview fiel ao Instagram ===== */}
         <div className="bg-black">
           {/* Header (foto/nome/@) removido: já aparece no chip da imagem — evita redundância */}
 
-          {/* Conteúdo (página 1) + fechamento (página 2, se aplicado) */}
+          {/* Single: conteúdo (pág 1) + contra-capa (pág 2). Carrossel:
+              todos os cards renderizados, em ordem. */}
           <CarouselPreview
-            images={[post.image_url, post.closing_image_url].filter(
-              (u): u is string => !!u
-            )}
+            images={previewImages}
             alt={post.hook}
             className="aspect-[4/5] w-full"
           />
@@ -304,7 +318,8 @@ export function PostCard({
           </div>
         </div>
 
-        {/* ===== Contra-capa (por post) — sempre ajustável na fila ===== */}
+        {/* ===== Contra-capa (por post) — só para post single ===== */}
+        {!isCarousel && (
         <div className="flex items-center justify-between border-t border-line px-4 py-2.5">
           <label className="flex cursor-pointer items-center gap-2">
             <input
@@ -330,6 +345,7 @@ export function PostCard({
             </button>
           )}
         </div>
+        )}
 
         {/* ===== Ações — 1 clique, sem manual ===== */}
         <CardActions>
