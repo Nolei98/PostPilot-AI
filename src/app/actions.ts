@@ -973,6 +973,30 @@ export async function revertApproval(
 }
 
 /**
+ * Salva o formato padrão de geração do cliente ativo (single | carousel).
+ * O scan-news usa isso para decidir qual job disparar em cada candidata.
+ */
+export async function saveDefaultFormat(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
+
+  const fmt = formData.get("default_format") === "carousel" ? "carousel" : "single";
+  const { error } = await supabase
+    .from("brand_kits")
+    .update({ default_format: fmt })
+    .eq("client_id", clientId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+}
+
+/**
  * Troca o cliente (tenant) ativo — grava o id num cookie que
  * getActiveClient() lê. Valida que o cliente pertence ao usuário
  * antes de gravar (a RLS já filtra, mas evita cookie com id alheio).

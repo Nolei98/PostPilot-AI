@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   addSource,
   saveBrandTemplate,
+  saveDefaultFormat,
   saveIgProfile,
   saveNiche,
   saveTelegramChatId,
@@ -313,6 +314,34 @@ export default async function SettingsPage() {
             <SubmitButton savingLabel="Salvando template...">
               Salvar template da marca
             </SubmitButton>
+          </form>
+        </Card>
+      </section>
+
+      {/* ===== Formato dos posts ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Formato dos posts</h2>
+        <Card className="p-4">
+          <form action={saveDefaultFormat} className="space-y-3">
+            <div className="space-y-1.5">
+              <label htmlFor="default_format" className="block text-caption text-muted">
+                O que o piloto gera para cada notícia candidata
+              </label>
+              <select
+                id="default_format"
+                name="default_format"
+                defaultValue={brandKit?.default_format ?? "single"}
+                className={fieldClasses}
+              >
+                <option value="single">Post único (imagem 4:5)</option>
+                <option value="carousel">Carrossel (7–10 cards)</option>
+              </select>
+              <p className="text-micro text-subtle">
+                Vale para as próximas gerações deste cliente. Carrossel usa as
+                cores/fonte da marca em cada card.
+              </p>
+            </div>
+            <SubmitButton savingLabel="Salvando...">Salvar formato</SubmitButton>
           </form>
         </Card>
       </section>

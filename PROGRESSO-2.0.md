@@ -37,6 +37,8 @@ migrations aplicadas no Supabase. Além dele, foi feita a base de testes.
 - [x] `023_caption_embedding.sql` — pgvector + `posts.caption_embedding` + RPC `find_duplicate_caption`.
 - [x] `024_drop_migrated_brand_columns.sql` — remove de notification_configs as colunas migradas p/ brand_kit.
 - [x] `025_carousel.sql` — `posts.format` + `carousel_cards` + RLS.
+- [ ] `026_default_format.sql` — **pendente de aplicar** — `brand_kits.default_format`
+      (gatilho single/carousel por cliente). Código é resiliente sem ela (tudo single).
 
 ### Também já pronto (backend + testes)
 - [x] **Anti-duplicata por embedding** (pgvector): generate-post embeda a legenda, acha post do mesmo cliente parecido demais e regenera 1x com "novo ângulo". Mock determinístico ($0).
@@ -109,11 +111,12 @@ Backend pronto e testado; falta a camada de UI e o gatilho.
       single intactos.
 - [ ] **UI de aprovação (v2)**: editar o texto de 1 card e re-renderizar só ele;
       download zip dos PNGs; galeria dedicada na tela Prontos. *(precisa da UI aberta)*
-- [ ] **Gatilho**: decidir quando gerar carrossel vs single. Hoje `generate-carousel`
-      é disparável só por evento (`post/generate-carousel.requested`); não está no cron.
-      Opções: botão manual "gerar como carrossel" na notícia/fila, ou uma regra no
-      pipeline. *(decisão de produto)*
-- **Aceite (restante):** aprovar/editar/baixar um carrossel pela UI; gatilho definido.
+- [x] **Gatilho (v1)**: preferência por cliente `brand_kits.default_format`
+      (single|carousel, default single). O `scan-news` despacha `generate-post` ou
+      `generate-carousel` conforme o cliente. Ajustes tem o seletor "Formato dos posts".
+      Leitura best-effort no scan (se 026 não aplicada → tudo single = hoje).
+      **⚠️ Aplicar migration `026_default_format.sql`** para o seletor/gatilho valerem.
+- **Aceite (restante):** editar/baixar um carrossel pela UI (v2).
 
 ### 4.3 SPRINT C — Graph API (publicação auto + fecha o loop de métricas)
 - [ ] OAuth de conta IG Business/Creator por cliente (token por `client_id`).

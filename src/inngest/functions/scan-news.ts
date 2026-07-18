@@ -216,6 +216,24 @@ export const scanNews = inngest.createFunction(
       return (data ?? []) as { client_id: string; niche: string | null }[];
     });
     const clientNiche = new Map(clientNicheRows.map((c) => [c.client_id, c.niche]));
+
+    // Formato de geração por cliente (best-effort: se a migration 026 não
+    // rodou, a coluna não existe → erro capturado → todos 'single' = hoje).
+    const clientFormatRows = await step.run("fetch-client-formats", async () => {
+      const clientIds = [...new Set(sources.map((s) => s.client_id))];
+      const { data, error } = await supabase
+        .from("brand_kits")
+        .select("client_id, default_format")
+        .in("client_id", clientIds);
+      if (error) {
+        console.warn("[scan] default_format indisponível (migration 026?):", error.message);
+        return [] as { client_id: string; default_format: string | null }[];
+      }
+      return (data ?? []) as { client_id: string; default_format: string | null }[];
+    });
+    const clientFormat = new Map(
+      clientFormatRows.map((c) => [c.client_id, c.default_format === "carousel" ? "carousel" : "single"])
+    );
     const nicheOf = (sourceId: string) =>
       clientNiche.get(sourceClient.get(sourceId) ?? "") ?? null;
 
@@ -280,17 +298,25 @@ export const scanNews = inngest.createFunction(
         return candidateIds;
       });
 
-      // 5. Cada candidata dispara a geração de post (job separado)
+      // 5. Cada candidata dispara a geração — single ou carrossel conforme
+      //    o default_format do cliente dono da fonte.
       if (newCandidates.length > 0) {
         await step.sendEvent(
           `dispatch-generate-${idx}`,
-          newCandidates.map((c) => ({
-            name: "post/generate.requested" as const,
-            data: {
-              newsItemId: c.newsItemId,
-              userId: sourceOwner.get(c.sourceId)!,
-            },
-          }))
+          newCandidates.map((c) => {
+            const fmt = clientFormat.get(sourceClient.get(c.sourceId) ?? "");
+            const name =
+              fmt === "carousel"
+                ? ("post/generate-carousel.requested" as const)
+                : ("post/generate.requested" as const);
+            return {
+              name,
+              data: {
+                newsItemId: c.newsItemId,
+                userId: sourceOwner.get(c.sourceId)!,
+              },
+            };
+          })
         );
         candidates += newCandidates.length;
       }

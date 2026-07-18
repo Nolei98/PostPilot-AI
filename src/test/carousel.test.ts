@@ -51,6 +51,22 @@ async function insertCard(postId: string, idx: number, role = "value") {
   );
 }
 
+describe("brand_kits.default_format (026)", () => {
+  it("default é 'single' no signup e aceita 'carousel'; rejeita inválido", async () => {
+    const uid = await signup(db, { email: "deffmt@x.com" });
+    const { rows: c } = await db.query<{ id: string; default_format: string }>(
+      "select bk.id, bk.default_format from brand_kits bk join clients cl on cl.id = bk.client_id where cl.owner_user_id = $1",
+      [uid]
+    );
+    expect(c[0].default_format).toBe("single");
+
+    await db.query("update brand_kits set default_format = 'carousel' where id = $1", [c[0].id]);
+    await expect(
+      db.query("update brand_kits set default_format = 'gif' where id = $1", [c[0].id])
+    ).rejects.toThrow();
+  });
+});
+
 describe("posts.format", () => {
   it("default é 'single'", async () => {
     const { postId } = await makePost("fmt-default@x.com");

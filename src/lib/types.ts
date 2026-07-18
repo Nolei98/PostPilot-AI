@@ -33,6 +33,7 @@ export interface BrandKit {
   post_language: string;
   text_provider: "claude" | "gemini" | "pollinations";
   image_provider: "fal" | "gemini" | "pollinations" | "stock";
+  default_format: "single" | "carousel"; // formato que o pipeline gera
   niche: string | null;
   // perfil IG
   ig_handle: string;
