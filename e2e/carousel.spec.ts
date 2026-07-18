@@ -17,4 +17,7 @@ test("carrossel aparece como galeria e esconde controles single", async ({ page 
   // Controles single-only escondidos no carrossel.
   await expect(page.getByText("Prompt de imagem")).toHaveCount(0);
   await expect(page.getByText("Adicionar contra-capa")).toHaveCount(0);
+
+  // Botão de baixar o carrossel em zip (3 imagens).
+  await expect(page.getByRole("button", { name: /Baixar carrossel/ })).toBeVisible();
 });

@@ -25,6 +25,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { Modal } from "@/components/ui/Modal";
 import { Input, Textarea } from "@/components/ui/Input";
 import { CarouselPreview } from "@/components/CarouselPreview";
+import { CarouselDownload } from "@/components/CarouselDownload";
 import { resizeImageForUpload } from "@/lib/resizeImageClient";
 import { useToast } from "@/components/ui/Toast";
 import type { IgProfile, PostWithNews, VisualIdentity } from "@/lib/types";
@@ -316,6 +317,14 @@ export function PostCard({
             )}
             <p className="mt-1 text-secondary">{hashtags}</p>
           </div>
+          {isCarousel && (
+            <div className="px-3 pb-3">
+              <CarouselDownload
+                images={previewImages}
+                name={`carrossel-${post.id.slice(0, 8)}`}
+              />
+            </div>
+          )}
         </div>
 
         {/* ===== Contra-capa (por post) — só para post single ===== */}
