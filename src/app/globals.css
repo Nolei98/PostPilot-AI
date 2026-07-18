@@ -1,77 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ============================================================
-   POSTPILOT AI — DESIGN SYSTEM (fonte única de verdade)
-   Todos os tokens visuais vivem aqui. Mudou aqui → muda no app
-   inteiro (o tailwind.config.ts só referencia estas variáveis).
-
-   Cores em triplas RGB ("R G B") para o Tailwind suportar
-   opacidade (ex: bg-primary/20).
+   POSTPILOT — DESIGN SYSTEM (fonte única de verdade)
+   Atualizado com a identidade visual premium tech do Fable 5.
    ============================================================ */
 
 :root {
   /* ---------- PALETA ------------------------------------ */
-  /* Fundos (base escura — tech/IA) */
-  --color-bg: 9 9 15;            /* #09090F fundo do app */
-  --color-surface: 20 20 29;     /* #14141D cards, painéis */
-  --color-surface-2: 28 28 40;   /* #1C1C28 inputs, hover de card */
-  --color-border: 42 42 58;      /* #2A2A3A bordas sutis */
+  /* Fundos baseados no guia do Fable 5 */
+  --color-bg: 21 7 38;           /* #150726 fundo base */
+  --color-surface: 34 16 56;      /* #221038 superfícies (glass base) */
+  --color-surface-2: 42 21 69;    /* #2A1545 inputs, hover de cards */
+  --color-border: 56 32 86;       /* #382056 bordas escuras violetas */
 
-  /* Marca */
-  --color-primary: 124 92 255;   /* #7C5CFF violeta elétrico (accent IA) */
-  --color-primary-hover: 147 120 255; /* #9378FF */
-  --color-secondary: 34 211 238; /* #22D3EE ciano (detalhes, links) */
+  /* Marca (Gradiente: #E0219C -> #A020F0 -> #7B2FF7) */
+  --color-primary: 224 33 156;    /* #E0219C magenta principal */
+  --color-primary-hover: 160 32 240; /* #A020F0 roxo */
+  --color-secondary: 123 47 247;  /* #7B2FF7 indigo */
 
   /* Texto */
-  --color-text: 244 244 248;     /* #F4F4F8 principal */
-  --color-text-muted: 156 160 176;  /* #9CA0B0 secundário */
-  --color-text-subtle: 106 110 128; /* #6A6E80 terciário/dicas */
+  --color-text: 244 238 255;      /* #F4EEFF texto primário */
+  --color-text-muted: 185 169 214;   /* #B9A9D6 texto secundário */
+  --color-text-subtle: 126 107 155;  /* #7E6B9B texto terciário */
 
-  /* Estados */
-  --color-success: 16 185 129;   /* #10B981 aprovar / confirmado */
-  --color-error: 244 63 94;      /* #F43F5E descartar / erro */
-  --color-warning: 245 158 11;   /* #F59E0B score viral / atenção */
+  /* Estados Fable 5 */
+  --color-success: 70 229 183;    /* #46E5B7 aprovado */
+  --color-warning: 245 185 59;    /* #F5B93B editar / score med */
+  --color-error: 255 92 122;      /* #FF5C7A descartar */
 
   /* ---------- TIPOGRAFIA --------------------------------- */
-  /* Família: Geist (local, já no projeto) → fallback system */
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter', sans-serif;
+  --font-title: 'Sora', sans-serif;
 
-  /* Escala (mobile-first) */
-  --text-display: 1.5rem;   /* 24px — título de página (peso 700) */
-  --text-title: 1.125rem;   /* 18px — título de seção (peso 600) */
-  --text-body: 0.875rem;    /* 14px — corpo padrão (peso 400) */
-  --text-caption: 0.75rem;  /* 12px — metadados, labels (peso 500) */
-  --text-micro: 0.6875rem;  /* 11px — badges, hints (peso 600) */
+  /* Escala */
+  --text-display: 1.5rem;   /* 24px */
+  --text-title: 1.125rem;   /* 18px */
+  --text-body: 0.875rem;    /* 14px */
+  --text-caption: 0.75rem;  /* 12px */
+  --text-micro: 0.6875rem;  /* 11px */
 
   /* ---------- FORMA / ESPAÇO ----------------------------- */
-  --radius-card: 1rem;      /* 16px cards */
-  --radius-control: 0.625rem; /* 10px botões e inputs */
-  --radius-full: 9999px;    /* pills e badges */
+  --radius-card: 1.375rem;     /* 22px de acordo com Fable 5 */
+  --radius-control: 0.75rem;   /* 12px botões e inputs */
+  --radius-full: 9999px;
 
   /* ---------- SOMBRAS / ELEVAÇÃO ------------------------- */
-  --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.03) inset,
-                 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.08) inset,
+                 0 16px 36px -12px rgb(0 0 0 / 0.6);
   --shadow-modal: 0 24px 64px -16px rgb(0 0 0 / 0.8);
-  --glow-primary: 0 0 24px -4px rgb(var(--color-primary) / 0.5);
-
-  /* ---------- MOVIMENTO ---------------------------------- */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --duration-fast: 150ms;
-  --duration-base: 250ms;
-  --duration-slow: 400ms;
+  --glow-primary: 0 0 40px rgba(224, 33, 156, 0.35);
 }
 
 /* ---------- BASE ------------------------------------------ */
 body {
-  background: rgb(var(--color-bg));
+  background: radial-gradient(130% 100% at 50% 0%, #1A0B2E 0%, #150726 55%, #0D0418 100%) fixed #150726;
   color: rgb(var(--color-text));
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbar discreta, coerente com o tema */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-title);
+  font-weight: 700;
+}
+
+/* Scrollbar premium */
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -80,36 +77,34 @@ body {
   border-radius: var(--radius-full);
 }
 
-/* ---------- MICRO-INTERAÇÕES (keyframes) ------------------- */
+/* ---------- ORBE LOGO & PULSE ------------------------------ */
+@keyframes ppPulse {
+  0%, 100% { transform: scale(1); opacity: .85; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
 
-/* Card entrando na fila. "to" termina em transform: none (não
-   translateY(0)) — qualquer transform != none vira containing block
-   de descendentes com position: fixed, o que descentralizava modais
-   abertos de dentro do card assim que a animação (fill-mode both)
-   deixava esse valor "preso" no elemento. */
+.orb-logo-pulse {
+  background: radial-gradient(circle at 32% 28%, #FF7ACD 0%, #E0219C 34%, #7B2FF7 78%, #4a12a8 100%);
+  box-shadow: 0 0 24px rgba(224,33,156,.55), inset 0 1px 4px rgba(255,255,255,.35);
+  animation: ppPulse 4s ease-in-out infinite;
+}
+
+/* ---------- MICRO-INTERAÇÕES (keyframes) ------------------- */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: none; }
 }
-
-/* Aprovado: desliza para a direita com leve giro (swipe feliz) */
 @keyframes exit-right {
   to { opacity: 0; transform: translateX(70%) rotate(3deg); }
 }
-
-/* Descartado: desliza para a esquerda */
 @keyframes exit-left {
   to { opacity: 0; transform: translateX(-70%) rotate(-3deg); }
 }
-
-/* Check de sucesso "pulando" */
 @keyframes pop {
   0%   { transform: scale(0.4); opacity: 0; }
   70%  { transform: scale(1.15); }
   100% { transform: scale(1); opacity: 1; }
 }
-
-/* Modal */
 @keyframes modal-in {
   from { opacity: 0; transform: scale(0.96) translateY(8px); }
   to   { opacity: 1; transform: none; }
@@ -118,8 +113,6 @@ body {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-
-/* Skeleton de carregamento */
 @keyframes shimmer {
   from { background-position: 200% 0; }
   to   { background-position: -200% 0; }
@@ -144,3 +137,13 @@ body {
     animation: shimmer 1.6s linear infinite;
   }
 }
+
+/* ---------- LANDING PAGE KEYFRAMES ------------------------ */
+@keyframes ppBob { 0%,100% { transform: translateY(0px) rotate(0.001deg); } 50% { transform: translateY(-14px) rotate(0.001deg); } }
+@keyframes ppBobSm { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+@keyframes ppRadar { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes ppTwinkle { 0%,100% { opacity: .25; } 50% { opacity: .9; } }
+@keyframes ppMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes ppMarqueeR { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+@keyframes ppSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+

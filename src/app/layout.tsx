@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { ToastProvider } from "@/components/ui/Toast";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -9,8 +10,8 @@ const geistSans = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "PostPilot AI",
-  description: "Seu perfil de IA posta sozinho. Você só aprova.",
+  title: "PostPilot",
+  description: "Seu perfil posta sozinho. Você só aprova.",
 };
 
 export default function RootLayout({
@@ -22,7 +23,7 @@ export default function RootLayout({
     <html lang="pt-BR">
       {/* Cores/fonte vêm do design system (globals.css) */}
       <body className={geistSans.variable}>
-        {children}
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );

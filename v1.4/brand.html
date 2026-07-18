@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brand Guide - PostPilot AI (v1.4)</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <style>
+    /* ---- Brand Page Layout ---- */
+    .brand-page { padding-top: 120px; padding-bottom: 80px; position: relative; z-index: 1; }
+
+    .brand-hero {
+      text-align: center;
+      margin-bottom: 72px;
+    }
+
+    .brand-hero h1 {
+      font-size: 2.75rem;
+      margin-bottom: 12px;
+    }
+
+    .brand-hero p {
+      font-size: 1rem;
+      color: var(--text-muted);
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    .brand-section {
+      margin-bottom: 64px;
+    }
+
+    .brand-section h2 {
+      font-size: 1.25rem;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-section h2::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(255, 255, 255, .06);
+    }
+
+    /* ---- Color Grid ---- */
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 16px;
+    }
+
+    .color-swatch {
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, .06);
+      cursor: pointer;
+      transition: transform .25s ease, border-color .25s ease;
+    }
+
+    .color-swatch:hover {
+      transform: translateY(-3px);
+      border-color: rgba(224, 33, 156, .25);
+    }
+
+    .swatch-block {
+      height: 80px;
+    }
+
+    .swatch-info {
+      padding: 10px 12px;
+      background: rgba(34, 16, 56, .6);
+    }
+
+    .swatch-name {
+      font-family: var(--font-heading);
+      font-size: .7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text-primary);
+      margin-bottom: 2px;
+    }
+
+    .swatch-hex {
+      font-size: .7rem;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+
+    /* ---- Typography Specimen ---- */
+    .type-specimen {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .type-row {
+      display: flex;
+      align-items: baseline;
+      gap: 24px;
+      padding: 16px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, .04);
+    }
+
+    .type-meta {
+      min-width: 140px;
+      flex-shrink: 0;
+    }
+
+    .type-family {
+      font-size: .65rem;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--text-muted);
+    }
+
+    .type-weight {
+      font-size: .6rem;
+      color: var(--accent-magenta);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .type-sample {
+      flex: 1;
+    }
+
+    /* ---- Buttons Specimen ---- */
+    .buttons-specimen {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+    }
+
+    /* ---- Glass Specimen ---- */
+    .glass-specimen {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      align-items: center;
+    }
+
+    .glass-demo {
+      padding: 40px 32px;
+      text-align: center;
+    }
+
+    .glass-demo p {
+      font-size: .8125rem;
+      margin-top: 12px;
+    }
+
+    .orb-specimen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    @media (max-width: 768px) {
+      .brand-hero h1 { font-size: 1.75rem; }
+      .glass-specimen { grid-template-columns: 1fr; }
+      .type-row { flex-direction: column; gap: 8px; }
+      .type-meta { min-width: auto; }
+      .color-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========== STARFIELD ========== -->
+  <div class="starfield"></div>
+
+  <!-- ========== HEADER ========== -->
+  <header class="header-glass">
+    <div class="header-container">
+      <a href="app.html" class="logo-wrap">
+        <div class="orb-logo"></div>
+        <div class="logo-text">PostPilot<span>/AI</span></div>
+      </a>
+      <nav class="header-nav">
+        <a href="app.html">Dashboard</a>
+        <a href="brand.html" style="color:var(--text-primary);">Brand</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ========== SIDE RAILS ========== -->
+  <div class="side-rail side-rail--left">
+    <span class="rail-text">PostPilot AI · v1.4</span>
+  </div>
+  <div class="side-rail side-rail--right">
+    <span class="rail-text">Brand Guide</span>
+  </div>
+
+  <!-- ================================================================
+       BRAND CONTENT
+       ================================================================ -->
+  <div class="container brand-page">
+
+    <!-- ---- HERO ---- -->
+    <div class="brand-hero">
+      <h1><span class="gradient-text">Brand Guide</span></h1>
+      <p>Design tokens, tipografia, cores e componentes do sistema visual PostPilot AI v1.4.</p>
+    </div>
+
+    <!-- =========================================================
+         COLORS
+         ========================================================= -->
+    <section class="brand-section">
+      <h2>Paleta de Cores</h2>
+      <div class="color-grid">
+        <div class="color-swatch" onclick="copyColor('#150726', this)">
+          <div class="swatch-block" style="background:#150726;"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Deep BG</div>
+            <div class="swatch-hex">#150726</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('#1A0B2E', this)">
+          <div class="swatch-block" style="background:#1A0B2E;"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Base BG</div>
+            <div class="swatch-hex">#1A0B2E</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('#221038', this)">
+          <div class="swatch-block" style="background:#221038;"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Card BG</div>
+            <div class="swatch-hex">#221038</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('#E0219C', this)">
+          <div class="swatch-block" style="background:#E0219C;"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Magenta</div>
+            <div class="swatch-hex">#E0219C</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('#A020F0', this)">
+          <div class="swatch-block" style="background:#A020F0;"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Purple</div>
+            <div class="swatch-hex">#A020F0</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('#7B2FF7', this)">
+          <div class="swatch-block" style="background:#7B2FF7;"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Indigo</div>
+            <div class="swatch-hex">#7B2FF7</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('#46E5B7', this)">
+          <div class="swatch-block" style="background:#46E5B7;"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Approved</div>
+            <div class="swatch-hex">#46E5B7</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('#FF5C7A', this)">
+          <div class="swatch-block" style="background:#FF5C7A;"></div>
+          <div class="swatch-info">
+            <div class="swatch-name">Discard</div>
+            <div class="swatch-hex">#FF5C7A</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================
+         TYPOGRAPHY
+         ========================================================= -->
+    <section class="brand-section">
+      <h2>Tipografia</h2>
+      <div class="type-specimen">
+
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-family">Space Grotesk</div>
+            <div class="type-weight">700 · Bold</div>
+          </div>
+          <div class="type-sample">
+            <h1 style="font-size:2.5rem;">Heading One</h1>
+          </div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-family">Space Grotesk</div>
+            <div class="type-weight">700 · Bold</div>
+          </div>
+          <div class="type-sample">
+            <h2>Heading Two</h2>
+          </div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-family">Space Grotesk</div>
+            <div class="type-weight">600 · SemiBold</div>
+          </div>
+          <div class="type-sample">
+            <h3>Heading Three</h3>
+          </div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-family">Space Grotesk</div>
+            <div class="type-weight">600 · SemiBold</div>
+          </div>
+          <div class="type-sample">
+            <h4>Heading Four</h4>
+          </div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-family">Inter</div>
+            <div class="type-weight">400 · Regular</div>
+          </div>
+          <div class="type-sample">
+            <p style="color:var(--text-primary);font-size:1rem;">Body text — A inteligência artificial está transformando a maneira como criamos e distribuímos conteúdo digital. Com PostPilot AI, cada post é otimizado para máximo engajamento.</p>
+          </div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-family">Inter</div>
+            <div class="type-weight">300 · Light</div>
+          </div>
+          <div class="type-sample">
+            <p style="color:var(--text-secondary);font-size:.875rem;font-weight:300;">Secondary text — Informações adicionais, descrições e contexto complementar para os elementos da interface.</p>
+          </div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-family">Inter</div>
+            <div class="type-weight">500 · Medium</div>
+          </div>
+          <div class="type-sample">
+            <p style="color:var(--text-muted);font-size:.75rem;font-weight:500;text-transform:uppercase;letter-spacing:.1em;">Muted label · caption · overline</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =========================================================
+         BUTTONS
+         ========================================================= -->
+    <section class="brand-section">
+      <h2>Botões</h2>
+      <div class="buttons-specimen">
+        <button class="btn btn-gradient">Gradient Button</button>
+        <button class="btn btn-gradient" style="padding:10px 20px;font-size:.75rem;">Small Gradient</button>
+        <button class="btn btn-ghost">Ghost Button</button>
+        <button class="btn btn-ghost" style="padding:10px 20px;font-size:.75rem;">Small Ghost</button>
+        <button class="btn btn-gradient" disabled style="opacity:.4;pointer-events:none;">Disabled</button>
+      </div>
+    </section>
+
+    <!-- =========================================================
+         GLASSMORPHISM + ORB
+         ========================================================= -->
+    <section class="brand-section">
+      <h2>Glass & Orb</h2>
+      <div class="glass-specimen">
+        <div class="glass-panel glass-demo">
+          <h4>Glass Panel</h4>
+          <p>backdrop-filter: blur(20px) com borda semi-transparente e sombra profunda. Usado em cards, modais e overlays.</p>
+        </div>
+        <div class="orb-specimen">
+          <div class="orb-3d">
+            <div class="orb-inner-glow"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ========== TOAST ========== -->
+  <div class="toast" id="brand-toast"></div>
+
+  <!-- ========== INLINE SCRIPT ========== -->
+  <script>
+    function copyColor(hex, el) {
+      navigator.clipboard.writeText(hex).then(function () {
+        showToast('Copiado: ' + hex);
+      }).catch(function () {
+        showToast('Erro ao copiar');
+      });
+    }
+
+    var _toastTimer = null;
+    function showToast(msg) {
+      var toast = document.getElementById('brand-toast');
+      if (!toast) return;
+      clearTimeout(_toastTimer);
+      toast.textContent = msg;
+      toast.classList.add('is-visible');
+      _toastTimer = setTimeout(function () {
+        toast.classList.remove('is-visible');
+      }, 2200);
+    }
+  </script>
+</body>
+</html>

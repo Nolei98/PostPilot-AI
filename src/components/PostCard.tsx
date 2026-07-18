@@ -21,10 +21,12 @@ import {
 } from "@/app/actions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardActions } from "@/components/ui/Card";
+import { Drawer } from "@/components/ui/Drawer";
 import { Modal } from "@/components/ui/Modal";
 import { Input, Textarea } from "@/components/ui/Input";
 import { CarouselPreview } from "@/components/CarouselPreview";
 import { resizeImageForUpload } from "@/lib/resizeImageClient";
+import { useToast } from "@/components/ui/Toast";
 import type { IgProfile, PostWithNews, VisualIdentity } from "@/lib/types";
 
 type ExitDirection = "right" | "left" | null;
@@ -46,6 +48,7 @@ export function PostCard({
   identityDefaults: VisualIdentity;
 }) {
   const HANDLE = profile.handle;
+  const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [hook, setHook] = useState(post.hook);
   const [caption, setCaption] = useState(post.caption);
@@ -267,35 +270,7 @@ export function PostCard({
 
         {/* ===== Preview fiel ao Instagram ===== */}
         <div className="bg-black">
-          {/* Header fiel ao IG: foto + nome (negrito) + @handle */}
-          <div className="flex items-center gap-2.5 px-3 py-2.5">
-            {profile.avatarUrl ? (
-              <img
-                src={profile.avatarUrl}
-                alt={profile.displayName}
-                className="h-9 w-9 rounded-full object-cover"
-              />
-            ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-tr from-warning via-error to-primary text-sm">
-                🤖
-              </div>
-            )}
-            <div className="min-w-0 leading-tight">
-              <p className="flex items-center gap-1 truncate text-body font-semibold">
-                {profile.displayName}
-                {profile.verified && (
-                  /* selo azul — igual ao renderizado na arte */
-                  <svg width="14" height="14" viewBox="0 0 24 24" aria-label="Verificado" className="shrink-0">
-                    <circle cx="12" cy="12" r="11" fill="#3897F0" />
-                    <path d="m7.5 12.5 3 3 6-6.5" stroke="#fff" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </p>
-              <p className="truncate text-caption text-muted">@{HANDLE}</p>
-            </div>
-            {/* ⋯ do IG */}
-            <span className="ml-auto text-muted">⋯</span>
-          </div>
+          {/* Header (foto/nome/@) removido: já aparece no chip da imagem — evita redundância */}
 
           {/* Conteúdo (página 1) + fechamento (página 2, se aplicado) */}
           <CarouselPreview
@@ -359,35 +334,51 @@ export function PostCard({
         {/* ===== Ações — 1 clique, sem manual ===== */}
         <CardActions>
           <Button
-            variant="success"
+            variant="primary"
             className="flex-1"
             disabled={isPending || exit !== null}
-            onClick={() => exitAndRun("right", () => approvePost(post.id))}
+            onClick={() =>
+              exitAndRun("right", async () => {
+                await approvePost(post.id);
+                toast("✓ Post aprovado — movido para Prontos.");
+              })
+            }
           >
             ✓ Aprovar
           </Button>
           <Button
-            variant="secondary"
+            variant="warning"
             className="flex-1"
             disabled={isPending || exit !== null}
             onClick={() => setEditing(true)}
           >
-            Editar
+            ✎ Editar
           </Button>
           <Button
             variant="danger"
-            className="flex-1"
+            className="flex-grow-0 w-[50px] shrink-0"
             disabled={isPending || exit !== null}
-            onClick={() => exitAndRun("left", () => discardPost(post.id))}
+            onClick={() =>
+              exitAndRun("left", async () => {
+                await discardPost(post.id);
+                toast("✕ Post descartado.");
+              })
+            }
           >
-            Descartar
+            ✕
           </Button>
         </CardActions>
       </Card>
 
-      {/* ===== Modal de edição ===== */}
-      <Modal open={editing} onClose={() => setEditing(false)} title="Editar post">
+      {/* ===== Drawer de edição (desliza da direita) ===== */}
+      <Drawer open={editing} onClose={() => setEditing(false)} title="Editar post">
         <div className="space-y-4">
+          {post.image_url && (
+            <div
+              className="relative h-[180px] overflow-hidden rounded-control bg-cover bg-center"
+              style={{ backgroundImage: `url(${post.image_url})` }}
+            />
+          )}
           <Textarea
             label="Título (aparece NA IMAGEM)"
             rows={2}
@@ -411,7 +402,20 @@ export function PostCard({
             onChange={(e) => setHashtags(e.target.value)}
             className="text-secondary"
           />
-          <div className="flex gap-2">
+          <div className="rounded-control border border-white/8 bg-[#0D0418]/55 p-3.5">
+            <span className="mb-1.5 block font-title text-[9.5px] tracking-[.22em] text-muted">
+              NOTÍCIA-FONTE
+            </span>
+            <a
+              href={post.news_items.url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-caption text-primary hover:underline"
+            >
+              {post.news_items.title} ↗
+            </a>
+          </div>
+          <div className="mt-auto flex gap-2">
             <Button
               className="flex-1"
               loading={isPending}
@@ -419,6 +423,7 @@ export function PostCard({
                 startTransition(async () => {
                   await updatePost(post.id, { hook, caption, hashtags });
                   setEditing(false);
+                  toast("✓ Alterações salvas.");
                 })
               }
             >
@@ -437,7 +442,7 @@ export function PostCard({
             </Button>
           </div>
         </div>
-      </Modal>
+      </Drawer>
 
       {/* ===== Modal da contra-capa (por post) ===== */}
       <Modal

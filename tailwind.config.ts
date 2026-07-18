@@ -47,6 +47,10 @@ const config: Config = {
       transitionTimingFunction: {
         out: "var(--ease-out)",
       },
+      fontFamily: {
+        sans: ["var(--font-sans)", "sans-serif"],
+        title: ["var(--font-title)", "sans-serif"],
+      },
     },
   },
   plugins: [],

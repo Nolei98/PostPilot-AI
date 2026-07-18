@@ -14,23 +14,33 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Resvg } from "@resvg/resvg-js";
-import { FONT_BUFFERS_BASE64 } from "@/lib/font-data";
+import { POST_FONTS } from "@/lib/font-data";
 
 let fontFilesCache: string[] | null = null;
 
+/**
+ * Grava em disco TODOS os pesos de TODAS as famílias selecionáveis em
+ * Ajustes (Inter/Sora/Space Grotesk) — o resvg casa por família+peso
+ * lidos do próprio arquivo, então basta ter tudo registrado; o SVG
+ * escolhe a família certa via font-family no texto.
+ */
 function ensureFontFiles(): string[] {
   if (fontFilesCache) return fontFilesCache;
 
   const dir = path.join(os.tmpdir(), "postpilot-fonts");
   fs.mkdirSync(dir, { recursive: true });
 
-  fontFilesCache = FONT_BUFFERS_BASE64.map((f) => {
-    const file = path.join(dir, `inter-${f.weight}.ttf`);
-    if (!fs.existsSync(file)) {
-      fs.writeFileSync(file, Buffer.from(f.data, "base64"));
+  const files: string[] = [];
+  for (const font of POST_FONTS) {
+    for (const f of font.buffers) {
+      const file = path.join(dir, `${font.key}-${f.weight}.ttf`);
+      if (!fs.existsSync(file)) {
+        fs.writeFileSync(file, Buffer.from(f.data, "base64"));
+      }
+      files.push(file);
     }
-    return file;
-  });
+  }
+  fontFilesCache = files;
   return fontFilesCache;
 }
 

@@ -5,6 +5,7 @@
 // no desktop (lg+). Navegação auto-explicativa: 3 destinos com
 // ícone + rótulo, item ativo destacado, badge de posts prontos.
 // ============================================================
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -20,7 +21,7 @@ interface NavItem {
 function navItems(readyCount: number): NavItem[] {
   return [
     {
-      href: "/",
+      href: "/fila",
       label: "Fila",
       icon: (
         // pilha de cards = fila de aprovação
@@ -67,78 +68,92 @@ function navItems(readyCount: number): NavItem[] {
 
 function Logo() {
   return (
-    <span className="flex items-center gap-2 font-bold">
-      <span className="flex h-7 w-7 items-center justify-center rounded-control bg-primary/20 text-primary">
-        {/* raio = automação */}
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2z" />
-        </svg>
-      </span>
-      PostPilot
-    </span>
+    <Link href="/fila" className="flex items-center gap-3 font-bold transition-opacity hover:opacity-90">
+      <span aria-hidden="true" className="orb-logo-pulse block h-7 w-7 rounded-full" />
+      <span className="font-title tracking-wide text-[13px] uppercase">PostPilot</span>
+    </Link>
   );
 }
 
 function Badge({ count }: { count: number }) {
   if (!count) return null;
   return (
-    <span className="animate-pop min-w-[1.25rem] rounded-full bg-success px-1.5 py-0.5 text-center text-micro text-white">
-      {count > 99 ? "99+" : count}
+    <span className="ml-auto bg-gradient-to-r from-[#E0219C] to-[#7B2FF7] rounded-full text-[10px] px-2 py-0.5 text-white font-sans font-semibold animate-pop">
+      {count}
     </span>
   );
 }
 
 export function AppShell({
   readyCount = 0,
+  brandName,
+  logoUrl,
   children,
 }: {
   readyCount?: number;
+  brandName?: string | null;
+  logoUrl?: string | null;
   children: ReactNode;
 }) {
   const pathname = usePathname();
   const items = navItems(readyCount);
 
   return (
-    <div className="min-h-screen lg:pl-60">
+    <div className="min-h-screen lg:pl-[230px] flex flex-col w-full">
       {/* ===== SIDEBAR (desktop lg+) ===== */}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r border-line bg-surface px-3 py-5 lg:flex">
-        <div className="mb-8 px-2 text-display">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[230px] flex-col border-r border-white/7 bg-[#150726] px-4 py-[26px] lg:flex">
+        <div className="mb-6 px-[10px]">
           <Logo />
         </div>
-        <nav className="flex-1 space-y-1">
+        <nav className="flex-1 space-y-1.5">
           {items.map((item) => {
             const active = pathname === item.href;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 rounded-control px-3 py-2.5 text-body transition-colors duration-150
+                className={`flex items-center gap-3 rounded-control border px-3.5 py-3 font-title text-[11.5px] font-semibold tracking-wider transition-all duration-200 uppercase
                   ${active
-                    ? "bg-primary/15 font-medium text-primary"
-                    : "text-muted hover:bg-surface-2 hover:text-content"}`}
+                    ? "bg-primary/16 border-primary/45 text-white"
+                    : "border-transparent text-muted hover:border-white/20 hover:text-white"}`}
               >
-                {item.icon}
+                <span className="w-[18px] text-center text-sm">{item.icon}</span>
                 <span className="flex-1">{item.label}</span>
                 <Badge count={item.badge ?? 0} />
               </Link>
             );
           })}
         </nav>
-        <form action={signOut}>
-          <button className="flex w-full items-center gap-3 rounded-control px-3 py-2.5 text-body text-muted transition-colors hover:bg-surface-2 hover:text-content">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-            </svg>
-            Sair
-          </button>
-        </form>
+        <div className="mt-auto border-t border-white/7 pt-4">
+          <div className="flex items-center gap-2.5 px-2 py-2">
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={brandName ?? "Logo da marca"}
+                className="h-[30px] w-[30px] shrink-0 rounded-full object-cover ring-1 ring-white/15"
+              />
+            ) : (
+              <span aria-hidden="true" className="h-[30px] w-[30px] rounded-full bg-gradient-to-br from-[#46E5B7] to-[#37C8F5] block shrink-0" />
+            )}
+            <span className="min-w-0 truncate font-sans text-[12px] leading-tight text-white">
+              {brandName || "Sua Marca"}
+              <br />
+              <span className="text-[10.5px] text-[#B9A9D6]">Plano Pro</span>
+            </span>
+          </div>
+          <form action={signOut} className="mt-2">
+            <button className="flex w-full items-center justify-center rounded-control border border-white/12 py-2.5 font-title text-[11px] font-semibold tracking-wider text-[#B9A9D6] transition-colors hover:border-[#FF5C7A]/40 hover:text-[#FF5C7A] uppercase">
+              Sair
+            </button>
+          </form>
+        </div>
       </aside>
 
       {/* ===== NAVBAR (mobile, topo sticky) ===== */}
-      <header className="sticky top-0 z-20 border-b border-line bg-bg/85 backdrop-blur lg:hidden">
+      <header className="sticky top-0 z-20 border-b border-white/7 bg-[#150726]/85 backdrop-blur lg:hidden">
         <div className="flex items-center justify-between px-4 py-3">
           <Logo />
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-1.5">
             {items.map((item) => {
               const active = pathname === item.href;
               return (
@@ -146,12 +161,12 @@ export function AppShell({
                   key={item.href}
                   href={item.href}
                   aria-label={item.label}
-                  className={`relative rounded-control p-2 transition-colors duration-150
-                    ${active ? "bg-primary/15 text-primary" : "text-muted hover:text-content"}`}
+                  className={`relative rounded-control p-2 transition-all duration-150 border
+                    ${active ? "bg-primary/16 border-primary/45 text-white" : "border-transparent text-muted hover:text-white"}`}
                 >
-                  {item.icon}
+                  <span className="text-sm block">{item.icon}</span>
                   {(item.badge ?? 0) > 0 && (
-                    <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-success ring-2 ring-bg" />
+                    <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-gradient-to-r from-[#E0219C] to-[#7B2FF7]" />
                   )}
                 </Link>
               );
@@ -171,7 +186,7 @@ export function AppShell({
       </header>
 
       {/* ===== CONTEÚDO ===== */}
-      <main className="mx-auto max-w-lg px-4 pb-24 pt-4 lg:max-w-2xl lg:pt-8">
+      <main className="flex-1 p-4 pb-24 pt-4 md:p-[34px_38px_80px] min-w-0 max-w-[1240px] mx-auto w-full">
         {children}
       </main>
     </div>

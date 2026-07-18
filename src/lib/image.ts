@@ -17,13 +17,13 @@ import { fal } from "@fal-ai/client";
 import sharp from "sharp";
 import { GoogleGenAI } from "@google/genai";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { IgProfile, VisualIdentity } from "@/lib/types";
+import type { BrandTemplate, IgProfile, VisualIdentity } from "@/lib/types";
 import { FONT_FAMILY } from "@/lib/font-data";
 import { rasterizeSvg } from "@/lib/svg-render";
 import { searchStockPhoto, fetchStockPhotoBuffer } from "@/lib/stock-photos";
 
-/** font-family usada em todos os <text> do SVG — ver font-data.ts */
-const TEXT_FONT = FONT_FAMILY;
+/** Template de marca default (posts antigos / config ausente) */
+const DEFAULT_BRAND: BrandTemplate = { logoUrl: null, showLogo: true, fontFamily: FONT_FAMILY };
 
 const WIDTH = 1080;
 const HEIGHT = 1350;
@@ -317,7 +317,8 @@ async function circularAvatar(
  */
 async function buildProfileChipLayers(
   profile: IgProfile,
-  canvasWidth: number
+  canvasWidth: number,
+  fontFamily: string = FONT_FAMILY
 ): Promise<CompositeLayer[]> {
   const s = canvasWidth / 1080; // fator de escala
 
@@ -381,7 +382,7 @@ async function buildProfileChipLayers(
     ? ""
     : `<circle cx="${avatarX + avatarSize / 2}" cy="${avatarY + avatarSize / 2}" r="${avatarSize / 2}" fill="url(#avatarGrad)"/>
        <text x="${avatarX + avatarSize / 2}" y="${avatarY + avatarSize / 2 + nameSize * 0.36}"
-             font-family="${TEXT_FONT}" font-size="${nameSize}" font-weight="800"
+             font-family="${fontFamily}" font-size="${nameSize}" font-weight="800"
              fill="#ffffff" text-anchor="middle">${escapeXml(initials(name))}</text>`;
 
   // SVG do chip: fundo escuro semitransparente + borda tracejada +
@@ -406,10 +407,10 @@ async function buildProfileChipLayers(
       ${fallbackAvatarSvg}
       <circle cx="${avatarX + avatarSize / 2}" cy="${avatarY + avatarSize / 2}" r="${avatarSize / 2}"
               fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="${Math.max(1, Math.round(1.5 * s))}"/>
-      <text x="${textX}" y="${nameY}" font-family="${TEXT_FONT}"
+      <text x="${textX}" y="${nameY}" font-family="${fontFamily}"
             font-size="${nameSize}" font-weight="800" fill="#ffffff">${escapeXml(name)}</text>
       ${verifiedSvg}
-      <text x="${textX}" y="${handleY}" font-family="${TEXT_FONT}"
+      <text x="${textX}" y="${handleY}" font-family="${fontFamily}"
             font-size="${handleSize}" font-weight="500" fill="#B0B3C0">${escapeXml(handleText)}</text>
     </svg>`;
 
@@ -472,10 +473,39 @@ function buildWatermarkLayer(width: number, height: number): CompositeLayer {
       <g transform="translate(${boltX}, ${boltY}) scale(${(bolt / 24).toFixed(3)})">
         <path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2z" fill="#A78BFA"/>
       </g>
-      <text x="${textX}" y="${textY}" font-family="${TEXT_FONT}" font-size="${fontSize}"
+      <text x="${textX}" y="${textY}" font-family="${FONT_FAMILY}" font-size="${fontSize}"
             font-weight="600" fill="rgba(255,255,255,0.92)">${escapeXml(WATERMARK_TEXT)}</text>
     </svg>`;
   return { input: rasterizeSvg(svg), top: 0, left: 0 };
+}
+
+/**
+ * Badge circular com a LOGO da marca (Template da marca, Ajustes) —
+ * canto superior direito, discreto, nas duas páginas do carrossel.
+ * Reaproveita o mesmo recorte circular do avatar do chip. Sem logo
+ * configurada, não desenha nada (layers vazio).
+ */
+async function buildLogoLayer(
+  logoUrl: string | null,
+  width: number
+): Promise<CompositeLayer | null> {
+  if (!logoUrl) return null;
+  const s = width / 1080;
+  const size = Math.round(64 * s);
+  const margin = Math.round(40 * s);
+  const circle = await circularAvatar(logoUrl, size);
+  if (!circle) return null;
+  const ring = Buffer.from(
+    `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="none"
+              stroke="rgba(255,255,255,0.5)" stroke-width="${Math.max(1, Math.round(1.5 * s))}"/>
+    </svg>`
+  );
+  const withRing = await sharp(circle)
+    .composite([{ input: ring, top: 0, left: 0 }])
+    .png()
+    .toBuffer();
+  return { input: withRing, top: margin, left: width - size - margin };
 }
 
 // ------------------------------------------------------------
@@ -496,8 +526,10 @@ export async function renderTemplateSlide(
   profile: IgProfile,
   width = WIDTH,
   height = HEIGHT,
-  watermark = false
+  watermark = false,
+  brand: BrandTemplate = DEFAULT_BRAND
 ): Promise<Buffer> {
+  const fontFamily = brand.fontFamily;
   const s = width / 1080;
   const centerX = width / 2;
 
@@ -570,7 +602,7 @@ export async function renderTemplateSlide(
   const topLinesSvg = topLines
     .map((line, i) => {
       const y = cursorY + i * lineHeight + Math.round(sideFontSize * 0.8);
-      return `<text x="${centerX}" y="${y}" text-anchor="middle" font-family="${TEXT_FONT}" font-size="${sideFontSize}" font-weight="800" fill="${identity.colorText}" letter-spacing="${Math.round(2 * s)}">${escapeXml(line.toUpperCase())}</text>`;
+      return `<text x="${centerX}" y="${y}" text-anchor="middle" font-family="${fontFamily}" font-size="${sideFontSize}" font-weight="800" fill="${identity.colorText}" letter-spacing="${Math.round(2 * s)}">${escapeXml(line.toUpperCase())}</text>`;
     })
     .join("\n");
   cursorY += topBlockH;
@@ -585,7 +617,7 @@ export async function renderTemplateSlide(
       <rect x="${ctaX}" y="${ctaY}" width="${ctaW}" height="${ctaH}"
             rx="${Math.round(ctaH / 2)}" fill="${identity.colorAccent}"/>
       <text x="${centerX}" y="${ctaY + ctaH - ctaPadY - Math.round(ctaFontSize * 0.2)}" text-anchor="middle"
-            font-family="${TEXT_FONT}" font-size="${ctaFontSize}" font-weight="800"
+            font-family="${fontFamily}" font-size="${ctaFontSize}" font-weight="800"
             fill="${identity.colorText}">${escapeXml(CTA_LABEL)}</text>`;
     cursorY += ctaH + gapCtaBox;
   } else {
@@ -599,7 +631,7 @@ export async function renderTemplateSlide(
   const bottomLinesSvg = bottomLines
     .map((line, i) => {
       const y = cursorY + i * lineHeight + Math.round(sideFontSize * 0.8);
-      return `<text x="${centerX}" y="${y}" text-anchor="middle" font-family="${TEXT_FONT}" font-size="${sideFontSize}" font-weight="800" fill="${identity.colorText}" letter-spacing="${Math.round(2 * s)}">${escapeXml(line.toUpperCase())}</text>`;
+      return `<text x="${centerX}" y="${y}" text-anchor="middle" font-family="${fontFamily}" font-size="${sideFontSize}" font-weight="800" fill="${identity.colorText}" letter-spacing="${Math.round(2 * s)}">${escapeXml(line.toUpperCase())}</text>`;
     })
     .join("\n");
 
@@ -626,7 +658,7 @@ export async function renderTemplateSlide(
       <rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}"
             rx="${Math.round(24 * s)}" fill="${identity.colorKeywordBox}"/>
       <text x="${centerX}" y="${boxY + boxH - boxPadY - Math.round(kwFontSize * 0.16)}" text-anchor="middle"
-            font-family="${TEXT_FONT}" font-size="${kwFontSize}" font-weight="900"
+            font-family="${fontFamily}" font-size="${kwFontSize}" font-weight="900"
             fill="${identity.colorText}">${escapeXml(keyword)}</text>
 
       <!-- texto embaixo (multi-linha) -->
@@ -636,8 +668,10 @@ export async function renderTemplateSlide(
   // Chip de perfil por cima (mesmo componente dos slides normais)
   const layers: CompositeLayer[] = [];
   if (profile.showProfileChip) {
-    layers.push(...(await buildProfileChipLayers(profile, width)));
+    layers.push(...(await buildProfileChipLayers(profile, width, fontFamily)));
   }
+  const logoLayer = brand.showLogo ? await buildLogoLayer(brand.logoUrl, width) : null;
+  if (logoLayer) layers.push(logoLayer);
   // Plano free: marca "feito com PostPilot" no rodapé
   if (watermark) {
     layers.push(buildWatermarkLayer(width, height));
@@ -662,9 +696,10 @@ export async function renderAndUploadTemplateArt(
   postId: string,
   identity: VisualIdentity,
   profile: IgProfile,
-  watermark = false
+  watermark = false,
+  brand: BrandTemplate = DEFAULT_BRAND
 ): Promise<string> {
-  const final = await renderTemplateSlide(identity, profile, WIDTH, HEIGHT, watermark);
+  const final = await renderTemplateSlide(identity, profile, WIDTH, HEIGHT, watermark, brand);
 
   const supabase = createAdminClient();
   const path = `${postId}-closing.jpg`;
@@ -686,8 +721,10 @@ async function composeTemplate(
   baseImage: Buffer,
   hook: string,
   profile: IgProfile,
-  watermark = false
+  watermark = false,
+  brand: BrandTemplate = DEFAULT_BRAND
 ): Promise<Buffer> {
+  const fontFamily = brand.fontFamily;
   const lines = wrapText(hook, 24);
   const fontSize = 72;
   const lineHeight = 88;
@@ -709,7 +746,7 @@ async function composeTemplate(
       ${lines
         .map(
           (line, i) =>
-            `<text x="60" y="${firstLineY + i * lineHeight}" font-family="${TEXT_FONT}" font-size="${fontSize}" font-weight="900" fill="#ffffff">${escapeXml(line)}</text>`
+            `<text x="60" y="${firstLineY + i * lineHeight}" font-family="${fontFamily}" font-size="${fontSize}" font-weight="900" fill="#ffffff">${escapeXml(line)}</text>`
         )
         .join("\n")}
     </svg>`;
@@ -721,8 +758,10 @@ async function composeTemplate(
     { input: rasterizeSvg(textSvg), top: 0, left: 0 },
   ];
   if (profile.showProfileChip) {
-    layers.push(...(await buildProfileChipLayers(profile, WIDTH)));
+    layers.push(...(await buildProfileChipLayers(profile, WIDTH, fontFamily)));
   }
+  const logoLayer = brand.showLogo ? await buildLogoLayer(brand.logoUrl, WIDTH) : null;
+  if (logoLayer) layers.push(logoLayer);
   // Plano free: marca "feito com PostPilot" no rodapé
   if (watermark) {
     layers.push(buildWatermarkLayer(WIDTH, HEIGHT));
@@ -748,7 +787,8 @@ export async function generatePostImage(
   watermark = false,
   sourceImageUrl: string | null = null,
   imageProvider: "fal" | "gemini" | "pollinations" | "stock" = "stock",
-  userId: string | null = null
+  userId: string | null = null,
+  brand: BrandTemplate = DEFAULT_BRAND
 ): Promise<string> {
   // 1. Imagem base — prioriza a imagem original da matéria (evita
   //    custo de gerar do zero e mantém a foto real da notícia); cai
@@ -825,7 +865,7 @@ export async function generatePostImage(
     }
   }
 
-  return composeAndUploadContentImage(base, hook, postId, profile, watermark);
+  return composeAndUploadContentImage(base, hook, postId, profile, watermark, brand);
 }
 
 /**
@@ -839,7 +879,8 @@ async function composeAndUploadContentImage(
   hook: string,
   postId: string,
   profile: IgProfile,
-  watermark: boolean
+  watermark: boolean,
+  brand: BrandTemplate = DEFAULT_BRAND
 ): Promise<string> {
   const supabase = createAdminClient();
 
@@ -860,7 +901,7 @@ async function composeAndUploadContentImage(
   }
 
   // Template de marca: chip de perfil no topo (se habilitado) + hook
-  const final = await composeTemplate(base, hook, profile, watermark);
+  const final = await composeTemplate(base, hook, profile, watermark, brand);
 
   // Upload no Storage (bucket público criado na migration)
   const path = `${postId}.jpg`;
@@ -900,10 +941,11 @@ export async function applyCustomBaseImage(
   hook: string,
   profile: IgProfile,
   watermark: boolean,
-  base: Buffer
+  base: Buffer,
+  brand: BrandTemplate = DEFAULT_BRAND
 ): Promise<string> {
   const normalized = await normalizeUploadedImage(base);
-  return composeAndUploadContentImage(normalized, hook, postId, profile, watermark);
+  return composeAndUploadContentImage(normalized, hook, postId, profile, watermark, brand);
 }
 
 /**
@@ -919,7 +961,8 @@ export async function regenerateContentImage(
   postId: string,
   hook: string,
   profile: IgProfile,
-  watermark = false
+  watermark = false,
+  brand: BrandTemplate = DEFAULT_BRAND
 ): Promise<string | null> {
   const supabase = createAdminClient();
   const { data, error } = await supabase.storage
@@ -928,7 +971,7 @@ export async function regenerateContentImage(
   if (error || !data) return null;
 
   const baseBuffer = Buffer.from(await data.arrayBuffer());
-  const final = await composeTemplate(baseBuffer, hook, profile, watermark);
+  const final = await composeTemplate(baseBuffer, hook, profile, watermark, brand);
 
   const path = `${postId}.jpg`;
   const { error: uploadError } = await supabase.storage

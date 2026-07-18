@@ -13,11 +13,17 @@
 // ============================================================
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
+import { nicheLabel } from "@/lib/niches";
 
 export interface TriageInput {
   id: string;
   title: string;
   summary: string | null;
+}
+
+/** Tema do perfil usado no critério de triagem, de acordo com o nicho escolhido */
+function triageTopic(niche: string | null | undefined): string {
+  return !niche || niche === "tecnologia" ? "Inteligência Artificial" : nicheLabel(niche);
 }
 
 export interface TriageResult {
@@ -54,8 +60,12 @@ function mockTriage(items: TriageInput[]): TriageResult[] {
 /**
  * Triagem real com Haiku 4.5 + structured outputs (JSON garantido).
  */
-async function claudeTriage(items: TriageInput[]): Promise<TriageResult[]> {
+async function claudeTriage(
+  items: TriageInput[],
+  niche?: string | null
+): Promise<TriageResult[]> {
   const anthropic = new Anthropic(); // lê ANTHROPIC_API_KEY do ambiente
+  const topic = triageTopic(niche);
 
   const newsList = items
     .map(
@@ -67,15 +77,15 @@ async function claudeTriage(items: TriageInput[]): Promise<TriageResult[]> {
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5",
     max_tokens: 4096,
-    system: `Você é um analista de conteúdo viral para um perfil de Instagram focado em Inteligência Artificial (notícias sensacionalistas, novidades e curiosidades de IA, em português).
+    system: `Você é um analista de conteúdo viral para um perfil de Instagram focado em ${topic} (notícias sensacionalistas, novidades e curiosidades do nicho, em português).
 
 Avalie cada notícia com um score de 0 a 100 de potencial viral para esse público:
-- 80-100: bombástica — grandes lançamentos, drama entre empresas de IA, números impressionantes, medo/empolgação
-- 60-79: boa — novidade interessante, ferramenta útil, curiosidade forte
+- 80-100: bombástica — grandes lançamentos, drama entre marcas/empresas do nicho, números impressionantes, medo/empolgação
+- 60-79: boa — novidade interessante, ferramenta ou fato útil, curiosidade forte
 - 40-59: mediana — relevante mas sem gancho emocional
-- 0-39: fraca — nichada demais, técnica demais ou sem relação com IA
+- 0-39: fraca — nichada demais, técnica demais ou sem relação com ${topic}
 
-Notícias fora do tema IA/tech devem receber score baixo.`,
+Notícias fora do tema ${topic} devem receber score baixo.`,
     messages: [
       {
         role: "user",
@@ -125,15 +135,18 @@ Notícias fora do tema IA/tech devem receber score baixo.`,
   }));
 }
 
-const TRIAGE_SYSTEM_PROMPT = `Você é um analista de conteúdo viral para um perfil de Instagram focado em Inteligência Artificial (notícias sensacionalistas, novidades e curiosidades de IA, em português).
+function buildTriageSystemPrompt(niche?: string | null): string {
+  const topic = triageTopic(niche);
+  return `Você é um analista de conteúdo viral para um perfil de Instagram focado em ${topic} (notícias sensacionalistas, novidades e curiosidades do nicho, em português).
 
 Avalie cada notícia com um score de 0 a 100 de potencial viral para esse público:
-- 80-100: bombástica — grandes lançamentos, drama entre empresas de IA, números impressionantes, medo/empolgação
-- 60-79: boa — novidade interessante, ferramenta útil, curiosidade forte
+- 80-100: bombástica — grandes lançamentos, drama entre marcas/empresas do nicho, números impressionantes, medo/empolgação
+- 60-79: boa — novidade interessante, ferramenta ou fato útil, curiosidade forte
 - 40-59: mediana — relevante mas sem gancho emocional
-- 0-39: fraca — nichada demais, técnica demais ou sem relação com IA
+- 0-39: fraca — nichada demais, técnica demais ou sem relação com ${topic}
 
-Notícias fora do tema IA/tech devem receber score baixo.`;
+Notícias fora do tema ${topic} devem receber score baixo.`;
+}
 
 const TRIAGE_SCHEMA = {
   type: "object",
@@ -158,7 +171,10 @@ const TRIAGE_SCHEMA = {
  * Triagem real com Gemini 2.5 Flash — mesmo critério do Claude,
  * JSON garantido via responseSchema. Alternativa mais barata ao Haiku.
  */
-async function geminiTriage(items: TriageInput[]): Promise<TriageResult[]> {
+async function geminiTriage(
+  items: TriageInput[],
+  niche?: string | null
+): Promise<TriageResult[]> {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
   const newsList = items
@@ -172,7 +188,7 @@ async function geminiTriage(items: TriageInput[]): Promise<TriageResult[]> {
     model: "gemini-2.5-flash",
     contents: `Avalie as notícias abaixo:\n\n${newsList}`,
     config: {
-      systemInstruction: TRIAGE_SYSTEM_PROMPT,
+      systemInstruction: buildTriageSystemPrompt(niche),
       responseMimeType: "application/json",
       responseSchema: TRIAGE_SCHEMA,
     },
@@ -193,15 +209,16 @@ async function geminiTriage(items: TriageInput[]): Promise<TriageResult[]> {
  * Claude se houver ANTHROPIC_API_KEY, senão mock.
  */
 export async function triageNews(
-  items: TriageInput[]
+  items: TriageInput[],
+  niche?: string | null
 ): Promise<TriageResult[]> {
   if (items.length === 0) return [];
   if (process.env.AI_PROVIDER === "gemini" && process.env.GEMINI_API_KEY) {
-    return geminiTriage(items);
+    return geminiTriage(items, niche);
   }
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn("[triage] nenhuma API key de IA — usando MOCK");
     return mockTriage(items);
   }
-  return claudeTriage(items);
+  return claudeTriage(items, niche);
 }

@@ -15,6 +15,7 @@
 // ============================================================
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
+import { nicheLabel } from "@/lib/niches";
 
 export interface GenerateInput {
   title: string;
@@ -22,6 +23,14 @@ export interface GenerateInput {
   url: string;
   /** Idioma do post gerado (ex: "pt-BR", "en", "es"). Default: pt-BR */
   language?: string;
+  /** Nicho do usuário (ver src/lib/niches.ts) — direciona o tom do perfil. Default: tecnologia/IA */
+  niche?: string | null;
+}
+
+/** Descrição do perfil usada no prompt, de acordo com o nicho escolhido em Ajustes/cadastro */
+function nichePersona(niche: string | null | undefined): string {
+  if (!niche || niche === "tecnologia") return "um perfil de notícias de IA";
+  return `um perfil de notícias de ${nicheLabel(niche)}`;
 }
 
 /** Nome legível do idioma para instruir o modelo com clareza */
@@ -64,11 +73,12 @@ function mockGenerate(input: GenerateInput): PostPackage {
 async function claudeGenerate(input: GenerateInput): Promise<PostPackage> {
   const anthropic = new Anthropic();
   const lang = languageName(input.language ?? "pt-BR");
+  const persona = nichePersona(input.niche);
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 2048,
-    system: `Você escreve posts virais de Instagram para um perfil de notícias de IA, no estilo de @gurudoprompt, @guilhermemorais.ia e @hollyfield.ia.
+    system: `Você escreve posts virais de Instagram para ${persona}, no estilo de @gurudoprompt, @guilhermemorais.ia e @hollyfield.ia (adapte o tom e os exemplos abaixo para o assunto da notícia recebida, mesmo que o estilo de referência seja de IA).
 
 ⚠️ IDIOMA DO POST: escreva hook, caption e hashtags em ${lang}. Os exemplos abaixo estão em português apenas para mostrar o ESTILO — reproduza o estilo, não o idioma. O image_prompt continua sempre em inglês.
 
@@ -127,8 +137,9 @@ REGRAS DO PACOTE:
 
 // Mesmo prompt (system + few-shot) do Claude, só o transporte muda —
 // mantém geração equivalente entre os dois providers.
-function buildSystemPrompt(lang: string): string {
-  return `Você escreve posts virais de Instagram para um perfil de notícias de IA, no estilo de @gurudoprompt, @guilhermemorais.ia e @hollyfield.ia.
+function buildSystemPrompt(lang: string, niche?: string | null): string {
+  const persona = nichePersona(niche);
+  return `Você escreve posts virais de Instagram para ${persona}, no estilo de @gurudoprompt, @guilhermemorais.ia e @hollyfield.ia (adapte o tom e os exemplos abaixo para o assunto da notícia recebida, mesmo que o estilo de referência seja de IA).
 
 ⚠️ IDIOMA DO POST: escreva hook, caption e hashtags em ${lang}. Os exemplos abaixo estão em português apenas para mostrar o ESTILO — reproduza o estilo, não o idioma. O image_prompt continua sempre em inglês.
 
@@ -178,7 +189,7 @@ async function geminiGenerate(input: GenerateInput): Promise<PostPackage> {
     model: "gemini-2.5-flash",
     contents: `Crie o pacote de post para esta notícia:\n\nTítulo: ${input.title}\nResumo: ${input.summary ?? "(sem resumo)"}\nFonte: ${input.url}`,
     config: {
-      systemInstruction: buildSystemPrompt(lang),
+      systemInstruction: buildSystemPrompt(lang, input.niche),
       responseMimeType: "application/json",
       responseSchema: POST_PACKAGE_SCHEMA,
     },
@@ -210,7 +221,7 @@ async function pollinationsGenerate(input: GenerateInput): Promise<PostPackage> 
     body: JSON.stringify({
       model: "openai",
       messages: [
-        { role: "system", content: buildSystemPrompt(lang) },
+        { role: "system", content: buildSystemPrompt(lang, input.niche) },
         {
           role: "user",
           content: `Crie o pacote de post para esta notícia:\n\nTítulo: ${input.title}\nResumo: ${input.summary ?? "(sem resumo)"}\nFonte: ${input.url}\n\nResponda APENAS com o JSON do pacote (hook, caption, hashtags, image_prompt), sem texto antes ou depois.`,

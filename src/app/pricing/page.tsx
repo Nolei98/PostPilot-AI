@@ -22,8 +22,17 @@ export default async function PricingPage() {
 
   const pct = Math.min(100, Math.round((quota.used / quota.limit) * 100));
 
+  const { data: config } = await supabase
+    .from("notification_configs")
+    .select("brand_name, logo_url")
+    .maybeSingle();
+
   return (
-    <AppShell readyCount={0}>
+    <AppShell
+      readyCount={0}
+      brandName={config?.brand_name}
+      logoUrl={config?.logo_url}
+    >
       <div className="mx-auto max-w-4xl">
         <div className="mb-8 text-center">
           <h1 className="text-display">Um social media custa R$1.500/mês.</h1>
@@ -34,19 +43,19 @@ export default async function PricingPage() {
         </div>
 
         {/* Uso do mês — âncora visual do gatilho de upgrade */}
-        <div className="mb-8 rounded-card border border-line bg-surface p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-caption text-muted">
+        <div className="mb-8 rounded-[22px] border border-white/8 bg-[#221038]/55 backdrop-blur-[20px] p-6 shadow-card">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-caption text-[#B9A9D6] uppercase tracking-wider font-title font-semibold text-[10.5px]">
               Seu uso este mês — plano{" "}
-              <strong className="text-content">{PLANS[quota.plan].label}</strong>
+              <strong className="text-white font-bold">{PLANS[quota.plan].label}</strong>
             </span>
-            <span className="text-caption font-semibold">
+            <span className="text-caption font-bold font-title text-white">
               {quota.used}/{quota.limit} posts
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-surface-2">
+          <div className="h-2.5 overflow-hidden rounded-full bg-black/70">
             <div
-              className={`h-full rounded-full transition-all ${pct >= 80 ? "bg-warning" : "bg-primary"}`}
+              className="h-full rounded-full bg-gradient-to-r from-[#E0219C] via-[#A020F0] to-[#7B2FF7] shadow-[0_0_16px_rgba(224,33,156,0.6)] transition-all duration-200"
               style={{ width: `${pct}%` }}
             />
           </div>

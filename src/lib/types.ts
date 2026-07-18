@@ -47,7 +47,22 @@ export interface NotificationConfig {
   // Provider de IA escolhido em Ajustes (default: gemini/gemini)
   text_provider: "claude" | "gemini" | "pollinations";
   image_provider: "fal" | "gemini" | "pollinations" | "stock";
+  // Template da marca: nome, logo + fonte usadas na renderização das artes
+  brand_name: string | null;
+  logo_url: string | null;
+  show_brand_logo: boolean; // liga/desliga o selo da logo nas artes geradas
+  post_font_family: string; // chave de PostFontKey (ver src/lib/font-data.ts)
+  // Nicho do negócio — escolhido no cadastro, ajustável depois.
+  // Direciona o tom dos posts gerados e as fontes RSS padrão.
+  niche: string | null;
   created_at: string;
+}
+
+/** Template visual da marca (logo + fonte) aplicado na renderização das artes */
+export interface BrandTemplate {
+  logoUrl: string | null;
+  showLogo: boolean; // false = não desenha o selo, mesmo com logoUrl setada
+  fontFamily: string; // nome da família resolvido (ver resolvePostFontFamily)
 }
 
 /** Dados do perfil usados no preview e no chip da arte */

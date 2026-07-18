@@ -164,21 +164,49 @@ export const scanNews = inngest.createFunction(
       return data ?? [];
     });
 
-    let candidates = 0;
-    for (let i = 0; i < pending.length; i += TRIAGE_BATCH_SIZE) {
-      const batch = pending.slice(i, i + TRIAGE_BATCH_SIZE);
+    // Nicho é por usuário (dono da fonte) — a triagem usa um critério
+    // diferente por nicho (ver triage.ts), então agrupamos as pendentes
+    // por nicho ANTES de fatiar em lotes, para não misturar notícias de
+    // nichos diferentes num mesmo prompt de triagem.
+    const sourceOwner = new Map(sources.map((s) => [s.id, s.user_id]));
+    // step.run resultados passam por (de)serialização JSON no replay do
+    // Inngest — retorna array (não Map) e monta o Map fora do step.
+    const ownerNicheRows = await step.run("fetch-owner-niches", async () => {
+      const ownerIds = [...new Set(sources.map((s) => s.user_id))];
+      const { data } = await supabase
+        .from("notification_configs")
+        .select("user_id, niche")
+        .in("user_id", ownerIds);
+      return (data ?? []) as { user_id: string; niche: string | null }[];
+    });
+    const ownerNiche = new Map(ownerNicheRows.map((c) => [c.user_id, c.niche]));
+    const nicheOf = (sourceId: string) =>
+      ownerNiche.get(sourceOwner.get(sourceId) ?? "") ?? null;
 
-      const scored = await step.run(`triage-batch-${i}`, async () => {
+    const byNiche = new Map<string, typeof pending>();
+    for (const news of pending) {
+      const key = nicheOf(news.source_id) ?? "tecnologia";
+      byNiche.set(key, [...(byNiche.get(key) ?? []), news]);
+    }
+
+    let candidates = 0;
+    let batchIndex = 0;
+    for (const [niche, newsForNiche] of byNiche) {
+    for (let i = 0; i < newsForNiche.length; i += TRIAGE_BATCH_SIZE) {
+      const batch = newsForNiche.slice(i, i + TRIAGE_BATCH_SIZE);
+      const idx = batchIndex++;
+
+      const scored = await step.run(`triage-batch-${idx}`, async () => {
         const inputs: TriageInput[] = batch.map((n) => ({
           id: n.id,
           title: n.title,
           summary: n.summary,
         }));
-        return triageNews(inputs);
+        return triageNews(inputs, niche);
       });
 
       // 4. Grava scores e decide candidato vs descarte por fonte
-      const newCandidates = await step.run(`save-scores-${i}`, async () => {
+      const newCandidates = await step.run(`save-scores-${idx}`, async () => {
         // threshold de cada fonte (evita 1 query por notícia)
         const thresholdBySource = new Map(
           sources.map((s) => [s.id, s.threshold])
@@ -214,10 +242,8 @@ export const scanNews = inngest.createFunction(
 
       // 5. Cada candidata dispara a geração de post (job separado)
       if (newCandidates.length > 0) {
-        // Descobre o dono da fonte para associar o post ao usuário
-        const sourceOwner = new Map(sources.map((s) => [s.id, s.user_id]));
         await step.sendEvent(
-          `dispatch-generate-${i}`,
+          `dispatch-generate-${idx}`,
           newCandidates.map((c) => ({
             name: "post/generate.requested" as const,
             data: {
@@ -228,6 +254,7 @@ export const scanNews = inngest.createFunction(
         );
         candidates += newCandidates.length;
       }
+    }
     }
 
       return await finishScanRun({
