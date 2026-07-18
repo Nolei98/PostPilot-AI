@@ -50,6 +50,31 @@ describe("signup trigger (handle_new_user)", () => {
   });
 });
 
+describe("cleanup 024: notification_configs enxuto", () => {
+  it("não tem mais colunas de marca; mantém telegram + active_client_id", async () => {
+    const { rows } = await db.query<{ column_name: string }>(
+      "select column_name from information_schema.columns where table_name = 'notification_configs'"
+    );
+    const cols = rows.map((r) => r.column_name);
+    // migradas para brand_kits → devem ter sumido
+    for (const gone of [
+      "niche",
+      "brand_name",
+      "ig_handle",
+      "color_accent",
+      "post_font_family",
+      "text_provider",
+      "template_apply_mode",
+    ]) {
+      expect(cols).not.toContain(gone);
+    }
+    // per-usuário → devem permanecer
+    for (const kept of ["telegram_chat_id", "notify_on_candidate", "active_client_id"]) {
+      expect(cols).toContain(kept);
+    }
+  });
+});
+
 describe("RLS: isolamento entre tenants", () => {
   it("clients: cada usuário só enxerga os próprios", async () => {
     const a = await signup(db, { email: "a-cli@x.com" });

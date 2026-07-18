@@ -69,38 +69,17 @@ export interface SourceConfig {
   created_at: string;
 }
 
+/**
+ * Config per-USUÁRIO. Depois da migration 024, guarda só notificação
+ * (Telegram) e o cliente ativo — toda a identidade de marca vive em
+ * [[BrandKit]] por cliente.
+ */
 export interface NotificationConfig {
   id: string;
   user_id: string;
   telegram_chat_id: string | null;
   notify_on_candidate: boolean;
-  post_language: string; // idioma dos posts gerados (ex: "pt-BR", "en")
-  ig_handle: string; // @ do perfil (sem @)
-  ig_display_name: string; // nome exibido no topo do post
-  ig_avatar_url: string | null; // foto de perfil
-  ig_verified: boolean; // selo azul ao lado do nome
-  show_profile_chip: boolean; // renderizar o chip na arte?
-  // Identidade visual default da arte
-  color_background: string;
-  color_accent: string;
-  color_text: string;
-  color_keyword_box: string;
-  tpl_keyword: string;
-  tpl_top_text: string;
-  tpl_bottom_text: string;
-  tpl_cta_enabled: boolean; // mostra "COMENTE:" acima da palavra-chave na contra-capa
-  template_apply_mode: TemplateApplyMode;
-  // Provider de IA escolhido em Ajustes (default: gemini/gemini)
-  text_provider: "claude" | "gemini" | "pollinations";
-  image_provider: "fal" | "gemini" | "pollinations" | "stock";
-  // Template da marca: nome, logo + fonte usadas na renderização das artes
-  brand_name: string | null;
-  logo_url: string | null;
-  show_brand_logo: boolean; // liga/desliga o selo da logo nas artes geradas
-  post_font_family: string; // chave de PostFontKey (ver src/lib/font-data.ts)
-  // Nicho do negócio — escolhido no cadastro, ajustável depois.
-  // Direciona o tom dos posts gerados e as fontes RSS padrão.
-  niche: string | null;
+  active_client_id: string | null; // cliente ativo (fan-out do cron)
   created_at: string;
 }
 
