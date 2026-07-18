@@ -6,7 +6,7 @@
 // pra um arquivo para o teardown apagá-lo.
 // ============================================================
 import { chromium } from "@playwright/test";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -14,6 +14,56 @@ const AUTH_DIR = path.join(process.cwd(), "e2e", ".auth");
 
 export const E2E_EMAIL = `e2e-${Date.now()}@postpilot-e2e.dev`;
 export const E2E_PASSWORD = "e2e-Test-123456";
+
+const IMG = (n: number) => `https://picsum.photos/seed/pp-e2e-${n}/300/375`;
+
+/** Cria um post format='carousel' com 3 cards no cliente do usuário. */
+async function seedCarousel(admin: SupabaseClient, userId: string): Promise<void> {
+  const { data: client } = await admin
+    .from("clients")
+    .select("id")
+    .eq("owner_user_id", userId)
+    .limit(1)
+    .single();
+  const { data: src } = await admin
+    .from("source_configs")
+    .select("id")
+    .eq("client_id", client!.id)
+    .limit(1)
+    .single();
+  const { data: news } = await admin
+    .from("news_items")
+    .insert({
+      source_id: src!.id,
+      client_id: client!.id,
+      url: `https://ex.com/e2e-carousel-${Date.now()}`,
+      title: "Notícia e2e carrossel",
+      status: "candidate",
+    })
+    .select("id")
+    .single();
+  const { data: post } = await admin
+    .from("posts")
+    .insert({
+      news_item_id: news!.id,
+      user_id: userId,
+      client_id: client!.id,
+      format: "carousel",
+      hook: "Gancho e2e",
+      caption: "Legenda e2e do carrossel",
+      hashtags: "#e2e #carrossel",
+      image_prompt: "",
+      image_url: IMG(0),
+      status: "pending_approval",
+    })
+    .select("id")
+    .single();
+  await admin.from("carousel_cards").insert([
+    { post_id: post!.id, idx: 0, role: "hook", headline: "Card 1", body: "b", image_url: IMG(0) },
+    { post_id: post!.id, idx: 1, role: "value", headline: "Card 2", body: "b", image_url: IMG(1) },
+    { post_id: post!.id, idx: 2, role: "cta", headline: "Card 3", body: "b", image_url: IMG(2) },
+  ]);
+}
 
 export default async function globalSetup() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -39,6 +89,11 @@ export default async function globalSetup() {
 
   mkdirSync(AUTH_DIR, { recursive: true });
   writeFileSync(path.join(AUTH_DIR, "user-id.txt"), userId);
+
+  // Semeia 1 post carrossel (3 cards) no cliente do signup, para o e2e da
+  // UI de carrossel. Usa service role (ignora RLS). URLs de imagem são
+  // placeholders — o teste checa a estrutura da galeria, não o pixel.
+  await seedCarousel(admin, userId);
 
   // Login pela UI real → cookies de sessão válidos no storageState.
   const browser = await chromium.launch();
