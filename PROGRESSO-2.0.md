@@ -5,7 +5,155 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `feat/multi-tenant-brand-kit` (não mexer na `main`).
-**Última atualização:** 2026-07-18.
+**Última atualização:** 2026-07-21.
+
+> ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
+> coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0. Sessão 2026-07-21 — kit v2 (5 layouts + vídeo Reels MVP)
+
+Sessão longa, fora da ordem do roadmap original (o usuário trouxe um "kit de
+design" próprio — `AGENT_PROMPT.md` + `postpilot-layouts.html` — com um
+pedido específico: sistema de identidades de layout ortogonais à cor da
+marca, contraste automático, e depois vídeo). Tratei como uma extensão do
+que já existia (B6-B12), não como reescrita. Tudo abaixo está **testado
+(193 testes verdes), `tsc`/`eslint` limpos, e verificado ao vivo** (não só
+em teste automatizado) — sempre com dados reais da conta do usuário
+(`@joaorodrigues.ia`) antes de considerar pronto.
+
+**Ponto de restauração:** commit `<PREENCHIDO NO COMMIT — ver `git log`>`
+na branch `feat/multi-tenant-brand-kit`. Pra voltar pra ANTES desta sessão
+toda: `git log --oneline` e ache o commit anterior a esse (é o
+`e2617c3 feat(carousel): capa sempre com imagem...`, o topo do log antes
+de hoje) — `git reset --hard e2617c3` desfaz tudo abaixo (com CUIDADO,
+é destrutivo; prefira `git revert` ou uma branch nova se tiver dúvida).
+
+### 0.1 Contraste automático (Fase 1 do kit v2)
+- [x] `src/lib/contrast.ts`: luminância real medida na foto (não estimada),
+  limiar 0.55 → tema claro/escuro, razão WCAG mínima 4.5:1, overlay
+  calibrado (nunca fixo/às cegas). 13 testes (casos de borda 0/0.54/0.55/1).
+- [x] Aplicado em TODO lugar que desenha texto sobre foto: capa/interior/
+  fechamento do carrossel, página 1 do post único, quadro Reels, overlay
+  de vídeo (luminância medida do **frame de pôster**, não do vídeo inteiro).
+
+### 0.2 Página 1 do post único unificada com o motor de layouts
+- Antes: página 1 (foto+hook) usava um compositor genérico separado
+  (`composeTemplate`, removido), sem contraste automático, com chip fixo
+  no topo, sem wordmark. Só a contra-capa usava o motor novo.
+- [x] Unificado: página 1 agora usa o MESMO motor de 5 layouts que a capa
+  do carrossel (`buildPageOneCoverSvg` em `image.ts`) — decisão do usuário:
+  **sem chip** (Instagram já mostra o perfil por cima do post) e **com
+  wordmark**, igual à capa.
+- [x] **2 variações de post único** (kit v2 §3): `brand_kits.single_post_style`
+  (`cover` default | `centered`) — "estilo capa" (wordmark+título) vs
+  "fonte no meio" (frase centralizada minimalista, sem marca nenhuma,
+  usando a MESMA fonte de destaque do layout escolhido). Seletor em
+  Ajustes ("Estilo do post único"), migration 031 (aplicada).
+- [x] Bug real achado e corrigido: os 4 layouts alternativos confundiam
+  "página 1" com "contra-capa" (mesma heurística `overlay presente + sem
+  swipe hint`) e desenhavam os ícones de ação indevidamente — corrigido
+  com `showActionIcons` explícito nos 4 arquivos `layout-*.ts` + teste
+  de regressão.
+
+### 0.3 5 identidades de layout completas (Fase 3 do kit v2)
+Preset ortogonal à cor da marca — `brand_kits.layout_preset` (migration
+030, aplicada): `editorial-noir` (padrão) | `brutalism` | `serif-luxe` |
+`swiss-mono` | `pop-creator`. Cada um em `src/lib/layout-{nome}.ts`
+(exceto editorial-noir, que é o `carousel-render.ts` original).
+- [x] Título do card INTERIOR nível-capa (auto-fit por comprimento, mesma
+  lógica da capa) nos 5 — não era assim antes; título era menor no miolo.
+  Corpo escala proporcional ao título.
+- [x] Corpo/título maiores, tipografia por preset (Anton/DM Serif Display/
+  Inter 800/Varela Round + IBM Plex Mono), bugs de colisão de linha
+  corrigidos ao vivo (Anton precisa de `line-height` maior que o normal).
+- [x] **20 previews** em Ajustes (`LayoutPreview.tsx` + `layout-preview.ts`):
+  5 layouts × 4 formatos (capa/carrossel/vídeo/híbrido), SVG puro (sem
+  rasterizar), reaproveita os MESMOS builders do render real — nunca
+  desalinha do que sai de verdade. Vídeo/híbrido são aproximação estática
+  (motor de vídeo real só compõe foto/vídeo real, não gera preview
+  animado).
+- [ ] Layout ainda **não finalizado visualmente** — usuário disse que vai
+  trazer ajustes de layout depois. Não mexer em tipografia/estrutura dos
+  5 presets sem pedido explícito dele.
+
+### 0.4 Reels 9:16 — motor de vídeo real (Fase 4 do kit v2 — NÃO é o SPRINT D completo)
+⚠️ **Isto é um MVP simplificado, não o Video Engine do §4.4 abaixo**
+(aquele pede Remotion + b-roll automático + legendas queimadas + TikTok).
+O que foi construído agora:
+- [x] **Upload manual** do usuário (sem geração por IA de vídeo) — botão
+  "Anexar vídeo" em qualquer post pendente (single). Server Action
+  `uploadPostVideo` sobe o arquivo bruto (máx 50MB) e dispara o
+  processamento em BACKGROUND (Inngest) — nunca síncrono (ffmpeg pode
+  levar dezenas de segundos).
+- [x] **Motor ffmpeg** (`src/lib/video.ts`, via `ffmpeg-static` +
+  `fluent-ffmpeg`): extrai frame de pôster, mede contraste nele, encaixa
+  o vídeo enviado pela LARGURA (nunca corta lateral — regra crítica do
+  kit), completa topo/base com extensão desfocada do próprio vídeo,
+  sobrepõe overlay de texto (wordmark/título, motor de 5 layouts).
+  Testado com vídeo 16:9 sintético → saída 1080×1920 exata, sem cortar.
+- [x] **Achado de infra real (só apareceu rodando, não em teoria):**
+  `ffmpeg-static` precisa entrar em `experimental.serverComponentsExternalPackages`
+  no `next.config.mjs` — sem isso o Next tenta "bundlar" o binário e
+  quebra (`spawn .../vendor-chunks/ffmpeg.exe ENOENT`). Já corrigido.
+  Também adicionado `outputFileTracingIncludes` pra Vercel empacotar o
+  binário na função serverless (250MB de limite, ffmpeg-static tem ~80MB
+  — cabe folgado).
+- [x] Job `attach-video` (Inngest): nunca deixa exceção escapar — sempre
+  grava `video_status` ('processing'|'ready'|'error') no post, mesmo se
+  o encode falhar.
+- [x] UI na fila (`PostCard.tsx`) e em Prontos (`ReadyPostCard.tsx`):
+  player nativo quando pronto, estado "processando", botão de baixar
+  vídeo.
+- [x] **Testado ponta a ponta com dados reais** (não só sintético): post
+  real do usuário, upload real, ffmpeg real, resultado real com
+  wordmark/@handle/layout da conta de verdade.
+- [x] Migration 032 (aplicada): `posts.video_url`, `video_poster_url`,
+  `video_status`, `video_error`.
+
+**Pendências conhecidas do vídeo (não resolvidas ainda, seguras de deixar
+pra depois):**
+- [ ] `resync-layout-preset` (job que re-renderiza a fila quando o layout
+  muda em Ajustes) **ainda não reprocessa posts de vídeo já prontos**
+  (`format='video'`) — só carrosséis e posts single. Se o usuário trocar
+  o layout depois de já ter um vídeo pronto, o vídeo NÃO é re-renderizado
+  automaticamente (o `-video-source.mp4` original fica guardado no
+  Storage, então dá pra reprocessar depois — só não está automatizado).
+- [ ] Vídeo no FEED (bloco contido 1:1/16:9 com play+badge+barra de
+  progresso) e vídeo no INTERIOR do carrossel — só o Reels 9:16 foi feito.
+- [ ] Geração de vídeo por IA — explicitamente fora de escopo (usuário
+  escolheu só upload manual).
+- **Dependência de ambiente:** `npx inngest-cli dev` PRECISA estar rodando
+  local pra vídeo processar (upload sem isso fica "processando" pra
+  sempre, sem erro — não é bug, é falta do dev server; em produção com
+  Inngest Cloud configurado isso não acontece).
+
+### Migrations desta sessão (todas aplicadas no Supabase pelo usuário)
+- [x] `030_layout_preset.sql` — `brand_kits.layout_preset`.
+- [x] `031_single_post_style.sql` — `brand_kits.single_post_style`.
+- [x] `032_video_posts.sql` — `posts.video_url/video_poster_url/video_status/video_error`.
+
+### Arquivos novos desta sessão
+`src/lib/render-shared.ts` (tipos/constantes compartilhados), `layout-brutalism.ts`,
+`layout-serif-luxe.ts`, `layout-swiss-mono.ts`, `layout-pop-creator.ts`,
+`layout-centered.ts` (fonte no meio), `layout-preview.ts` + `LayoutPreview.tsx`
+(previews), `contrast.ts`, `profile-chip.ts`, `video.ts` (motor ffmpeg),
+`inngest/functions/resync-layout-preset.ts`, `inngest/functions/attach-video.ts`,
+`docs/layouts-spec.md` (spec pra IA de design externa).
+
+### Pra continuar amanhã
+1. `npm run dev` + `npx inngest-cli dev -u http://localhost:3000/api/inngest`
+   (os dois — vídeo e resync de layout dependem do Inngest).
+2. Se algo quebrou: `git log --oneline` e ache o commit desta sessão
+   (mensagem começando com `feat(kit-v2)` ou similar — ver o commit mais
+   recente antes de mexer). `git diff <hash-do-commit-de-hoje>` mostra
+   exatamente o que mudou hoje.
+3. Trabalho autônomo que rodei DEPOIS do ponto de restauração (se houver):
+   ver commits subsequentes — cada um é um passo seguro pra reverter
+   isoladamente com `git revert <hash>` sem perder o resto.
+4. Você disse que vai trazer ajustes de LAYOUT (tipografia/estrutura dos
+   5 presets) — não mexi em nada disso além do que já estava aprovado.
 
 ---
 
@@ -162,6 +310,12 @@ visual). Brief completo + prompt mestre no arquivo linkado acima. **Ainda não i
 - **Aceite:** aprovar → agenda → publica; métricas reais gravadas por post.
 
 ### 4.4 SPRINT D — Video Engine (clipes reais, não slideshow)
+> ⚠️ **Update 2026-07-21 (ver seção 0.4):** um MVP mais simples já foi
+> construído fora de ordem (pedido pontual do usuário) — upload manual +
+> ffmpeg overlay (wordmark/título, motor de contraste) em quadro Reels
+> 9:16. NÃO tem b-roll automático, NÃO tem legendas queimadas, NÃO usa
+> Remotion, NÃO publica (fica na fila pra aprovação manual, igual
+> foto/carrossel). O que falta abaixo continua de pé.
 - [ ] Roteiro (Sonnet): gancho 0–3s + beats + CTA; 9:16; duração por rede.
 - [ ] Montagem com **b-roll real** (Pexels/Pixabay Video ou upload) + legendas
       queimadas + logo/chip via **Remotion** (⚠️ checar licença comercial do Remotion).

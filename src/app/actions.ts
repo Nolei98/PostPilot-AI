@@ -26,6 +26,7 @@ function buildCardBrand(bk: Record<string, unknown> | null): CardBrand {
     handle: (bk?.ig_handle as string | null) ?? null,
     keywords: (bk?.keywords as string[] | null) ?? null,
     brandMark: (bk?.brand_mark as CardBrand["brandMark"]) ?? "auto",
+    layoutPreset: (bk?.layout_preset as CardBrand["layoutPreset"]) ?? "editorial-noir",
   };
 }
 
@@ -36,7 +37,11 @@ function buildCardBrand(bk: Record<string, unknown> | null): CardBrand {
  * próximos). Card 0 = capa (divisor). Atualiza image_url dos cards + o
  * do post (thumbnail = capa).
  */
-async function resyncCarouselOnPendingPosts(clientId: string, cardBrand: CardBrand) {
+async function resyncCarouselOnPendingPosts(
+  clientId: string,
+  cardBrand: CardBrand,
+  profile: IgProfile
+) {
   const supabase = createClient();
   const { data: posts } = await supabase
     .from("posts")
@@ -66,10 +71,14 @@ async function resyncCarouselOnPendingPosts(clientId: string, cardBrand: CardBra
     if (!cards || cards.length === 0) continue;
 
     let coverUrl: string | null = null;
+    const lastIdx = cards.length - 1;
     for (const c of cards) {
       const isCover = c.idx === 0;
-      // Reusa a foto salva (bg_url); capa sem bg_url cai na imagem da notícia.
-      const bgUrl = (c.bg_url as string | null) ?? (isCover ? newsImg : null);
+      const isClosing = c.idx === lastIdx;
+      const pageKind = isCover ? "cover" : isClosing ? "closing" : "interior";
+      // Reusa a foto salva (bg_url); capa/fechamento sem bg_url caem na
+      // imagem da notícia.
+      const bgUrl = (c.bg_url as string | null) ?? (isCover || isClosing ? newsImg : null);
       let bgBuf: Buffer | null = null;
       if (bgUrl) {
         try {
@@ -89,8 +98,10 @@ async function resyncCarouselOnPendingPosts(clientId: string, cardBrand: CardBra
             body: c.body ?? "",
           },
           cardBrand,
-          isCover,
-          bgBuf
+          pageKind,
+          bgBuf,
+          profile,
+          cards.length
         );
         await supabase.from("carousel_cards").update({ image_url: url }).eq("id", c.id);
         if (isCover) coverUrl = url;
@@ -427,6 +438,73 @@ export async function uploadPostImage(
       error: "Não foi possível processar essa imagem. Tente um JPG/PNG.",
     };
   }
+
+  revalidatePath("/");
+  revalidatePath("/ready");
+  return { ok: true };
+}
+
+/**
+ * Anexa um vídeo a um post pendente (Fase 4, kit v2 §3) — sobe o
+ * arquivo bruto pro Storage e dispara o processamento em BACKGROUND
+ * (Inngest): o ffmpeg compõe o quadro Reels 9:16 por cima, o que pode
+ * levar dezenas de segundos — não dá pra fazer síncrono como a foto.
+ * `video_status` vira 'processing' na hora; a fila mostra isso e
+ * atualiza quando o job terminar (revalidatePath cobre o próximo load).
+ */
+export async function uploadPostVideo(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+
+  const postId = String(formData.get("post_id") ?? "");
+  const file = formData.get("video") as File | null;
+  if (!postId || !file || file.size === 0) {
+    return { ok: false, error: "Selecione um vídeo." };
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    return { ok: false, error: "Vídeo muito grande (máx 50MB)." };
+  }
+
+  const { data: post } = await supabase
+    .from("posts")
+    .select("id")
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!post) return { ok: false, error: "Post não encontrado." };
+
+  try {
+    const buf = Buffer.from(await file.arrayBuffer());
+    const admin = createAdminClient();
+    const { error: upErr } = await admin.storage
+      .from("post-images")
+      .upload(`${postId}-video-source.mp4`, buf, {
+        contentType: file.type || "video/mp4",
+        upsert: true,
+      });
+    if (upErr) throw new Error(upErr.message);
+
+    const { error } = await supabase
+      .from("posts")
+      .update({ video_status: "processing", video_error: null })
+      .eq("id", postId);
+    if (error) return { ok: false, error: error.message };
+  } catch (err) {
+    console.error("[uploadPostVideo] falha ao subir vídeo:", err);
+    return {
+      ok: false,
+      error: "Não foi possível processar esse vídeo. Tente outro arquivo (.mp4/.mov).",
+    };
+  }
+
+  inngest
+    .send({ name: "post/attach-video.requested", data: { postId, userId: user.id } })
+    .catch((err) => console.warn("[uploadPostVideo] não foi possível enfileirar o processamento:", err));
 
   revalidatePath("/");
   revalidatePath("/ready");
@@ -863,7 +941,7 @@ export async function saveBrandTemplate(formData: FormData) {
     const brand = buildBrand(freshConfig);
     await resyncChipOnPendingPosts(user.id, clientId, profile, brand);
     // Carrosséis pendentes também re-renderizam com a nova fonte/logo/cor.
-    await resyncCarouselOnPendingPosts(clientId, buildCardBrand(freshConfig));
+    await resyncCarouselOnPendingPosts(clientId, buildCardBrand(freshConfig), profile);
 
     if (brandColor && oldConfig) {
       const oldIdentity: VisualIdentity = {
@@ -1082,10 +1160,18 @@ export async function updateCarouselCard(
   // RLS garante posse (via post). Pega o card + o cliente do post.
   const { data: card, error: cardErr } = await supabase
     .from("carousel_cards")
-    .select("id, post_id, idx, role")
+    .select("id, post_id, idx, role, bg_url")
     .eq("id", cardId)
     .single();
   if (cardErr || !card) throw new Error("Card não encontrado");
+
+  const { count: totalCards } = await supabase
+    .from("carousel_cards")
+    .select("id", { count: "exact", head: true })
+    .eq("post_id", card.post_id);
+  const lastIdx = (totalCards ?? 1) - 1;
+  const pageKind =
+    card.idx === 0 ? "cover" : card.idx === lastIdx ? "closing" : "interior";
 
   const { data: post } = await supabase
     .from("posts")
@@ -1097,6 +1183,18 @@ export async function updateCarouselCard(
     .select("*")
     .eq("client_id", post?.client_id ?? "")
     .maybeSingle();
+
+  // Reusa a foto salva do card (se houver) — editar o texto não deve
+  // derrubar o fundo pra cor sólida.
+  let bgBuf: Buffer | null = null;
+  if (card.bg_url) {
+    try {
+      const r = await fetch(card.bg_url as string);
+      if (r.ok) bgBuf = Buffer.from(await r.arrayBuffer());
+    } catch {
+      /* sem foto → sólido */
+    }
+  }
 
   const { resolvePostFontFamily } = await import("@/lib/font-data");
   const { renderAndUploadCard } = await import("@/lib/carousel-render");
@@ -1114,7 +1212,22 @@ export async function updateCarouselCard(
       colorText: bk?.color_text ?? "#FFFFFF",
       fontFamily: resolvePostFontFamily(bk?.post_font_family),
       brandName: bk?.brand_name ?? null,
-    }
+      wordmark: bk?.wordmark ?? null,
+      handle: bk?.ig_handle ?? null,
+      keywords: bk?.keywords ?? null,
+      brandMark: bk?.brand_mark ?? "auto",
+      layoutPreset: bk?.layout_preset ?? "editorial-noir",
+    },
+    pageKind,
+    bgBuf,
+    {
+      handle: bk?.ig_handle ?? "seuperfil.ia",
+      displayName: bk?.ig_display_name ?? "Seu Perfil",
+      avatarUrl: bk?.ig_avatar_url ?? null,
+      verified: bk?.ig_verified ?? false,
+      showProfileChip: bk?.show_profile_chip ?? true,
+    },
+    totalCards ?? 1
   );
 
   const { error } = await supabase
@@ -1163,7 +1276,95 @@ export async function saveBrandLabel(formData: FormData) {
     .select("*")
     .eq("client_id", clientId)
     .maybeSingle();
-  await resyncCarouselOnPendingPosts(clientId, buildCardBrand(bk));
+  const profile: IgProfile = {
+    handle: bk?.ig_handle ?? "seuperfil.ia",
+    displayName: bk?.ig_display_name ?? "Seu Perfil",
+    avatarUrl: bk?.ig_avatar_url ?? null,
+    verified: bk?.ig_verified ?? false,
+    showProfileChip: bk?.show_profile_chip ?? true,
+  };
+  await resyncCarouselOnPendingPosts(clientId, buildCardBrand(bk), profile);
+
+  revalidatePath("/settings");
+  revalidatePath("/");
+}
+
+/**
+ * Salva o preset de LAYOUT (Fase 3 — Editorial Noir / Brutalismo
+ * Editorial / ...) do cliente ativo e re-renderiza tudo que está
+ * pendente (carrosséis + fechamento dos posts únicos) pra refletir na
+ * hora, sem esperar a próxima geração.
+ */
+export async function saveLayoutPreset(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
+
+  const presets = ["editorial-noir", "brutalism", "serif-luxe", "swiss-mono", "pop-creator"];
+  const raw = String(formData.get("layout_preset") ?? "editorial-noir");
+  const layoutPreset = presets.includes(raw) ? raw : "editorial-noir";
+
+  const { error } = await supabase
+    .from("brand_kits")
+    .update({ layout_preset: layoutPreset })
+    .eq("client_id", clientId);
+  if (error) throw new Error(error.message);
+
+  // Resync roda em BACKGROUND (Inngest) — contas grandes têm centenas de
+  // posts únicos pendentes (a página 1 também depende do layout_preset
+  // desde a unificação com o motor de layouts) e rodar isso síncrono
+  // dentro do Server Action arrisca estourar o timeout serverless.
+  // Disparo é FIRE-AND-FORGET DE PROPÓSITO (sem await): o SDK do Inngest
+  // tenta de novo com backoff por vários segundos se a fila não estiver
+  // acessível (ex: dev sem `npx inngest-cli dev` rodando) — travar o
+  // Save nesse retry (mesmo com timeout/race) deixou a ação lenta na
+  // prática. O preset já foi salvo acima; se o envio falhar, o resync
+  // fica pendente até o próximo save ou o dev subir a fila.
+  inngest
+    .send({ name: "post/resync-layout.requested", data: { clientId, userId: user.id } })
+    .catch((err) => console.warn("[saveLayoutPreset] não foi possível enfileirar o resync:", err));
+
+  revalidatePath("/settings");
+  revalidatePath("/");
+}
+
+/**
+ * Salva a variação de conteúdo da PÁGINA 1 do post único (kit v2 §3):
+ * "cover" (estilo capa, com wordmark) ou "centered" (fonte no meio,
+ * minimalista) — ortogonal ao layout_preset (tipografia). Reusa o MESMO
+ * job de resync em background do layout (fetchCoverBrand já busca
+ * single_post_style fresco por post, então o job não precisa mudar).
+ */
+export async function saveSinglePostStyle(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
+
+  const styles = ["cover", "centered"];
+  const raw = String(formData.get("single_post_style") ?? "cover");
+  const singlePostStyle = styles.includes(raw) ? raw : "cover";
+
+  const { error } = await supabase
+    .from("brand_kits")
+    .update({ single_post_style: singlePostStyle })
+    .eq("client_id", clientId);
+  if (error) throw new Error(error.message);
+
+  inngest
+    .send({ name: "post/resync-layout.requested", data: { clientId, userId: user.id } })
+    .catch((err) => console.warn("[saveSinglePostStyle] não foi possível enfileirar o resync:", err));
 
   revalidatePath("/settings");
   revalidatePath("/");

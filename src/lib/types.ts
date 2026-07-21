@@ -64,6 +64,8 @@ export interface BrandKit {
   brand_mark: BrandMark; // tratamento de marca padrão dos cards
   template_defaults: TemplateDefaults;
   template_selection: Partial<Record<Surface, string>>; // modelo escolhido por superfície (migration 028)
+  layout_preset: string; // "editorial-noir" | "brutalism" | ... (Fase 3, migration 030)
+  single_post_style: string; // "cover" | "centered" (kit v2 §3, migration 031)
   created_at: string;
 }
 
@@ -264,6 +266,13 @@ export interface Post {
   tpl_color_accent: string | null;
   tpl_color_text: string | null;
   tpl_color_keyword_box: string | null;
+  // Vídeo anexado (Fase 4, kit v2 §3) — upload manual, composto em
+  // background (Inngest + ffmpeg) no quadro Reels 9:16. video_status
+  // controla o estado assíncrono; video_url só existe quando 'ready'.
+  video_url: string | null;
+  video_poster_url: string | null;
+  video_status: "none" | "processing" | "ready" | "error";
+  video_error: string | null;
   created_at: string;
 }
 

@@ -15,7 +15,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { generateCarouselPackage } from "@/lib/ai/carousel";
 import { renderAndUploadCard, type CardBrand } from "@/lib/carousel-render";
 import { resolvePostFontFamily } from "@/lib/font-data";
-import type { NewsItem } from "@/lib/types";
+import type { IgProfile, NewsItem } from "@/lib/types";
 
 export const generateCarousel = inngest.createFunction(
   { id: "generate-carousel", retries: 2, concurrency: { limit: 2 } },
@@ -67,12 +67,22 @@ export const generateCarousel = inngest.createFunction(
         handle: (data?.ig_handle as string | null | undefined) ?? null,
         keywords: (data?.keywords as string[] | null | undefined) ?? null,
         brandMark: (data?.brand_mark as CardBrand["brandMark"]) ?? "auto",
+        // Preset de layout (Fase 3; migration 030 — best-effort se ausente).
+        layoutPreset: (data?.layout_preset as CardBrand["layoutPreset"]) ?? "editorial-noir",
+      };
+      const profile: IgProfile = {
+        handle: (data?.ig_handle as string | undefined) ?? "seuperfil.ia",
+        displayName: (data?.ig_display_name as string | undefined) ?? "Seu Perfil de IA",
+        avatarUrl: (data?.ig_avatar_url as string | null | undefined) ?? null,
+        verified: (data?.ig_verified as boolean | undefined) ?? false,
+        showProfileChip: (data?.show_profile_chip as boolean | undefined) ?? true,
       };
       return {
         language: (data?.post_language as string | undefined) ?? "pt-BR",
         niche: (data?.niche as string | null | undefined) ?? null,
         textProvider,
         card,
+        profile,
       };
     });
 
@@ -112,18 +122,20 @@ export const generateCarousel = inngest.createFunction(
     // Resolve o fundo de cada card: CAPA sempre tem imagem (notícia → banco
     // → pollinations); internos tentam o banco (opcional). Retorna as URLs
     // (serializável); o buffer é baixado no step de cada card.
+    const lastIdx = pkg.cards.length - 1;
     const bgUrls = await step.run("resolve-backgrounds", async () => {
       const { getCardBg } = await import("@/lib/card-bg");
       const exclude = new Set<string>();
       const out: (string | null)[] = [];
       for (const card of pkg.cards) {
         const isCover = card.idx === 0;
+        const isClosing = card.idx === lastIdx;
         const bg = await getCardBg({
           newsImageUrl: isCover ? news.image_url : null,
           niche: prefs.niche,
           headline: card.headline,
           excludeIds: exclude,
-          allowGen: isCover, // capa: pollinations garante imagem
+          allowGen: isCover || isClosing, // capa e fechamento: pollinations garante imagem
         });
         out.push(bg?.url ?? null);
       }
@@ -144,9 +156,18 @@ export const generateCarousel = inngest.createFunction(
             /* sem foto → fundo sólido */
           }
         }
-        // card 0 = capa (divisor @0verlens); demais = card interior. bgBuf
-        // presente → texto sobre foto borrada/escurecida.
-        const imageUrl = await renderAndUploadCard(postId, card, prefs.card, card.idx === 0, bgBuf);
+        // card 0 = capa; último = fechamento (mesmo tratamento @0verlens da
+        // capa, sem "deslize p/ ver"); demais = card interior.
+        const pageKind = card.idx === 0 ? "cover" : card.idx === lastIdx ? "closing" : "interior";
+        const imageUrl = await renderAndUploadCard(
+          postId,
+          card,
+          prefs.card,
+          pageKind,
+          bgBuf,
+          prefs.profile,
+          pkg.cards.length
+        );
         const { data: inserted, error } = await supabase
           .from("carousel_cards")
           .insert({

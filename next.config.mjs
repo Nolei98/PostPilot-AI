@@ -3,8 +3,26 @@ const nextConfig = {
   // resvg-js tem um binário nativo (.node) — sem isso o webpack tenta
   // "bundlar" o binário como se fosse JS e quebra o build (o mesmo
   // problema que o Next já resolve automaticamente para o sharp).
+  // ffmpeg-static tem o MESMO problema por um motivo diferente: exporta
+  // o CAMINHO do binário calculado via `__dirname` — se o webpack
+  // processar o módulo, o `__dirname` bundlado aponta pra dentro de
+  // .next/server/vendor-chunks (onde o .exe não existe) em vez de
+  // node_modules/ffmpeg-static (erro real visto: "spawn .../vendor-
+  // chunks/ffmpeg.exe ENOENT"). Marcar como externo preserva o require
+  // nativo em runtime, com o __dirname certo.
   experimental: {
-    serverComponentsExternalPackages: ["@resvg/resvg-js"],
+    serverComponentsExternalPackages: ["@resvg/resvg-js", "ffmpeg-static"],
+    // ffmpeg-static exporta só o CAMINHO do binário (calculado em
+    // runtime, não um require estático de arquivo) — o rastreador de
+    // arquivos da Vercel (@vercel/nft) não detecta isso sozinho e deixa
+    // o binário de fora do pacote da função serverless, quebrando em
+    // produção (funciona local, quebra só no deploy). Força a inclusão
+    // explícita na rota do Inngest (onde o job de vídeo roda). Next 14
+    // ainda expõe essa flag só dentro de `experimental` (virou estável
+    // só no Next 15).
+    outputFileTracingIncludes: {
+      "/api/inngest": ["./node_modules/ffmpeg-static/**"],
+    },
     // Default de Server Actions é 1MB. Fotos de celular / imagens do
     // nano banana passam disso fácil (10-20MB) — a imagem é comprimida
     // e redimensionada no servidor (normalizeUploadedImage, lib/image.ts)

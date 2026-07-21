@@ -21,6 +21,63 @@ import type { BrandTemplate, IgProfile, VisualIdentity } from "@/lib/types";
 import { FONT_FAMILY } from "@/lib/font-data";
 import { rasterizeSvg } from "@/lib/svg-render";
 import { searchStockPhoto, fetchStockPhotoBuffer } from "@/lib/stock-photos";
+import { buildProfileChipLayers } from "@/lib/profile-chip";
+import { buildCoverSvg, composePhotoBg, type CardBrand } from "@/lib/carousel-render";
+import { buildBrutalismCoverSvg } from "@/lib/layout-brutalism";
+import { buildSerifLuxeCoverSvg } from "@/lib/layout-serif-luxe";
+import { buildSwissMonoCoverSvg } from "@/lib/layout-swiss-mono";
+import { buildPopCreatorCoverSvg } from "@/lib/layout-pop-creator";
+import { buildCenteredPhraseSvg } from "@/lib/layout-centered";
+
+/** Construtor de capa/fechamento de cada preset de layout ALTERNATIVO
+ * (Fase 3) — mesma assinatura (headline, brand, transparent, opts) →
+ * {svg, blurBandTop}, despachado por tabela a partir de layout_preset. */
+const ALT_COVER_BUILDERS: Partial<Record<NonNullable<CardBrand["layoutPreset"]>, typeof buildBrutalismCoverSvg>> = {
+  brutalism: buildBrutalismCoverSvg,
+  "serif-luxe": buildSerifLuxeCoverSvg,
+  "swiss-mono": buildSwissMonoCoverSvg,
+  "pop-creator": buildPopCreatorCoverSvg,
+};
+
+/** Dispatcher único da PÁGINA 1 do post único — 2 variações (kit v2 §3),
+ * ortogonais ao layoutPreset (que decide a tipografia):
+ * - "centered" (fonte no meio): frase curta centralizada, minimalista,
+ *   sem wordmark/marca — mesmo em qualquer preset de layout.
+ * - "cover" (estilo capa, default): mesma função usada pela contra-capa
+ *   (fetchIdentityLabel já existia) — wordmark + título display, herda
+ *   os 5 layouts (Editorial Noir OU um dos 4 alternativos), sem chip
+ *   (decisão do usuário — igual à capa do carrossel). */
+function buildPageOneCoverSvg(
+  headline: string,
+  cardBrand: CardBrand,
+  transparent: boolean,
+  opts: { showSwipeHint?: boolean; overlay?: { theme: "light" | "dark"; alpha: number } }
+): { svg: string; blurBandTop: number } {
+  if (cardBrand.singlePostStyle === "centered") {
+    return buildCenteredPhraseSvg(headline, cardBrand, transparent, { overlay: opts.overlay });
+  }
+  const alt = cardBrand.layoutPreset ? ALT_COVER_BUILDERS[cardBrand.layoutPreset] : undefined;
+  // showActionIcons: false explícito — sem essa força, a heurística padrão
+  // dos 4 layouts alternativos (overlay presente + sem swipe hint) confunde
+  // a página 1 com a CONTRA-CAPA (mesma condição, papel diferente) e
+  // desenha os ícones de ação indevidamente.
+  if (alt) return alt(headline, cardBrand, transparent, { ...opts, showActionIcons: false });
+  return buildCoverSvg({ idx: 0, role: "hook", headline, body: "" }, cardBrand, transparent, {
+    showSwipeHint: opts.showSwipeHint,
+    align: "center",
+    overlay: opts.overlay,
+    showActionIcons: false,
+  });
+}
+
+import {
+  pickTheme,
+  textColorForTheme,
+  needsOverlay,
+  relativeLuminanceOfHex,
+  measureImageLuminance,
+  overlayAlphaFor,
+} from "@/lib/contrast";
 
 /** Template de marca default (posts antigos / config ausente) */
 const DEFAULT_BRAND: BrandTemplate = { logoUrl: null, showLogo: true, fontFamily: FONT_FAMILY };
@@ -184,50 +241,6 @@ async function mockGenerateImage(): Promise<Buffer> {
   return rasterizeSvg(svg);
 }
 
-/**
- * Quebra o hook em linhas de no máx `maxChars` caracteres,
- * respeitando palavras (para o SVG de texto).
- */
-function wrapText(text: string, maxChars: number, maxLines = 4): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    if ((current + " " + word).trim().length > maxChars && current) {
-      lines.push(current.trim());
-      current = word;
-    } else {
-      current = `${current} ${word}`;
-    }
-  }
-  if (current.trim()) lines.push(current.trim());
-  return lines.slice(0, maxLines);
-}
-
-/**
- * Divide texto respeitando quebras MANUAIS (Enter) e TAMBÉM quebra
- * automaticamente linhas longas que estourariam a largura do canvas
- * (uma linha sem Enter mas com texto grande não deve vazar pra fora
- * da imagem). Usado no texto-cima/texto-baixo do slide de fechamento.
- */
-function wrapMultiline(
-  text: string,
-  maxCharsPerLine: number,
-  maxTotalLines = 4
-): string[] {
-  const paragraphs = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-  if (paragraphs.length === 0) return [""];
-
-  const allLines: string[] = [];
-  for (const para of paragraphs) {
-    allLines.push(...wrapText(para, maxCharsPerLine, maxTotalLines));
-  }
-  return allLines.slice(0, maxTotalLines);
-}
-
 // Emoji/pictogramas não existem na fonte Inter embutida (só glifos
 // latinos) — sem filtrar, o resvg desenha uma caixa "NO GLYPH" no
 // lugar, pior que não ter nada. Cobre os blocos Unicode de emoji
@@ -246,56 +259,14 @@ function escapeXml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-// ------------------------------------------------------------
-// CHIP DE PERFIL (topo do slide)
-// Card pequeno e centralizado, com borda tracejada, avatar
-// circular, nome em bold + selo azul de verificado e @handle em
-// cinza. Ocupa ~33% da largura do canvas, sempre centralizado.
-// Reutilizável: retorna camadas para o sharp.composite() — serve
-// para qualquer página/slide e escala com a largura do canvas.
-// ------------------------------------------------------------
-
 type CompositeLayer = { input: Buffer; top: number; left: number };
 
-// Gradiente de marca usado no avatar de fallback (iniciais)
-const AVATAR_GRADIENT_FROM = "#8B6BFF";
-const AVATAR_GRADIENT_TO = "#4C1D95";
-
-/** Iniciais do nome para o fallback de avatar (máx 2 letras) */
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const chars = (parts[0]?.[0] ?? "?") + (parts[1]?.[0] ?? "");
-  return chars.toUpperCase();
-}
-
-/**
- * Trunca texto com reticências para caber em `maxWidthPx`, usando a
- * mesma estimativa de largura de caractere do resto do chip (Arial:
- * ~0.58em bold, ~0.52em regular). Sem isso, nomes/handles longos
- * (ex: bio completa do Instagram) estouram a caixa do chip.
- */
-function truncateToWidth(
-  text: string,
-  fontSize: number,
-  emFactor: number,
-  maxWidthPx: number
-): string {
-  const charW = fontSize * emFactor;
-  if (text.length * charW <= maxWidthPx) return text;
-  const maxChars = Math.max(1, Math.floor(maxWidthPx / charW) - 1); // -1 para o "…"
-  return text.slice(0, maxChars).trimEnd() + "…";
-}
-
-/** Baixa e recorta o avatar em círculo. Retorna null se falhar. */
-async function circularAvatar(
-  url: string,
-  size: number
-): Promise<Buffer | null> {
+/** Baixa e recorta uma imagem em círculo (avatar do chip, logo da marca). */
+async function circularAvatar(url: string, size: number): Promise<Buffer | null> {
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
     const raw = Buffer.from(await res.arrayBuffer());
-    // Máscara circular via SVG (blend dest-in mantém só o círculo)
     const mask = Buffer.from(
       `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="#fff"/></svg>`
     );
@@ -305,136 +276,59 @@ async function circularAvatar(
       .png()
       .toBuffer();
   } catch {
-    return null; // fallback de iniciais assume
+    return null;
   }
 }
 
-/**
- * Monta as camadas do chip de perfil para compor no topo do slide.
- * Largura fixa em 33% do canvas, sempre centralizado horizontalmente,
- * com borda tracejada. Todas as medidas escalam com a largura do
- * canvas (base 1080), então funciona em 1080x1350, 1080x1080 etc.
- */
-async function buildProfileChipLayers(
-  profile: IgProfile,
-  canvasWidth: number,
-  fontFamily: string = FONT_FAMILY
-): Promise<CompositeLayer[]> {
-  const s = canvasWidth / 1080; // fator de escala
-
-  // Chip ocupa 33% da largura do canvas, sempre centralizado.
-  const chipW = Math.round(canvasWidth * 0.33);
-  const chipX = Math.round((canvasWidth - chipW) / 2);
-  const chipY = Math.round(48 * s); // margem de segurança do topo
-
-  // Medidas internas (px @1080, escalonadas)
-  const pad = Math.round(14 * s);
-  const avatarSize = Math.round(60 * s);
-  const gap = Math.round(10 * s);
-  const nameSize = Math.round(23 * s);
-  const handleSize = Math.round(17 * s);
-  const badgeR = Math.round(10 * s); // raio do selo azul
-  const radius = Math.round(18 * s); // corner radius do card
-  const borderW = Math.max(1.4, Math.round(1.6 * s * 10) / 10);
-  const dashLen = Math.round(5 * s);
-  const dashGap = Math.round(4 * s);
-
-  const chipH = pad * 2 + avatarSize;
-
-  const rawName = profile.displayName || "Seu Perfil";
-  const rawHandle = `@${profile.handle}`;
-  const badgeW = profile.verified ? badgeR * 2 + Math.round(8 * s) : 0;
-
-  // Espaço disponível para nome/handle dentro do chip (33% fixo) —
-  // nomes longos truncam com reticências em vez de estourar o card.
-  const maxTextW = chipW - pad * 2 - avatarSize - gap;
-  const name = truncateToWidth(rawName, nameSize, 0.58, maxTextW - badgeW);
-  const handleText = truncateToWidth(rawHandle, handleSize, 0.52, maxTextW);
-  const nameW = Math.ceil(name.length * nameSize * 0.58);
-
-  // Posições internas (coordenadas do canvas)
-  const avatarX = chipX + pad;
-  const avatarY = chipY + pad;
-  const textX = avatarX + avatarSize + gap;
-  const nameY = avatarY + Math.round(avatarSize * 0.42); // baseline do nome
-  const handleY = avatarY + Math.round(avatarSize * 0.85); // baseline do @
-
-  // Selo de verificado: círculo azul + check branco, após o nome
-  const badgeCx = Math.min(
-    textX + nameW + Math.round(8 * s) + badgeR,
-    chipX + chipW - pad - badgeR
-  );
-  const badgeCy = nameY - Math.round(nameSize * 0.32);
-  const check = badgeR * 0.5;
-  const verifiedSvg = profile.verified
-    ? `<circle cx="${badgeCx}" cy="${badgeCy}" r="${badgeR}" fill="#3897F0"/>
-       <path d="M ${badgeCx - check} ${badgeCy} l ${check * 0.7} ${check * 0.7} l ${check * 1.2} -${check * 1.3}"
-             stroke="#ffffff" stroke-width="${Math.max(2.2, Math.round(3.5 * s))}" fill="none"
-             stroke-linecap="round" stroke-linejoin="round"/>`
-    : "";
-
-  // Avatar: imagem real (circular, com anel sutil) ou fallback em
-  // gradiente de marca com as iniciais do nome.
-  const avatarLayer = profile.avatarUrl
-    ? await circularAvatar(profile.avatarUrl, avatarSize)
-    : null;
-  const fallbackAvatarSvg = avatarLayer
-    ? ""
-    : `<circle cx="${avatarX + avatarSize / 2}" cy="${avatarY + avatarSize / 2}" r="${avatarSize / 2}" fill="url(#avatarGrad)"/>
-       <text x="${avatarX + avatarSize / 2}" y="${avatarY + avatarSize / 2 + nameSize * 0.36}"
-             font-family="${fontFamily}" font-size="${nameSize}" font-weight="800"
-             fill="#ffffff" text-anchor="middle">${escapeXml(initials(name))}</text>`;
-
-  // SVG do chip: fundo escuro semitransparente + borda tracejada +
-  // sombra sutil + textos. Card menor e mais elegante que a versão
-  // anterior (largura fixa em 33%, sempre centralizado).
-  const chipSvg = `
-    <svg width="${canvasWidth}" height="${chipY + chipH + Math.round(8 * s)}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <filter id="chipShadow" x="-30%" y="-30%" width="160%" height="200%">
-          <feDropShadow dx="0" dy="${Math.round(3 * s)}" stdDeviation="${Math.round(6 * s)}" flood-color="#000000" flood-opacity="0.4"/>
-        </filter>
-        <linearGradient id="avatarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="${AVATAR_GRADIENT_FROM}"/>
-          <stop offset="100%" stop-color="${AVATAR_GRADIENT_TO}"/>
-        </linearGradient>
-      </defs>
-      <rect x="${chipX}" y="${chipY}" width="${chipW}" height="${chipH}"
-            rx="${radius}" fill="rgba(15,15,20,0.82)" filter="url(#chipShadow)"/>
-      <rect x="${chipX}" y="${chipY}" width="${chipW}" height="${chipH}"
-            rx="${radius}" fill="none" stroke="rgba(255,255,255,0.4)"
-            stroke-width="${borderW}" stroke-dasharray="${dashLen},${dashGap}"/>
-      ${fallbackAvatarSvg}
-      <circle cx="${avatarX + avatarSize / 2}" cy="${avatarY + avatarSize / 2}" r="${avatarSize / 2}"
-              fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="${Math.max(1, Math.round(1.5 * s))}"/>
-      <text x="${textX}" y="${nameY}" font-family="${fontFamily}"
-            font-size="${nameSize}" font-weight="800" fill="#ffffff">${escapeXml(name)}</text>
-      ${verifiedSvg}
-      <text x="${textX}" y="${handleY}" font-family="${fontFamily}"
-            font-size="${handleSize}" font-weight="500" fill="#B0B3C0">${escapeXml(handleText)}</text>
-    </svg>`;
-
-  const layers: CompositeLayer[] = [
-    { input: rasterizeSvg(chipSvg), top: 0, left: 0 },
-  ];
-  // Avatar raster entra como camada própria, por cima do chip
-  if (avatarLayer) {
-    layers.push({ input: avatarLayer, top: avatarY, left: avatarX });
-  }
-  return layers;
-}
-
+// Chip de perfil (avatar + nome + @handle) mora em profile-chip.ts —
+// reexportado aqui pra não quebrar quem já importava daqui (evita import
+// circular com carousel-render.ts, que também usa o chip e agora é usado
+// POR image.ts, na contra-capa unificada).
+export { buildProfileChipLayers };
 // Exposto apenas para o teste visual (scripts/test-chip.ts)
 export { buildProfileChipLayers as __testBuildProfileChipLayers };
 
 /** Exposto apenas para teste visual (scripts/test-watermark.ts) */
 export async function __testComposeTemplate(
   hook: string,
-  profile: IgProfile,
+  _profile: IgProfile,
   watermark = false
 ): Promise<Buffer> {
   const base = await mockGenerateImage();
-  return composeTemplate(base, hook, profile, watermark);
+  const cardBrand: CardBrand = {
+    colorBackground: "#0B0B12",
+    colorAccent: "#7C5CFF",
+    colorText: "#FFFFFF",
+    fontFamily: FONT_FAMILY,
+    brandName: null,
+    wordmark: "POSTPILOT®",
+  };
+  const jpeg = await composeCoverStyleContent(base, hook, cardBrand);
+  if (!watermark) return jpeg;
+  return sharp(jpeg).composite([buildWatermarkLayer(WIDTH, HEIGHT)]).jpeg({ quality: 90 }).toBuffer();
+}
+
+/** Exposto apenas para QA visual (debug route) — testa a PÁGINA 1 sobre
+ * uma foto de verdade (não mock), com o preset de layout escolhido. */
+export async function __testPageOneCover(
+  hook: string,
+  layoutPreset: NonNullable<CardBrand["layoutPreset"]>,
+  photo: Buffer,
+  singlePostStyle: CardBrand["singlePostStyle"] = "cover"
+): Promise<Buffer> {
+  const cardBrand: CardBrand = {
+    colorBackground: "#0B0B12",
+    colorAccent: "#E11D2A",
+    colorText: "#FFFFFF",
+    fontFamily: FONT_FAMILY,
+    brandName: "Debug",
+    wordmark: "POSTPILOT®",
+    handle: "debug.ia",
+    keywords: ["DESIGN", "IA"],
+    layoutPreset,
+    singlePostStyle,
+  };
+  return composeCoverStyleContent(photo, hook, cardBrand);
 }
 
 // ------------------------------------------------------------
@@ -509,17 +403,24 @@ async function buildLogoLayer(
 }
 
 // ------------------------------------------------------------
-// CONTRA-CAPA (página 2 do carrossel)
-// Fundo de cor sólida + texto-cima (multi-linha) + "COMENTE:"
-// opcional (toggle, sem texto livre) + PALAVRA-CHAVE numa caixa +
-// texto-baixo (multi-linha) + chip de perfil no topo.
-// Ordem vertical: barra → texto-cima → COMENTE: → caixa → texto-baixo.
-// Tudo centralizado. Sem Flux — arte 100% local (custo $0).
+// CONTRA-CAPA (página 2 do post single)
+// Usa o MESMO motor da capa/fechamento do carrossel (buildCoverSvg):
+// divisor com wordmark, headline grande centralizada, corpo de apoio,
+// chip no canto inferior esquerdo, ícones (curtir/repostar/compartilhar/
+// salvar) no canto inferior direito — "layout único pra todos" em vez de
+// um sistema à parte de texto-cima/CTA/palavra-chave-em-caixa/texto-baixo.
+//
+// Mapeamento do modelo antigo (Ajustes ainda usa esses campos) pro novo:
+// palavra-chave → headline (era o elemento mais forte visualmente, essa
+// continua sendo); texto-cima + texto-baixo → corpo de apoio. O "COMENTE:"
+// (CTA) não tem equivalente direto no novo layout — vira parte do corpo.
+// Sem Flux — arte 100% local (custo $0).
 // ------------------------------------------------------------
 
 /**
- * Renderiza a contra-capa (identidade visual) completa.
- * Escala com a largura do canvas; funciona em 1080x1350 e 1080x1080.
+ * Renderiza a contra-capa (identidade visual) completa. Canvas fixo
+ * 1080x1350 (mesmo do carrossel) — os parâmetros width/height só
+ * escalam a arte final se algum chamador pedir outro tamanho.
  */
 export async function renderTemplateSlide(
   identity: VisualIdentity,
@@ -527,148 +428,75 @@ export async function renderTemplateSlide(
   width = WIDTH,
   height = HEIGHT,
   watermark = false,
-  brand: BrandTemplate = DEFAULT_BRAND
+  brand: BrandTemplate = DEFAULT_BRAND,
+  label: {
+    wordmark?: string | null;
+    handle?: string | null;
+    layoutPreset?: CardBrand["layoutPreset"];
+  } | null = null
 ): Promise<Buffer> {
   const fontFamily = brand.fontFamily;
-  const s = width / 1080;
-  const centerX = width / 2;
 
-  const sideFontSize = Math.round(52 * s);
-  const lineHeight = Math.round(sideFontSize * 1.3);
+  // Contraste automático (contrast.ts): a cor de texto configurada em
+  // Ajustes só é respeitada se já tiver contraste suficiente contra o
+  // fundo; senão troca pra cor segura do tema — nunca entrega um slide
+  // ilegível, mesmo que o usuário tenha escolhido uma combinação ruim.
+  const bgLuminance = relativeLuminanceOfHex(identity.colorBackground);
+  const theme = pickTheme(bgLuminance);
+  const textColor = needsOverlay(identity.colorText, bgLuminance)
+    ? textColorForTheme(theme)
+    : identity.colorText;
 
-  // Texto-cima e texto-baixo aceitam quebra manual de linha (Enter,
-  // configurável em Ajustes ou por post) E quebram automaticamente se
-  // uma linha for larga demais para o canvas (evita o texto vazar
-  // pra fora da imagem). ~0.60em é a largura média de um caractere
-  // maiúsculo em Arial bold com o letter-spacing usado aqui.
-  const sideTextMaxWidthPx = width - Math.round(96 * s);
-  const sideMaxChars = Math.max(
-    6,
-    Math.floor(sideTextMaxWidthPx / (sideFontSize * 0.6))
-  );
-  const topLines = wrapMultiline(identity.topText, sideMaxChars);
-  const bottomLines = wrapMultiline(identity.bottomText, sideMaxChars);
-  const kwFontSize = Math.round(100 * s);
+  // Palavra-chave era o elemento mais forte (caixa colorida, fonte
+  // gigante) — vira a headline grande do novo layout. Texto-cima +
+  // texto-baixo (+ o CTA "COMENTE:", sem equivalente visual direto)
+  // viram o corpo de apoio.
+  const headline = identity.keyword || identity.topText || "";
+  const ctaLine = identity.ctaEnabled ? "Comente aqui embaixo" : null;
+  const bodyParts = identity.keyword
+    ? [identity.topText, ctaLine, identity.bottomText].filter(Boolean)
+    : [ctaLine, identity.bottomText].filter(Boolean);
+  const body = bodyParts.length ? bodyParts.join(" — ") : null;
 
-  const barW = Math.round(120 * s);
-  const barH = Math.round(8 * s);
+  const cardBrand: CardBrand = {
+    colorBackground: identity.colorBackground,
+    colorAccent: identity.colorAccent,
+    colorText: textColor,
+    fontFamily,
+    brandName: null,
+    wordmark: label?.wordmark ?? null,
+    handle: label?.handle ?? null,
+    keywords: null,
+    brandMark: "wordmark",
+  };
 
-  // Caixa da palavra-chave
-  const keyword = identity.keyword.toUpperCase();
-  const kwTextW = Math.ceil(keyword.length * kwFontSize * 0.62);
-  const boxPadX = Math.round(44 * s);
-  const boxPadY = Math.round(20 * s);
-  const boxW = Math.min(kwTextW + boxPadX * 2, width - Math.round(96 * s));
-  const boxH = kwFontSize + boxPadY * 2;
+  // Preset de layout (Fase 3): mesmo motor de contraste acima, só troca
+  // qual construtor de SVG desenha a contra-capa.
+  const altCoverBuilder = label?.layoutPreset ? ALT_COVER_BUILDERS[label.layoutPreset] : undefined;
+  const svg = altCoverBuilder
+    ? altCoverBuilder(headline, cardBrand, false, {
+        showSwipeHint: false,
+        body,
+        eyebrowRight: "OBRIGADO",
+        overlay: { theme, alpha: 0 }, // sinaliza "fechamento" → mostra os ícones
+      }).svg
+    : buildCoverSvg(
+        { idx: 0, role: "hook", headline, body: body ?? "" },
+        cardBrand,
+        false,
+        { showSwipeHint: false, body, align: "center", showActionIcons: true }
+      ).svg;
 
-  // "COMENTE:" — toggle liga/desliga (não é mais texto livre), fica
-  // ACIMA da palavra-chave, entre o texto-cima e a caixa.
-  const hasCta = identity.ctaEnabled;
-  const CTA_LABEL = "COMENTE:";
-  const ctaFontSize = Math.round(32 * s);
-  const ctaPadX = Math.round(28 * s);
-  const ctaPadY = Math.round(14 * s);
-  const ctaTextW = Math.ceil(CTA_LABEL.length * ctaFontSize * 0.56);
-  const ctaW = Math.min(ctaTextW + ctaPadX * 2, width - Math.round(96 * s));
-  const ctaH = ctaFontSize + ctaPadY * 2;
-
-  // Espaçamentos entre os blocos do stack vertical
-  const gapBarTop = Math.round(28 * s);
-  const gapTopCta = Math.round(28 * s); // texto-cima → CTA
-  const gapCtaBox = Math.round(28 * s); // CTA → caixa da palavra-chave
-  const gapTopBox = Math.round(36 * s); // texto-cima → caixa (sem CTA)
-  const gapBoxBottom = Math.round(72 * s);
-
-  const topBlockH = topLines.length * lineHeight;
-  const bottomBlockH = bottomLines.length * lineHeight;
-
-  // Altura total do bloco (barra → texto-baixo), para centralizar
-  // tudo verticalmente independente de quantas linhas cada texto tem.
-  const stackH =
-    barH +
-    gapBarTop +
-    topBlockH +
-    (hasCta ? gapTopCta + ctaH + gapCtaBox : gapTopBox) +
-    boxH +
-    gapBoxBottom +
-    bottomBlockH;
-
-  // Centro um pouco abaixo do meio, deixando espaço pro chip no topo
-  let cursorY = Math.round(height * 0.56) - stackH / 2;
-
-  const barY = cursorY;
-  cursorY += barH + gapBarTop;
-
-  const topLinesSvg = topLines
-    .map((line, i) => {
-      const y = cursorY + i * lineHeight + Math.round(sideFontSize * 0.8);
-      return `<text x="${centerX}" y="${y}" text-anchor="middle" font-family="${fontFamily}" font-size="${sideFontSize}" font-weight="800" fill="${identity.colorText}" letter-spacing="${Math.round(2 * s)}">${escapeXml(line.toUpperCase())}</text>`;
-    })
-    .join("\n");
-  cursorY += topBlockH;
-
-  // "COMENTE:" — logo abaixo do texto-cima, antes da palavra-chave
-  let ctaSvg = "";
-  if (hasCta) {
-    cursorY += gapTopCta;
-    const ctaY = cursorY;
-    const ctaX = centerX - ctaW / 2;
-    ctaSvg = `
-      <rect x="${ctaX}" y="${ctaY}" width="${ctaW}" height="${ctaH}"
-            rx="${Math.round(ctaH / 2)}" fill="${identity.colorAccent}"/>
-      <text x="${centerX}" y="${ctaY + ctaH - ctaPadY - Math.round(ctaFontSize * 0.2)}" text-anchor="middle"
-            font-family="${fontFamily}" font-size="${ctaFontSize}" font-weight="800"
-            fill="${identity.colorText}">${escapeXml(CTA_LABEL)}</text>`;
-    cursorY += ctaH + gapCtaBox;
-  } else {
-    cursorY += gapTopBox;
-  }
-
-  const boxY = cursorY;
-  const boxX = centerX - boxW / 2;
-  cursorY += boxH + gapBoxBottom;
-
-  const bottomLinesSvg = bottomLines
-    .map((line, i) => {
-      const y = cursorY + i * lineHeight + Math.round(sideFontSize * 0.8);
-      return `<text x="${centerX}" y="${y}" text-anchor="middle" font-family="${fontFamily}" font-size="${sideFontSize}" font-weight="800" fill="${identity.colorText}" letter-spacing="${Math.round(2 * s)}">${escapeXml(line.toUpperCase())}</text>`;
-    })
-    .join("\n");
-
-  const svg = `
-    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      <!-- fundo sólido + brilhos sutis de profundidade -->
-      <rect width="100%" height="100%" fill="${identity.colorBackground}"/>
-      <circle cx="${width * 0.85}" cy="${height * 0.18}" r="${Math.round(260 * s)}"
-              fill="${identity.colorAccent}" opacity="0.10"/>
-      <circle cx="${width * 0.12}" cy="${height * 0.9}" r="${Math.round(200 * s)}"
-              fill="${identity.colorAccent}" opacity="0.08"/>
-
-      <!-- barra de realce -->
-      <rect x="${centerX - barW / 2}" y="${barY}" width="${barW}" height="${barH}"
-            rx="${Math.round(4 * s)}" fill="${identity.colorAccent}"/>
-
-      <!-- texto em cima (multi-linha) -->
-      ${topLinesSvg}
-
-      <!-- "COMENTE:" (toggle) — antes da caixa da palavra-chave -->
-      ${ctaSvg}
-
-      <!-- caixa da palavra-chave -->
-      <rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}"
-            rx="${Math.round(24 * s)}" fill="${identity.colorKeywordBox}"/>
-      <text x="${centerX}" y="${boxY + boxH - boxPadY - Math.round(kwFontSize * 0.16)}" text-anchor="middle"
-            font-family="${fontFamily}" font-size="${kwFontSize}" font-weight="900"
-            fill="${identity.colorText}">${escapeXml(keyword)}</text>
-
-      <!-- texto embaixo (multi-linha) -->
-      ${bottomLinesSvg}
-    </svg>`;
-
-  // Chip de perfil por cima (mesmo componente dos slides normais)
+  // Chip de perfil no canto inferior esquerdo (mesma margem dos ícones).
   const layers: CompositeLayer[] = [];
   if (profile.showProfileChip) {
-    layers.push(...(await buildProfileChipLayers(profile, width, fontFamily)));
+    layers.push(
+      ...(await buildProfileChipLayers(profile, width, fontFamily, {
+        position: "bottom-left",
+        canvasHeight: height,
+        widthPercent: 0.3,
+      }))
+    );
   }
   const logoLayer = brand.showLogo ? await buildLogoLayer(brand.logoUrl, width) : null;
   if (logoLayer) layers.push(logoLayer);
@@ -692,6 +520,215 @@ export async function renderTemplateSlide(
  * Retorna a URL pública com cache-bust (?v=) para o browser não
  * mostrar uma versão antiga em cache ao re-renderizar.
  */
+/** Busca wordmark/@handle/preset de layout do Brand Kit do cliente do
+ * post (best-effort — nunca quebra o render da contra-capa por causa
+ * disso). */
+async function fetchIdentityLabel(postId: string): Promise<{
+  wordmark: string | null;
+  handle: string | null;
+  layoutPreset: CardBrand["layoutPreset"];
+} | null> {
+  try {
+    const supabase = createAdminClient();
+    const { data: post } = await supabase
+      .from("posts")
+      .select("client_id")
+      .eq("id", postId)
+      .maybeSingle();
+    if (!post?.client_id) return null;
+    const { data: bk } = await supabase
+      .from("brand_kits")
+      .select("wordmark, ig_handle, layout_preset")
+      .eq("client_id", post.client_id)
+      .maybeSingle();
+    if (!bk) return null;
+    return {
+      wordmark: (bk.wordmark as string | null) ?? null,
+      handle: (bk.ig_handle as string | null) ?? null,
+      layoutPreset: (bk.layout_preset as CardBrand["layoutPreset"]) ?? "editorial-noir",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Busca o CardBrand completo (cores + rótulo + preset de layout) do
+ * cliente do post — usado pela PÁGINA 1 (hook sobre a foto), que agora
+ * herda os 5 layouts igual à capa do carrossel e à contra-capa.
+ * Best-effort: nunca quebra a geração por causa disso (cai no default
+ * Editorial Noir com as cores neutras). */
+async function fetchCoverBrand(postId: string, fontFamily: string): Promise<CardBrand> {
+  const fallback: CardBrand = {
+    colorBackground: "#0B0B12",
+    colorAccent: "#7C5CFF",
+    colorText: "#FFFFFF",
+    fontFamily,
+    brandName: null,
+  };
+  try {
+    const supabase = createAdminClient();
+    const { data: post } = await supabase
+      .from("posts")
+      .select("client_id")
+      .eq("id", postId)
+      .maybeSingle();
+    if (!post?.client_id) return fallback;
+    const { data: bk } = await supabase
+      .from("brand_kits")
+      .select("*")
+      .eq("client_id", post.client_id)
+      .maybeSingle();
+    if (!bk) return fallback;
+    return {
+      colorBackground: (bk.color_background as string | null) ?? fallback.colorBackground,
+      colorAccent: (bk.color_accent as string | null) ?? fallback.colorAccent,
+      colorText: (bk.color_text as string | null) ?? fallback.colorText,
+      fontFamily,
+      brandName: (bk.brand_name as string | null) ?? null,
+      wordmark: (bk.wordmark as string | null) ?? null,
+      handle: (bk.ig_handle as string | null) ?? null,
+      keywords: (bk.keywords as string[] | null) ?? null,
+      brandMark: (bk.brand_mark as CardBrand["brandMark"]) ?? "auto",
+      layoutPreset: (bk.layout_preset as CardBrand["layoutPreset"]) ?? "editorial-noir",
+      singlePostStyle: (bk.single_post_style as CardBrand["singlePostStyle"]) ?? "cover",
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Compõe a PÁGINA 1 (hook sobre a foto) usando o MESMO motor de layouts
+ * da capa do carrossel/contra-capa: mede a luminância REAL da banda de
+ * identidade, escolhe tema claro/escuro + overlay calibrado (contrast.ts),
+ * desenha wordmark + headline no preset de layout escolhido em Ajustes.
+ * Sem chip (decisão do usuário — igual à capa do carrossel, o Instagram
+ * já mostra o perfil por cima do post).
+ */
+async function composeCoverStyleContent(baseImage: Buffer, hook: string, cardBrand: CardBrand): Promise<Buffer> {
+  const probe = buildPageOneCoverSvg(hook, { ...cardBrand, colorText: "#FFFFFF" }, true, { showSwipeHint: false });
+  const band = await sharp(baseImage)
+    .resize(WIDTH, HEIGHT, { fit: "cover", position: "attention" })
+    .extract({ left: 0, top: probe.blurBandTop, width: WIDTH, height: HEIGHT - probe.blurBandTop })
+    .toBuffer();
+  const luminance = await measureImageLuminance(band);
+  const theme = pickTheme(luminance);
+  const textColor = textColorForTheme(theme);
+  const alpha = overlayAlphaFor(theme, textColor, luminance);
+  const { svg, blurBandTop } = buildPageOneCoverSvg(hook, { ...cardBrand, colorText: textColor }, true, {
+    showSwipeHint: false,
+    overlay: { theme, alpha },
+  });
+  const png = await composePhotoBg(baseImage, svg, blurBandTop);
+  return sharp(png).jpeg({ quality: 90 }).toBuffer();
+}
+
+// ------------------------------------------------------------
+// REELS 9:16 (Fase 4, kit v2 §3 — "regra crítica de vídeo 9:16").
+//
+// Fatia 1: só o QUADRO (imagem estática 1080×1920), sem vídeo de
+// verdade ainda — prova o layout/design antes de mexer com upload de
+// vídeo + ffmpeg (projeto à parte, maior e mais arriscado).
+//
+// Regra inegociável do kit: o quadro é NATIVAMENTE 9:16, nunca deriva
+// cortando as laterais. Encaixa a capa 4:5 inteira (1080×1350, mesma
+// composição/motor de contraste da capa/página 1) pela LARGURA e
+// completa o topo com uma extensão desfocada da própria foto — nunca
+// corta o conteúdo. Margem lateral (padding dos layouts, ≥64px = ~6%
+// da largura) já é bem maior que o mínimo exigido (5px/~3%).
+// ------------------------------------------------------------
+const REELS_W = 1080;
+const REELS_H = 1920;
+const REELS_TOP_EXTENSION = REELS_H - HEIGHT; // 570px
+
+/**
+ * Renderiza o QUADRO 9:16 do Reels (imagem estática): mesma composição
+ * de capa (wordmark + headline, motor de contraste real) encaixada pela
+ * LARGURA na base do quadro; o topo é preenchido por uma extensão
+ * desfocada da própria foto (nunca corta a foto nem o texto lateral).
+ */
+async function composeReelsFrame(photo: Buffer, headline: string, cardBrand: CardBrand): Promise<Buffer> {
+  // Mesma composição 1080×1350 da capa/página 1 (contraste real, wordmark).
+  const coverJpeg = await composeCoverStyleContent(photo, headline, cardBrand);
+
+  // Extensão do topo: crop desfocado do topo da MESMA foto — completa o
+  // quadro sem inventar conteúdo nem cortar a foto original.
+  const topFill = await sharp(photo)
+    .resize(REELS_W, HEIGHT, { fit: "cover", position: "attention" })
+    .extract({ left: 0, top: 0, width: REELS_W, height: REELS_TOP_EXTENSION })
+    .blur(24)
+    .toBuffer();
+
+  const canvas = await sharp({
+    create: {
+      width: REELS_W,
+      height: REELS_H,
+      channels: 3,
+      background: cardBrand.colorBackground || "#0B0B12",
+    },
+  })
+    .png()
+    .toBuffer();
+
+  return sharp(canvas)
+    .composite([
+      { input: topFill, top: 0, left: 0 },
+      { input: coverJpeg, top: REELS_TOP_EXTENSION, left: 0 },
+    ])
+    .jpeg({ quality: 90 })
+    .toBuffer();
+}
+
+/**
+ * Constrói só o OVERLAY de texto (PNG transparente 1080×1350 — wordmark
+ * + headline no preset de layout, sem fundo) pro Reels de VÍDEO de
+ * verdade (fatia 2) — o ffmpeg faz a composição final sobre o vídeo
+ * (video.ts), não o sharp. Regra do kit: a luminância/contraste vem do
+ * FRAME DE PÔSTER (posterFrame), não do vídeo inteiro — mesmo motor de
+ * contraste automático das fotos, só a fonte da medição muda.
+ */
+export async function buildReelsVideoOverlayPng(
+  headline: string,
+  cardBrand: CardBrand,
+  posterFrame: Buffer
+): Promise<Buffer> {
+  const probe = buildPageOneCoverSvg(headline, { ...cardBrand, colorText: "#FFFFFF" }, true, { showSwipeHint: false });
+  const band = await sharp(posterFrame)
+    .resize(WIDTH, HEIGHT, { fit: "cover", position: "attention" })
+    .extract({ left: 0, top: probe.blurBandTop, width: WIDTH, height: HEIGHT - probe.blurBandTop })
+    .toBuffer();
+  const luminance = await measureImageLuminance(band);
+  const theme = pickTheme(luminance);
+  const textColor = textColorForTheme(theme);
+  const alpha = overlayAlphaFor(theme, textColor, luminance);
+  const { svg } = buildPageOneCoverSvg(headline, { ...cardBrand, colorText: textColor }, true, {
+    showSwipeHint: false,
+    overlay: { theme, alpha },
+  });
+  return rasterizeSvg(svg);
+}
+
+/** Exposto apenas para QA visual (debug route) — Fatia 1 do Reels
+ * (quadro estático 9:16), sem vídeo de verdade ainda. */
+export async function __testReelsFrame(
+  hook: string,
+  layoutPreset: NonNullable<CardBrand["layoutPreset"]>,
+  photo: Buffer
+): Promise<Buffer> {
+  const cardBrand: CardBrand = {
+    colorBackground: "#0B0B12",
+    colorAccent: "#E11D2A",
+    colorText: "#FFFFFF",
+    fontFamily: FONT_FAMILY,
+    brandName: "Debug",
+    wordmark: "POSTPILOT®",
+    handle: "debug.ia",
+    keywords: ["DESIGN", "IA"],
+    layoutPreset,
+  };
+  return composeReelsFrame(photo, hook, cardBrand);
+}
+
 export async function renderAndUploadTemplateArt(
   postId: string,
   identity: VisualIdentity,
@@ -699,7 +736,8 @@ export async function renderAndUploadTemplateArt(
   watermark = false,
   brand: BrandTemplate = DEFAULT_BRAND
 ): Promise<string> {
-  const final = await renderTemplateSlide(identity, profile, WIDTH, HEIGHT, watermark, brand);
+  const label = await fetchIdentityLabel(postId);
+  const final = await renderTemplateSlide(identity, profile, WIDTH, HEIGHT, watermark, brand, label);
 
   const supabase = createAdminClient();
   const path = `${postId}-closing.jpg`;
@@ -710,68 +748,6 @@ export async function renderAndUploadTemplateArt(
 
   const { data } = supabase.storage.from("post-images").getPublicUrl(path);
   return `${data.publicUrl}?v=${Date.now()}`;
-}
-
-/**
- * Compõe o template de marca sobre a imagem base: gradiente escuro
- * no rodapé + hook + chip de perfil no topo. O @handle NÃO aparece
- * mais no rodapé — o chip já mostra avatar/nome/@ no topo.
- */
-async function composeTemplate(
-  baseImage: Buffer,
-  hook: string,
-  profile: IgProfile,
-  watermark = false,
-  brand: BrandTemplate = DEFAULT_BRAND
-): Promise<Buffer> {
-  const fontFamily = brand.fontFamily;
-  const lines = wrapText(hook, 24);
-  const fontSize = 72;
-  const lineHeight = 88;
-  // Bloco de texto ancorado próximo ao rodapé (sobe um pouco quando
-  // há marca d'água do plano free, para não colarem)
-  const textBlockBottom = HEIGHT - (watermark ? 140 : 90);
-  const firstLineY = textBlockBottom - (lines.length - 1) * lineHeight;
-
-  const textSvg = `
-    <svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="fade" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="40%" stop-color="#000000" stop-opacity="0"/>
-          <stop offset="75%" stop-color="#000000" stop-opacity="0.75"/>
-          <stop offset="100%" stop-color="#000000" stop-opacity="0.92"/>
-        </linearGradient>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#fade)"/>
-      ${lines
-        .map(
-          (line, i) =>
-            `<text x="60" y="${firstLineY + i * lineHeight}" font-family="${fontFamily}" font-size="${fontSize}" font-weight="900" fill="#ffffff">${escapeXml(line)}</text>`
-        )
-        .join("\n")}
-    </svg>`;
-
-  // Camadas: gradiente+hook embaixo, chip de perfil no topo.
-  // Chip fica no topo e o hook no rodapé — não colidem; nenhum
-  // offset extra de conteúdo é necessário.
-  const layers: CompositeLayer[] = [
-    { input: rasterizeSvg(textSvg), top: 0, left: 0 },
-  ];
-  if (profile.showProfileChip) {
-    layers.push(...(await buildProfileChipLayers(profile, WIDTH, fontFamily)));
-  }
-  const logoLayer = brand.showLogo ? await buildLogoLayer(brand.logoUrl, WIDTH) : null;
-  if (logoLayer) layers.push(logoLayer);
-  // Plano free: marca "feito com PostPilot" no rodapé
-  if (watermark) {
-    layers.push(buildWatermarkLayer(WIDTH, HEIGHT));
-  }
-
-  return sharp(baseImage)
-    .resize(WIDTH, HEIGHT, { fit: "cover" })
-    .composite(layers)
-    .jpeg({ quality: 90 })
-    .toBuffer();
 }
 
 /**
@@ -869,24 +845,63 @@ export async function generatePostImage(
 }
 
 /**
- * Compõe (chip + hook) e sobe a página de CONTEÚDO a partir de uma
- * imagem base já pronta — compartilhado entre generatePostImage
- * (base gerada por IA/mock) e applyCustomBaseImage (base enviada
- * manualmente pelo usuário, ex: gerada por fora no nano banana).
+ * Compõe a PÁGINA 1 no preset de layout do cliente (capa-style: wordmark
+ * + headline + contraste automático, sem chip) + logo/marca d'água por
+ * cima (independem do layout), e sobe no Storage. Compartilhado entre
+ * composeAndUploadContentImage (geração nova) e regenerateContentImage
+ * (re-render a partir da base salva).
+ */
+async function composeAndUploadFinal(
+  base: Buffer,
+  hook: string,
+  postId: string,
+  watermark: boolean,
+  brand: BrandTemplate
+): Promise<string> {
+  const cardBrand = await fetchCoverBrand(postId, brand.fontFamily);
+  let final = await composeCoverStyleContent(base, hook, cardBrand);
+
+  const layers: CompositeLayer[] = [];
+  const logoLayer = brand.showLogo ? await buildLogoLayer(brand.logoUrl, WIDTH) : null;
+  if (logoLayer) layers.push(logoLayer);
+  if (watermark) layers.push(buildWatermarkLayer(WIDTH, HEIGHT));
+  if (layers.length) {
+    final = await sharp(final).composite(layers).jpeg({ quality: 90 }).toBuffer();
+  }
+
+  const supabase = createAdminClient();
+  const path = `${postId}.jpg`;
+  const { error } = await supabase.storage
+    .from("post-images")
+    .upload(path, final, { contentType: "image/jpeg", upsert: true });
+  if (error) throw new Error(`Erro no upload da imagem: ${error.message}`);
+
+  const { data } = supabase.storage.from("post-images").getPublicUrl(path);
+  return `${data.publicUrl}?v=${Date.now()}`;
+}
+
+/**
+ * Compõe e sobe a página de CONTEÚDO a partir de uma imagem base já
+ * pronta — compartilhado entre generatePostImage (base gerada por
+ * IA/mock) e applyCustomBaseImage (base enviada manualmente pelo
+ * usuário, ex: gerada por fora no nano banana). `profile` não é mais
+ * usado aqui (a página 1 não tem chip — decisão do usuário, igual à
+ * capa do carrossel); mantido na assinatura por compatibilidade com
+ * quem já chama esta função.
  */
 async function composeAndUploadContentImage(
   base: Buffer,
   hook: string,
   postId: string,
-  profile: IgProfile,
+  _profile: IgProfile,
   watermark: boolean,
   brand: BrandTemplate = DEFAULT_BRAND
 ): Promise<string> {
   const supabase = createAdminClient();
 
-  // Guarda a imagem BASE (antes do chip/hook) para permitir
-  // re-renderizar a página de conteúdo depois — ex: nome/foto do
-  // perfil mudou em Ajustes — sem gerar a base de novo.
+  // Guarda a imagem BASE (antes do wordmark/hook) para permitir
+  // re-renderizar a página de conteúdo depois — ex: layout ou cores
+  // mudaram em Ajustes — sem gerar a base de novo.
   // Best-effort: uma falha aqui não derruba a geração do post.
   try {
     const baseJpeg = await sharp(base).jpeg({ quality: 92 }).toBuffer();
@@ -900,18 +915,7 @@ async function composeAndUploadContentImage(
     console.warn("[image] falha ao salvar base para re-render futuro", err);
   }
 
-  // Template de marca: chip de perfil no topo (se habilitado) + hook
-  const final = await composeTemplate(base, hook, profile, watermark, brand);
-
-  // Upload no Storage (bucket público criado na migration)
-  const path = `${postId}.jpg`;
-  const { error } = await supabase.storage
-    .from("post-images")
-    .upload(path, final, { contentType: "image/jpeg", upsert: true });
-  if (error) throw new Error(`Erro no upload da imagem: ${error.message}`);
-
-  const { data } = supabase.storage.from("post-images").getPublicUrl(path);
-  return `${data.publicUrl}?v=${Date.now()}`;
+  return composeAndUploadFinal(base, hook, postId, watermark, brand);
 }
 
 /**
@@ -960,7 +964,7 @@ export async function applyCustomBaseImage(
 export async function regenerateContentImage(
   postId: string,
   hook: string,
-  profile: IgProfile,
+  _profile: IgProfile,
   watermark = false,
   brand: BrandTemplate = DEFAULT_BRAND
 ): Promise<string | null> {
@@ -971,14 +975,5 @@ export async function regenerateContentImage(
   if (error || !data) return null;
 
   const baseBuffer = Buffer.from(await data.arrayBuffer());
-  const final = await composeTemplate(baseBuffer, hook, profile, watermark, brand);
-
-  const path = `${postId}.jpg`;
-  const { error: uploadError } = await supabase.storage
-    .from("post-images")
-    .upload(path, final, { contentType: "image/jpeg", upsert: true });
-  if (uploadError) throw new Error(`Erro no upload: ${uploadError.message}`);
-
-  const { data: pub } = supabase.storage.from("post-images").getPublicUrl(path);
-  return `${pub.publicUrl}?v=${Date.now()}`;
+  return composeAndUploadFinal(baseBuffer, hook, postId, watermark, brand);
 }

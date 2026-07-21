@@ -24,6 +24,16 @@ type Events = {
   "post/ready.notify": {
     data: { postId: string; userId: string };
   };
+  // Layout preset (Ajustes) mudou → re-renderiza em background os posts
+  // pendentes do cliente (carrosséis + página 1/contra-capa dos únicos).
+  "post/resync-layout.requested": {
+    data: { clientId: string; userId: string };
+  };
+  // Usuário anexou um vídeo a um post pendente (Fase 4, kit v2 §3) →
+  // compõe o quadro Reels 9:16 em background (ffmpeg).
+  "post/attach-video.requested": {
+    data: { postId: string; userId: string };
+  };
 };
 
 export const inngest = new Inngest({

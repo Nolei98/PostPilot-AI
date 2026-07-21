@@ -22,6 +22,7 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
     (u): u is string => !!u
   );
   const isCarousel = pages.length > 1;
+  const isVideo = post.format === "video" && !!post.video_url;
 
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -64,6 +65,22 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+  }
+
+  /** Post de vídeo (Reels): baixa o .mp4 já processado. */
+  async function downloadVideo() {
+    if (!post.video_url || downloading) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(post.video_url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      triggerDownload(await res.blob(), `post-${post.id}.mp4`);
+      toast("↓ Vídeo baixado.");
+    } catch {
+      window.open(post.video_url, "_blank");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   /** Post de 1 página: baixa a imagem única. */
@@ -124,11 +141,21 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
       className={`overflow-hidden ${exiting ? "animate-exit-right" : ""} ${isPosted ? "opacity-60" : ""}`}
     >
       <div className="flex gap-3 p-3">
-        <CarouselPreview
-          images={pages}
-          alt={post.hook}
-          className="h-28 w-[89.6px] shrink-0 rounded-control"
-        />
+        {isVideo ? (
+          /* eslint-disable-next-line jsx-a11y/media-has-caption */
+          <video
+            src={post.video_url ?? undefined}
+            poster={post.video_poster_url ?? undefined}
+            controls
+            className="h-28 w-[63px] shrink-0 rounded-control bg-black"
+          />
+        ) : (
+          <CarouselPreview
+            images={pages}
+            alt={post.hook}
+            className="h-28 w-[89.6px] shrink-0 rounded-control"
+          />
+        )}
         <div className="min-w-0 flex-1">
           {isPosted && (
             <span className="mb-1 inline-block rounded-full border border-success/50 bg-[#0D0418]/70 px-2.5 py-0.5 text-micro tracking-wider text-success">
@@ -141,7 +168,12 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
           <p className="line-clamp-3 text-caption text-muted">
             {post.caption}
           </p>
-          {isCarousel && (
+          {isVideo && (
+            <span className="mt-1 inline-block text-micro text-subtle">
+              🎬 Reels (vídeo)
+            </span>
+          )}
+          {!isVideo && isCarousel && (
             <span className="mt-1 inline-block text-micro text-subtle">
               🖼 carrossel · 2 páginas
             </span>
@@ -161,10 +193,10 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
           variant="secondary"
           size="sm"
           loading={downloading}
-          disabled={pages.length === 0}
-          onClick={isCarousel ? downloadZip : downloadImage}
+          disabled={isVideo ? !post.video_url : pages.length === 0}
+          onClick={isVideo ? downloadVideo : isCarousel ? downloadZip : downloadImage}
         >
-          {isCarousel ? "Baixar .zip" : "Baixar arte"}
+          {isVideo ? "Baixar vídeo" : isCarousel ? "Baixar .zip" : "Baixar arte"}
         </Button>
         {!isPosted && (
           <Button

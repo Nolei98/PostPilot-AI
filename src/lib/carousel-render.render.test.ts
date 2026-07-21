@@ -35,7 +35,24 @@ describe("render real do card (resvg)", () => {
       headline: "OpenAI acabou de mudar tudo na IA generativa hoje",
       body: "",
     };
-    const png = rasterizeSvg(buildCoverSvg(cover, { ...brand, wordmark: "OVERLENS®" }));
+    const { svg } = buildCoverSvg(cover, { ...brand, wordmark: "OVERLENS®" });
+    const png = rasterizeSvg(svg);
+    expect(png.length).toBeGreaterThan(1000);
+    expect([png[0], png[1], png[2], png[3]]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  });
+
+  it("rasteriza o FECHAMENTO (sem swipe hint, com body) em PNG válido", () => {
+    const closing: CarouselCard = {
+      idx: 4,
+      role: "cta",
+      headline: "Siga para não perder as próximas",
+      body: "Todo dia um resumo rápido do que importa em IA.",
+    };
+    const { svg } = buildCoverSvg(closing, { ...brand, wordmark: "OVERLENS®" }, false, {
+      showSwipeHint: false,
+      body: closing.body,
+    });
+    const png = rasterizeSvg(svg);
     expect(png.length).toBeGreaterThan(1000);
     expect([png[0], png[1], png[2], png[3]]).toEqual([0x89, 0x50, 0x4e, 0x47]);
   });

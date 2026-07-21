@@ -10,6 +10,8 @@ import {
   saveBrandTemplate,
   saveDefaultFormat,
   saveIgProfile,
+  saveLayoutPreset,
+  saveSinglePostStyle,
   saveNiche,
   saveTelegramChatId,
   saveVisualIdentity,
@@ -25,8 +27,11 @@ import { DeleteSourceButton } from "@/components/DeleteSourceButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getMonthlyQuota } from "@/lib/subscription";
 import { PLANS } from "@/lib/plans";
-import { POST_FONTS } from "@/lib/font-data";
+import { POST_FONTS, resolvePostFontFamily } from "@/lib/font-data";
 import { NICHES } from "@/lib/niches";
+import { LayoutPreview } from "@/components/LayoutPreview";
+import { PREVIEW_LAYOUTS, PREVIEW_FORMATS } from "@/lib/layout-preview";
+import type { CardBrand, LayoutPreset } from "@/lib/render-shared";
 import type { BrandKit, NotificationConfig, SourceConfig } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +74,20 @@ export default async function SettingsPage() {
   const sourceList = (sources ?? []) as SourceConfig[];
   const notifConfig = notif as NotificationConfig | null;
   const brandKit = bk as BrandKit | null;
+
+  // Marca real do cliente (cores/fonte/rótulo) — os previews de layout
+  // (kit v2 §7.7) usam a identidade de verdade, não uma cor genérica.
+  const previewBrand: CardBrand = {
+    colorBackground: brandKit?.color_background ?? "#0B0B12",
+    colorAccent: brandKit?.color_accent ?? "#7C5CFF",
+    colorText: brandKit?.color_text ?? "#FFFFFF",
+    fontFamily: resolvePostFontFamily(brandKit?.post_font_family),
+    brandName: brandKit?.brand_name ?? null,
+    wordmark: brandKit?.wordmark ?? null,
+    handle: brandKit?.ig_handle ?? null,
+    keywords: brandKit?.keywords ?? null,
+    brandMark: brandKit?.brand_mark ?? "auto",
+  };
 
   const fieldClasses =
     "w-full rounded-control border border-line bg-surface-2 px-3 py-2.5 text-body text-content placeholder:text-subtle outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25";
@@ -314,6 +333,96 @@ export default async function SettingsPage() {
             </div>
             <SubmitButton savingLabel="Salvando template...">
               Salvar template da marca
+            </SubmitButton>
+          </form>
+        </Card>
+      </section>
+
+      {/* ===== Layout das artes (Fase 3) ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Layout das artes</h2>
+        <Card className="p-4">
+          <form action={saveLayoutPreset} className="space-y-3">
+            <div className="space-y-1.5">
+              <label htmlFor="layout_preset" className="block text-caption text-muted">
+                Estilo visual dos cards (capa, interior e fechamento)
+              </label>
+              <select
+                id="layout_preset"
+                name="layout_preset"
+                defaultValue={brandKit?.layout_preset ?? "editorial-noir"}
+                className={fieldClasses}
+              >
+                <option value="editorial-noir">Editorial Noir (padrão)</option>
+                <option value="brutalism">Brutalismo Editorial</option>
+                <option value="serif-luxe">Serif Luxe</option>
+                <option value="swiss-mono">Swiss Mono</option>
+                <option value="pop-creator">Pop Creator</option>
+              </select>
+              <p className="text-micro text-subtle">
+                Salvar re-renderiza na hora os carrosséis e fechamentos já na fila com o novo layout.
+              </p>
+            </div>
+            <SubmitButton savingLabel="Salvando layout...">
+              Salvar layout
+            </SubmitButton>
+          </form>
+        </Card>
+
+        {/* Previews (kit v2 §7.7): 5 layouts × 4 formatos, com a cor/fonte
+            reais da marca — decida olhando antes de trocar acima. */}
+        <div className="mt-4 space-y-4">
+          {PREVIEW_LAYOUTS.map((layout) => (
+            <Card
+              key={layout.key}
+              className={`p-4 ${
+                (brandKit?.layout_preset ?? "editorial-noir") === layout.key
+                  ? "ring-2 ring-primary"
+                  : ""
+              }`}
+            >
+              <p className="mb-3 text-body font-semibold">{layout.label}</p>
+              <div className="flex gap-4 overflow-x-auto pb-1">
+                {PREVIEW_FORMATS.map((fmt) => (
+                  <div key={fmt.key} className="shrink-0">
+                    <LayoutPreview
+                      layoutPreset={layout.key as LayoutPreset}
+                      format={fmt.key}
+                      brand={previewBrand}
+                    />
+                    <p className="mt-1.5 text-center text-micro text-subtle">{fmt.label}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      {/* ===== Estilo do post único (kit v2 §3) ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Estilo do post único</h2>
+        <Card className="p-4">
+          <form action={saveSinglePostStyle} className="space-y-3">
+            <div className="space-y-1.5">
+              <label htmlFor="single_post_style" className="block text-caption text-muted">
+                Como a página 1 (foto + título) é composta
+              </label>
+              <select
+                id="single_post_style"
+                name="single_post_style"
+                defaultValue={brandKit?.single_post_style ?? "cover"}
+                className={fieldClasses}
+              >
+                <option value="cover">Estilo capa (com wordmark, igual ao carrossel)</option>
+                <option value="centered">Fonte no meio (minimalista, sem marca)</option>
+              </select>
+              <p className="text-micro text-subtle">
+                &quot;Fonte no meio&quot; usa a mesma tipografia do layout escolhido acima, só centralizada e sem wordmark — deixa a foto respirar. Salvar re-renderiza a página 1 dos posts únicos já na fila.
+              </p>
+            </div>
+            <SubmitButton savingLabel="Salvando estilo...">
+              Salvar estilo
             </SubmitButton>
           </form>
         </Card>

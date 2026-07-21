@@ -14,15 +14,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Resvg } from "@resvg/resvg-js";
-import { POST_FONTS } from "@/lib/font-data";
+import { POST_FONTS, LAYOUT_FONTS } from "@/lib/font-data";
 
 let fontFilesCache: string[] | null = null;
 
 /**
  * Grava em disco TODOS os pesos de TODAS as famílias selecionáveis em
- * Ajustes (Inter/Sora/Space Grotesk) — o resvg casa por família+peso
- * lidos do próprio arquivo, então basta ter tudo registrado; o SVG
- * escolhe a família certa via font-family no texto.
+ * Ajustes (Inter/Sora/Space Grotesk) + as fontes de uso interno dos
+ * layouts alternativos (Anton, IBM Plex Mono — Fase 3) — o resvg casa por
+ * família+peso lidos do próprio arquivo, então basta ter tudo registrado;
+ * o SVG escolhe a família certa via font-family no texto.
  */
 function ensureFontFiles(): string[] {
   if (fontFilesCache) return fontFilesCache;
@@ -31,11 +32,22 @@ function ensureFontFiles(): string[] {
   fs.mkdirSync(dir, { recursive: true });
 
   const files: string[] = [];
-  for (const font of POST_FONTS) {
+  for (const font of [...POST_FONTS, ...LAYOUT_FONTS]) {
     for (const f of font.buffers) {
       const file = path.join(dir, `${font.key}-${f.weight}.ttf`);
       if (!fs.existsSync(file)) {
-        fs.writeFileSync(file, Buffer.from(f.data, "base64"));
+        // Escreve num arquivo temporário exclusivo e só então renomeia —
+        // evita corromper o .ttf se duas requisições concorrentes (cold
+        // start) tentarem escrever o mesmo arquivo ao mesmo tempo.
+        const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+        fs.writeFileSync(tmp, Buffer.from(f.data, "base64"));
+        try {
+          fs.renameSync(tmp, file);
+        } catch {
+          // Outro processo já terminou de escrever o arquivo final —
+          // descarta o temporário e segue usando o que já existe.
+          fs.rmSync(tmp, { force: true });
+        }
       }
       files.push(file);
     }

@@ -18,6 +18,7 @@ import {
   removeTemplateFromPost,
   updatePost,
   uploadPostImage,
+  uploadPostVideo,
 } from "@/app/actions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardActions } from "@/components/ui/Card";
@@ -64,6 +65,8 @@ export function PostCard({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, startUpload] = useTransition();
   const [removingTpl, startRemoveTpl] = useTransition();
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [uploadingVideo, startVideoUpload] = useTransition();
 
   function handleToggleTemplate(checked: boolean) {
     if (checked) {
@@ -97,6 +100,24 @@ export function PostCard({
         if (!result.ok) setUploadError(result.error ?? "Falha ao subir imagem.");
       } catch {
         setUploadError("Falha ao subir imagem. Tente um arquivo menor.");
+      }
+    });
+  }
+
+  function handleVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setVideoError(null);
+    startVideoUpload(async () => {
+      try {
+        const fd = new FormData();
+        fd.set("post_id", post.id);
+        fd.set("video", file);
+        const result = await uploadPostVideo(fd);
+        if (!result.ok) setVideoError(result.error ?? "Falha ao subir vídeo.");
+      } catch {
+        setVideoError("Falha ao subir vídeo. Tente um arquivo menor.");
       }
     });
   }
@@ -151,8 +172,16 @@ export function PostCard({
   }
 
   const score = post.news_items.viral_score;
+  // Corta por CODE POINT (Array.from), não por índice de string: caption.slice(0,120)
+  // corta no meio de um par substituto UTF-16 sempre que um emoji (ex: 🚨) cai na
+  // fronteira — o caractere quebrado ("\uD83D" solto) é serializado de forma
+  // diferente no HTML da SSR vs. no texto hidratado no cliente, causando o erro
+  // de hydration mismatch ("Text content did not match").
+  const captionChars = [...caption];
   const shortCaption =
-    caption.length > 120 && !expanded ? caption.slice(0, 120) + "…" : caption;
+    captionChars.length > 120 && !expanded
+      ? captionChars.slice(0, 120).join("") + "…"
+      : caption;
 
   // Carrossel (format='carousel'): a galeria são os cards renderizados,
   // em ordem. Post single: página de conteúdo + contra-capa (se houver).
@@ -283,6 +312,43 @@ export function PostCard({
             />
           </label>
           {uploadError && <p className="text-micro text-error">{uploadError}</p>}
+
+          {/* Vídeo anexado (Fase 4, kit v2 §3) — upload manual, composto
+              em background (Inngest + ffmpeg) no quadro Reels 9:16. */}
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <span className="text-micro text-subtle">🎬 Reels (vídeo)</span>
+            {post.video_status === "processing" && (
+              <span className="text-micro text-warning">Processando…</span>
+            )}
+          </div>
+          <label
+            className={`flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content ${
+              post.video_status === "processing" ? "opacity-50" : ""
+            }`}
+          >
+            <span>
+              {uploadingVideo
+                ? "Enviando…"
+                : post.video_status === "processing"
+                  ? "Vídeo em processamento…"
+                  : post.video_status === "ready"
+                    ? "Trocar vídeo (reprocessa)"
+                    : "Anexar vídeo (.mp4/.mov)"}
+            </span>
+            <input
+              type="file"
+              accept="video/mp4,video/quicktime"
+              className="hidden"
+              disabled={uploadingVideo || post.video_status === "processing"}
+              onChange={handleVideoUpload}
+            />
+          </label>
+          {videoError && <p className="text-micro text-error">{videoError}</p>}
+          {post.video_status === "error" && !videoError && (
+            <p className="text-micro text-error">
+              Falha ao processar o vídeo{post.video_error ? `: ${post.video_error}` : "."} Tente de novo.
+            </p>
+          )}
         </div>
         )}
 
@@ -290,13 +356,23 @@ export function PostCard({
         <div className="bg-black">
           {/* Header (foto/nome/@) removido: já aparece no chip da imagem — evita redundância */}
 
-          {/* Single: conteúdo (pág 1) + contra-capa (pág 2). Carrossel:
-              todos os cards renderizados, em ordem. */}
-          <CarouselPreview
-            images={previewImages}
-            alt={post.hook}
-            className="aspect-[4/5] w-full"
-          />
+          {/* Vídeo pronto (Reels 9:16) vira a mídia principal do post —
+              senão, mesma preview de sempre (single: pág 1 + contra-capa;
+              carrossel: todos os cards, em ordem). */}
+          {post.video_status === "ready" && post.video_url ? (
+            <video
+              src={post.video_url}
+              poster={post.video_poster_url ?? undefined}
+              controls
+              className="aspect-[9/16] w-full bg-black"
+            />
+          ) : (
+            <CarouselPreview
+              images={previewImages}
+              alt={post.hook}
+              className="aspect-[4/5] w-full"
+            />
+          )}
 
           <div className="flex gap-4 px-3 py-2.5">
             {/* coração / comentário / compartilhar — fiéis ao IG */}

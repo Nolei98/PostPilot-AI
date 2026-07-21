@@ -11,8 +11,10 @@ import { scanNews } from "@/inngest/functions/scan-news";
 import { generatePost } from "@/inngest/functions/generate-post";
 import { generateCarousel } from "@/inngest/functions/generate-carousel";
 import { notifyPostReady } from "@/inngest/functions/notify";
+import { resyncLayoutPreset } from "@/inngest/functions/resync-layout-preset";
+import { attachVideo } from "@/inngest/functions/attach-video";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [scanNews, generatePost, generateCarousel, notifyPostReady],
+  functions: [scanNews, generatePost, generateCarousel, notifyPostReady, resyncLayoutPreset, attachVideo],
 });
