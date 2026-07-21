@@ -139,3 +139,23 @@ Cada um tem 3 "modos" de card: **capa**, **interior**, **fechamento**. Abaixo, s
 - Chip de perfil + trilha de ícones (posição, margem 60px, estilo dos ícones).
 - Motor de contraste automático (tema claro/escuro por luminância real da foto).
 - Corpo de texto do card interior sempre usa a fonte que o cliente escolheu em Ajustes (Inter/Sora/Space Grotesk) — só a HEADLINE e elementos decorativos usam a fonte fixa do layout.
+
+## Post único — 2 variações (adicionado 2026-07-21)
+
+A página 1 do post único (foto + título, sem "deslize") tem 2 variações,
+escolhidas em Ajustes (`brand_kits.single_post_style`), cada uma usando os
+5 layouts acima normalmente (typography do preset escolhido):
+- **Estilo capa** (padrão): igual à capa do carrossel — wordmark + título.
+- **Fonte no meio**: frase curta centralizada no meio do quadro, SEM
+  wordmark/marca nenhuma — minimalista, deixa a foto respirar.
+
+## Vídeo (Reels 9:16) — adicionado 2026-07-21
+
+Existe um formato de vídeo (upload manual do usuário, sem geração por
+IA): o quadro final é **1080×1920 nativo** — a capa 4:5 (mesmo motor de
+layout acima) é encaixada pela LARGURA no rodapé do quadro, e o topo é
+preenchido com uma extensão desfocada do próprio vídeo/foto (nunca corta
+lateral). O texto usa o MESMO preset de layout escolhido em Ajustes. Isso
+ainda não tem preview/mockup pra IA de design pensar variações — é só
+overlay de marca sobre vídeo real, sem tipografia nova além dos 5 presets
+já documentados acima.

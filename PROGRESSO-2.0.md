@@ -114,14 +114,13 @@ O que foi construído agora:
 - [x] Migration 032 (aplicada): `posts.video_url`, `video_poster_url`,
   `video_status`, `video_error`.
 
-**Pendências conhecidas do vídeo (não resolvidas ainda, seguras de deixar
-pra depois):**
-- [ ] `resync-layout-preset` (job que re-renderiza a fila quando o layout
-  muda em Ajustes) **ainda não reprocessa posts de vídeo já prontos**
-  (`format='video'`) — só carrosséis e posts single. Se o usuário trocar
-  o layout depois de já ter um vídeo pronto, o vídeo NÃO é re-renderizado
-  automaticamente (o `-video-source.mp4` original fica guardado no
-  Storage, então dá pra reprocessar depois — só não está automatizado).
+**Pendências conhecidas do vídeo:**
+- [x] **Resolvido (trabalho autônomo pós-restore point, ver commit
+  seguinte):** `resync-layout-preset` agora TAMBÉM reprocessa posts de
+  vídeo já prontos (`format='video'`, `video_status='ready'`) quando o
+  layout muda — reusa o `-video-source.mp4` já guardado no Storage, não
+  precisa o usuário reenviar o arquivo. Testado disparando o job de
+  verdade (Inngest dev server) contra o post real com vídeo — sem erro.
 - [ ] Vídeo no FEED (bloco contido 1:1/16:9 com play+badge+barra de
   progresso) e vídeo no INTERIOR do carrossel — só o Reels 9:16 foi feito.
 - [ ] Geração de vídeo por IA — explicitamente fora de escopo (usuário

@@ -198,6 +198,63 @@ export const resyncLayoutPreset = inngest.createFunction(
       }
     }
 
-    return { carouselCount: carouselPosts.length, singleCount: singlePosts.length };
+    // --- Posts de vídeo (Reels) já prontos ---
+    // Reusa o vídeo-fonte já salvo (`-video-source.mp4`) — não precisa o
+    // usuário reenviar o arquivo, só recompõe o overlay com o layout novo.
+    const videoPosts = await step.run("fetch-video-posts", async () => {
+      const { data } = await supabase
+        .from("posts")
+        .select("id, hook")
+        .eq("client_id", clientId)
+        .eq("status", "pending_approval")
+        .eq("format", "video")
+        .eq("video_status", "ready");
+      return data ?? [];
+    });
+
+    for (const post of videoPosts) {
+      await step.run(`video-${post.id}`, async () => {
+        try {
+          const { data: srcFile, error: dlErr } = await supabase.storage
+            .from("post-images")
+            .download(`${post.id}-video-source.mp4`);
+          if (dlErr || !srcFile) throw new Error("vídeo fonte não encontrado no Storage");
+          const videoBuffer = Buffer.from(await srcFile.arrayBuffer());
+
+          const { extractPosterFrame, composeReelsVideo } = await import("@/lib/video");
+          const { buildReelsVideoOverlayPng } = await import("@/lib/image");
+
+          const poster = await extractPosterFrame(videoBuffer, 0.5);
+          const overlay = await buildReelsVideoOverlayPng(post.hook ?? "", prefs.cardBrand, poster);
+          const finalVideo = await composeReelsVideo(videoBuffer, overlay);
+
+          const videoPath = `${post.id}-video.mp4`;
+          const posterPath = `${post.id}-video-poster.jpg`;
+          await supabase.storage.from("post-images").upload(videoPath, finalVideo, { contentType: "video/mp4", upsert: true });
+          await supabase.storage.from("post-images").upload(posterPath, poster, { contentType: "image/jpeg", upsert: true });
+          const { data: videoUrlData } = supabase.storage.from("post-images").getPublicUrl(videoPath);
+          const { data: posterUrlData } = supabase.storage.from("post-images").getPublicUrl(posterPath);
+
+          await supabase
+            .from("posts")
+            .update({
+              video_url: `${videoUrlData.publicUrl}?v=${Date.now()}`,
+              video_poster_url: `${posterUrlData.publicUrl}?v=${Date.now()}`,
+              video_error: null,
+            })
+            .eq("id", post.id);
+          return { updated: true };
+        } catch (err) {
+          console.error(`[resync-layout-preset] falha no vídeo do post ${post.id}:`, err);
+          return { updated: false };
+        }
+      });
+    }
+
+    return {
+      carouselCount: carouselPosts.length,
+      singleCount: singlePosts.length,
+      videoCount: videoPosts.length,
+    };
   }
 );
