@@ -64,6 +64,16 @@ export default async function DashboardPage() {
   };
   const posts = (queue ?? []) as PostWithNews[];
 
+  // Sprint C — só oferece "Agendar" se o cliente tiver Instagram conectado
+  // (senão o post nunca sairia de 'scheduled', já que ninguém publica).
+  const { data: igConn } = await supabase
+    .from("social_connections")
+    .select("id")
+    .eq("client_id", clientId ?? "")
+    .eq("status", "connected")
+    .maybeSingle();
+  const hasInstagramConnected = !!igConn;
+
   return (
     <AppShell
       readyCount={shell.readyCount}
@@ -121,6 +131,7 @@ export default async function DashboardPage() {
                 post={post}
                 profile={profile}
                 identityDefaults={identityDefaults}
+                hasInstagramConnected={hasInstagramConnected}
               />
             </div>
           ))}

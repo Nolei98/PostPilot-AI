@@ -16,6 +16,7 @@ import {
   approvePost,
   discardPost,
   removeTemplateFromPost,
+  schedulePost,
   updatePost,
   uploadPostImage,
   uploadPostVideo,
@@ -45,10 +46,13 @@ export function PostCard({
   post,
   profile,
   identityDefaults,
+  hasInstagramConnected = false,
 }: {
   post: PostWithNews;
   profile: IgProfile;
   identityDefaults: VisualIdentity;
+  /** Sprint C — só habilita o botão "Agendar" se o cliente tiver Instagram conectado. */
+  hasInstagramConnected?: boolean;
 }) {
   const HANDLE = profile.handle;
   const toast = useToast();
@@ -67,6 +71,14 @@ export function PostCard({
   const [removingTpl, startRemoveTpl] = useTransition();
   const [videoError, setVideoError] = useState<string | null>(null);
   const [uploadingVideo, startVideoUpload] = useTransition();
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState(() => {
+    const d = new Date(Date.now() + 5 * 60 * 1000);
+    d.setSeconds(0, 0);
+    // datetime-local espera horário LOCAL sem timezone (YYYY-MM-DDTHH:mm)
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  });
 
   function handleToggleTemplate(checked: boolean) {
     if (checked) {
@@ -459,6 +471,19 @@ export function PostCard({
             ✓ Aprovar
           </Button>
           <Button
+            variant="secondary"
+            className="flex-1"
+            disabled={isPending || exit !== null || !hasInstagramConnected}
+            title={
+              hasInstagramConnected
+                ? undefined
+                : "Conecte o Instagram em Ajustes para agendar"
+            }
+            onClick={() => setScheduling(true)}
+          >
+            🗓 Agendar
+          </Button>
+          <Button
             variant="warning"
             className="flex-1"
             disabled={isPending || exit !== null}
@@ -672,6 +697,48 @@ export function PostCard({
             página de conteúdo não é alterada. Os valores acima valem só
             para este post; o default de Ajustes não muda.
           </p>
+        </div>
+      </Modal>
+
+      {/* ===== Modal de agendamento (Sprint C) ===== */}
+      <Modal
+        open={scheduling}
+        onClose={() => setScheduling(false)}
+        title="Agendar publicação"
+      >
+        <div className="space-y-4">
+          <p className="text-caption text-muted">
+            O post publica sozinho no Instagram no horário escolhido — sem
+            precisar copiar legenda nem baixar arte.
+          </p>
+          <label className="block space-y-1.5">
+            <span className="block text-caption text-muted">Data e hora</span>
+            <input
+              type="datetime-local"
+              value={scheduledFor}
+              min={new Date(Date.now() + 60 * 1000).toISOString().slice(0, 16)}
+              onChange={(e) => setScheduledFor(e.target.value)}
+              className="w-full rounded-control border border-line bg-surface-2 px-3 py-2.5 text-body text-content outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
+            />
+          </label>
+          <div className="flex gap-2">
+            <Button
+              className="flex-1"
+              loading={isPending}
+              onClick={() => {
+                setScheduling(false);
+                exitAndRun("right", async () => {
+                  await schedulePost(post.id, new Date(scheduledFor).toISOString());
+                  toast("🗓 Post agendado.");
+                });
+              }}
+            >
+              Confirmar agendamento
+            </Button>
+            <Button variant="ghost" onClick={() => setScheduling(false)}>
+              Cancelar
+            </Button>
+          </div>
         </div>
       </Modal>
     </>

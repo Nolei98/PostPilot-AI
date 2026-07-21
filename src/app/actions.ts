@@ -303,6 +303,45 @@ export async function approvePost(postId: string) {
   revalidatePath("/ready");
 }
 
+/**
+ * Agenda um post pra publicação automática via Graph API (Sprint C) —
+ * alternativa ao "Aprovar" manual. Exige Instagram conectado pro
+ * cliente do post (senão o post ficaria 'scheduled' pra sempre, sem
+ * ninguém publicar). O job publish-scheduled-posts (Inngest, cron a
+ * cada 5min) pega daqui pra frente.
+ */
+export async function schedulePost(postId: string, scheduledForIso: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { data: post } = await supabase
+    .from("posts")
+    .select("client_id")
+    .eq("id", postId)
+    .maybeSingle();
+  if (!post) throw new Error("Post não encontrado");
+
+  const { data: conn } = await supabase
+    .from("social_connections")
+    .select("id")
+    .eq("client_id", post.client_id)
+    .eq("status", "connected")
+    .maybeSingle();
+  if (!conn) throw new Error("Conecte o Instagram em Ajustes antes de agendar");
+
+  const { error } = await supabase
+    .from("posts")
+    .update({ status: "scheduled", scheduled_for: scheduledForIso })
+    .eq("id", postId)
+    .eq("status", "pending_approval");
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+  revalidatePath("/ready");
+}
+
 /** Descarta um post da fila */
 export async function discardPost(postId: string) {
   const supabase = createClient();
