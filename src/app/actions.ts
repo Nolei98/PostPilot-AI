@@ -342,6 +342,19 @@ export async function schedulePost(postId: string, scheduledForIso: string) {
   revalidatePath("/ready");
 }
 
+/** Cancela o agendamento (Sprint C) — volta pro estado pré-agendamento (fila). */
+export async function cancelSchedule(postId: string) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("posts")
+    .update({ status: "pending_approval", scheduled_for: null })
+    .eq("id", postId)
+    .eq("status", "scheduled");
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+  revalidatePath("/ready");
+}
+
 /** Descarta um post da fila */
 export async function discardPost(postId: string) {
   const supabase = createClient();

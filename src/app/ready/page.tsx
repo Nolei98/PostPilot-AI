@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ReadyTabs } from "@/components/ReadyTabs";
 import { AppShell } from "@/components/ui/AppShell";
 import { getShellData } from "@/lib/shell";
-import type { PostWithNews } from "@/lib/types";
+import type { PostMetrics, PostWithNews } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -14,16 +14,32 @@ export default async function ReadyPage() {
   const supabase = createClient();
   const shell = await getShellData();
 
-  // "Prontos" cobre os dois estados pós-fila: aprovados (aguardando
-  // publicação) e publicados (histórico) — a aba filtra client-side.
+  // "Prontos" cobre os estados pós-fila: aprovados (a postar manualmente),
+  // agendados (Sprint C — publicação automática pendente) e publicados
+  // (histórico) — a aba filtra client-side.
   const { data } = await supabase
     .from("posts")
     .select("*, news_items(title, url, viral_score)")
-    .in("status", ["approved", "published"])
+    .in("status", ["approved", "scheduled", "published"])
     .eq("client_id", shell.activeClientId ?? "")
     .order("approved_at", { ascending: false });
 
   const posts = (data ?? []) as PostWithNews[];
+
+  // Métricas reais (Sprint C) dos posts publicados — badge discreto na
+  // aba Postados. Uma query só pra todos os posts desta página.
+  const publishedIds = posts.filter((p) => p.status === "published").map((p) => p.id);
+  const { data: metrics } =
+    publishedIds.length > 0
+      ? await supabase
+          .from("post_metrics")
+          .select("post_id, reach")
+          .in("post_id", publishedIds)
+          .eq("metric_window", "24h")
+      : { data: [] as Pick<PostMetrics, "post_id" | "reach">[] };
+  const reachByPost: Record<string, number | null> = Object.fromEntries(
+    (metrics ?? []).map((m) => [m.post_id, m.reach])
+  );
 
   return (
     <AppShell
@@ -40,7 +56,7 @@ export default async function ReadyPage() {
         </p>
       </div>
 
-      <ReadyTabs posts={posts} />
+      <ReadyTabs posts={posts} reachByPost={reachByPost} />
     </AppShell>
   );
 }

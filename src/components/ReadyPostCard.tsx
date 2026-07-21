@@ -8,7 +8,7 @@
 import { useState, useTransition } from "react";
 /* eslint-disable @next/next/no-img-element */
 import JSZip from "jszip";
-import { markAsPosted, revertApproval } from "@/app/actions";
+import { cancelSchedule, markAsPosted, revertApproval } from "@/app/actions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardActions } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
@@ -16,13 +16,21 @@ import { CarouselPreview } from "@/components/CarouselPreview";
 import { useToast } from "@/components/ui/Toast";
 import type { PostWithNews } from "@/lib/types";
 
-export function ReadyPostCard({ post }: { post: PostWithNews }) {
+export function ReadyPostCard({
+  post,
+  reach = null,
+}: {
+  post: PostWithNews;
+  /** Sprint C — alcance (24h) já coletado, só presente em posts publicados. */
+  reach?: number | null;
+}) {
   const toast = useToast();
   const pages = [post.image_url, post.closing_image_url].filter(
     (u): u is string => !!u
   );
   const isCarousel = pages.length > 1;
   const isVideo = post.format === "video" && !!post.video_url;
+  const isScheduled = post.status === "scheduled";
 
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -133,6 +141,23 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
     });
   }
 
+  /** Cancela o agendamento (Sprint C) — post volta pra Fila. */
+  function handleCancelSchedule() {
+    startTransition(async () => {
+      await cancelSchedule(post.id);
+      toast("↩ Agendamento cancelado — post voltou para a Fila.");
+    });
+  }
+
+  const scheduledLabel = post.scheduled_for
+    ? new Date(post.scheduled_for).toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
   if (gone) return null;
 
   return (
@@ -162,6 +187,11 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
               ✓ POSTADO
             </span>
           )}
+          {isScheduled && (
+            <span className="mb-1 inline-block rounded-full border border-warning/50 bg-[#0D0418]/70 px-2.5 py-0.5 text-micro tracking-wider text-warning">
+              🗓 AGENDADO · {scheduledLabel}
+            </span>
+          )}
           <p className="mb-1 text-body font-semibold leading-snug">
             {post.hook}
           </p>
@@ -178,50 +208,72 @@ export function ReadyPostCard({ post }: { post: PostWithNews }) {
               🖼 carrossel · 2 páginas
             </span>
           )}
+          {isPosted && reach !== null && (
+            <span className="mt-1 inline-block text-micro text-subtle">
+              📊 alcance (24h): {reach}
+            </span>
+          )}
         </div>
       </div>
 
-      <CardActions className={isPosted ? "grid grid-cols-2" : "grid grid-cols-3"}>
-        <Button variant="secondary" size="sm" onClick={copyText}>
-          {copied ? (
-            <span className="animate-pop text-success">✓ Copiado!</span>
-          ) : (
-            "Copiar texto"
-          )}
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          loading={downloading}
-          disabled={isVideo ? !post.video_url : pages.length === 0}
-          onClick={isVideo ? downloadVideo : isCarousel ? downloadZip : downloadImage}
-        >
-          {isVideo ? "Baixar vídeo" : isCarousel ? "Baixar .zip" : "Baixar arte"}
-        </Button>
-        {!isPosted && (
+      {isScheduled ? (
+        <CardActions>
           <Button
-            variant="success"
+            variant="secondary"
             size="sm"
+            className="flex-1"
             loading={isPending}
             disabled={exiting}
-            onClick={handlePosted}
+            onClick={handleCancelSchedule}
           >
-            ✓ Postei
+            ↩ Cancelar agendamento
           </Button>
-        )}
-      </CardActions>
+        </CardActions>
+      ) : (
+        <>
+          <CardActions className={isPosted ? "grid grid-cols-2" : "grid grid-cols-3"}>
+            <Button variant="secondary" size="sm" onClick={copyText}>
+              {copied ? (
+                <span className="animate-pop text-success">✓ Copiado!</span>
+              ) : (
+                "Copiar texto"
+              )}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={downloading}
+              disabled={isVideo ? !post.video_url : pages.length === 0}
+              onClick={isVideo ? downloadVideo : isCarousel ? downloadZip : downloadImage}
+            >
+              {isVideo ? "Baixar vídeo" : isCarousel ? "Baixar .zip" : "Baixar arte"}
+            </Button>
+            {!isPosted && (
+              <Button
+                variant="success"
+                size="sm"
+                loading={isPending}
+                disabled={exiting}
+                onClick={handlePosted}
+              >
+                ✓ Postei
+              </Button>
+            )}
+          </CardActions>
 
-      {/* Desistir da aprovação (com confirmação) — só faz sentido antes de postar */}
-      {!isPosted && (
-        <div className="border-t border-line px-3 py-2 text-center">
-          <button
-            onClick={() => setGivingUp(true)}
-            disabled={isPending || exiting}
-            className="text-caption text-subtle transition-colors hover:text-error disabled:opacity-50"
-          >
-            ↩ Desistir deste post
-          </button>
-        </div>
+          {/* Desistir da aprovação (com confirmação) — só faz sentido antes de postar */}
+          {!isPosted && (
+            <div className="border-t border-line px-3 py-2 text-center">
+              <button
+                onClick={() => setGivingUp(true)}
+                disabled={isPending || exiting}
+                className="text-caption text-subtle transition-colors hover:text-error disabled:opacity-50"
+              >
+                ↩ Desistir deste post
+              </button>
+            </div>
+          )}
+        </>
       )}
     </Card>
 

@@ -14,6 +14,7 @@ import { notifyPostReady } from "@/inngest/functions/notify";
 import { resyncLayoutPreset } from "@/inngest/functions/resync-layout-preset";
 import { attachVideo } from "@/inngest/functions/attach-video";
 import { publishScheduledPosts } from "@/inngest/functions/publish-scheduled-posts";
+import { collectInsights } from "@/inngest/functions/collect-insights";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -25,5 +26,6 @@ export const { GET, POST, PUT } = serve({
     resyncLayoutPreset,
     attachVideo,
     publishScheduledPosts,
+    collectInsights,
   ],
 });

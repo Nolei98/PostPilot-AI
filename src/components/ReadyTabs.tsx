@@ -9,19 +9,28 @@ import { useState } from "react";
 import { ReadyPostCard } from "@/components/ReadyPostCard";
 import type { PostWithNews } from "@/lib/types";
 
-type Filtro = "todos" | "apostar" | "postados";
+type Filtro = "todos" | "apostar" | "agendados" | "postados";
 
 const TABS: { key: Filtro; label: string }[] = [
   { key: "todos", label: "Todos" },
   { key: "apostar", label: "A postar" },
+  { key: "agendados", label: "Agendados" },
   { key: "postados", label: "Postados" },
 ];
 
-export function ReadyTabs({ posts }: { posts: PostWithNews[] }) {
+export function ReadyTabs({
+  posts,
+  reachByPost = {},
+}: {
+  posts: PostWithNews[];
+  /** Sprint C — alcance (24h) por post publicado, pro badge da aba Postados. */
+  reachByPost?: Record<string, number | null>;
+}) {
   const [filtro, setFiltro] = useState<Filtro>("todos");
 
   const filtrados = posts.filter((p) => {
     if (filtro === "apostar") return p.status === "approved";
+    if (filtro === "agendados") return p.status === "scheduled";
     if (filtro === "postados") return p.status === "published";
     return true;
   });
@@ -50,14 +59,16 @@ export function ReadyTabs({ posts }: { posts: PostWithNews[] }) {
           <p className="mx-auto max-w-xs text-body text-muted">
             {filtro === "postados"
               ? "Marque posts como postados e eles aparecem aqui, como histórico."
-              : "Aprove posts na fila e eles aparecem aqui, prontos para publicar."}
+              : filtro === "agendados"
+                ? "Agende posts na fila (botão 🗓) e eles aparecem aqui até publicar sozinhos."
+                : "Aprove posts na fila e eles aparecem aqui, prontos para publicar."}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {filtrados.map((post, i) => (
             <div key={post.id} style={{ animationDelay: `${i * 60}ms` }} className="animate-fade-up">
-              <ReadyPostCard post={post} />
+              <ReadyPostCard post={post} reach={reachByPost[post.id] ?? null} />
             </div>
           ))}
         </div>
