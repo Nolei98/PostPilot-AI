@@ -5,7 +5,7 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `feat/multi-tenant-brand-kit` (não mexer na `main`).
-**Última atualização:** 2026-07-21 (madrugada, trabalho autônomo).
+**Última atualização:** 2026-07-21 — Sprint C (Graph API) completo, ver §4.3.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
@@ -331,13 +331,36 @@ visual). Brief completo + prompt mestre no arquivo linkado acima. **Ainda não i
 - **Decisão de engenharia (autônoma):** o brief pedia Satori; usei o render **SVG+resvg** que já existe e funciona (evita dep nova + risco). O contrato `spec` (B12) pode ser desenhado sobre esse mesmo render. Reverter pra Satori é possível se você preferir.
 - Depende de: Sprint D (Remotion) para a montagem de vídeo do `video_cover` (aqui só o branding/legenda).
 
-### 4.3 SPRINT C — Graph API (publicação auto + fecha o loop de métricas)
-- [ ] OAuth de conta IG Business/Creator por cliente (token por `client_id`).
-- [ ] Publicação automática (single + carrossel) + agendamento via `scheduled_for`
-      (campos `scheduled`/`published`/`ig_media_id` já existem no schema).
-- [ ] `collect-insights` (Inngest, 24h/72h): alcance/salvamentos/compartilhamentos →
-      tabela `post_metrics`; comparar com o score previsto do Haiku.
-- **Aceite:** aprovar → agenda → publica; métricas reais gravadas por post.
+### 4.3 SPRINT C — Graph API (publicação auto + fecha o loop de métricas) — ✅ COMPLETO (2026-07-21)
+Implementado em 5 passos (C1-C5), cada um commitado isolado — ver
+`git log --oneline` a partir de `6e23b03`. **Mock-first** (mesmo padrão
+dos providers de IA/imagem): sem `META_APP_ID`/`META_APP_SECRET` no
+ambiente, tudo funciona em mock determinístico ($0, testável sem app do
+Meta) — plugar a chave real depois não muda nenhum código.
+- [x] **C1** — Schema (`social_connections`, `post_metrics`, `posts.publish_error`),
+      cifragem AES-256-GCM (`src/lib/crypto-secrets.ts` — primeiro segredo por
+      tenant do projeto), cliente Graph API mock-first (`src/lib/instagram-graph.ts`).
+- [x] **C2** — OAuth conectar/desconectar: `/api/instagram/connect` + `/callback`
+      (state assinado via HMAC, CSRF sem tabela de sessão nova), seção
+      "Publicação automática" em Ajustes.
+- [x] **C3** — Botão "🗓 Agendar" na Fila (ao lado de Aprovar), habilitado só com
+      IG conectado, modal com datetime-local → `schedulePost` (status='scheduled').
+- [x] **C4** — Job `publish-scheduled-posts` (cron 5min): publica single/carrossel/
+      vídeo via Graph API, marca 'published' + `ig_media_id`; falha grava só
+      `publish_error` (não derruba o status, tenta de novo).
+- [x] **C5** — Job `collect-insights` (evento `post/published`, `step.sleep` 24h+72h)
+      grava em `post_metrics`. **Gap achado testando:** post agendado sumia da UI
+      até publicar — sem visibilidade nem cancelamento. Corrigido junto: aba
+      "Agendados" em Prontos (data/hora + cancelar) + badge de alcance em Postados.
+- **Tudo verificado AO VIVO** (Playwright, conta real `@joaorodrigues.ia`, modo
+  mock): connect→callback→conectado, Agendar→apareceu em Agendados→cancelar
+  voltou pra Fila, e um ciclo completo aprovar→agendar→job de publicação→
+  status='published'+ig_media_id real (mock) confirmado direto no banco.
+- **Pendência real (não é código):** só publica de verdade depois que você
+  criar o app no Meta for Developers e me passar `META_APP_ID`/`META_APP_SECRET`
+  (+ `SECRETS_ENCRYPTION_KEY`, já gerada localmente em `.env.local` — gere outra
+  pra produção). Grátis, mas exige App Review do Meta pra ir além de "Tester".
+- **Aceite:** aprovar/agendar → publica sozinho; métricas reais gravadas por post. ✅
 
 ### 4.4 SPRINT D — Video Engine (clipes reais, não slideshow)
 > ⚠️ **Update 2026-07-21 (ver seção 0.4):** um MVP mais simples já foi
