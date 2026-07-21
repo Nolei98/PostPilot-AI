@@ -5,7 +5,7 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `feat/multi-tenant-brand-kit` (não mexer na `main`).
-**Última atualização:** 2026-07-21.
+**Última atualização:** 2026-07-21 (madrugada, trabalho autônomo).
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
@@ -121,6 +121,18 @@ O que foi construído agora:
   layout muda — reusa o `-video-source.mp4` já guardado no Storage, não
   precisa o usuário reenviar o arquivo. Testado disparando o job de
   verdade (Inngest dev server) contra o post real com vídeo — sem erro.
+- [x] **Verificação extra (madrugada, pós-restore):** conferi por que o
+  `Last-Modified` do vídeo não tinha mudado depois do resync — era falso
+  alarme, o `curl -I` bateu numa cópia em cache do CDN por eu ter
+  esquecido o `?v=` de cache-busting que a própria coluna `video_url` já
+  carrega. Com o `?v=` certo, `Last-Modified` bate exatamente com o
+  horário de conclusão do job — o resync funcionou.
+- [x] **Fix pequeno feito na mesma madrugada** (commit `f57b302`): o
+  bloco de resync de vídeo só logava falha no console, sem gravar nada
+  no banco — diferente do `attach-video`, que sempre grava
+  `video_status`/`video_error`. Agora, se o resync de um vídeo falhar,
+  `video_error` é atualizado (vídeo antigo continua válido, só fica
+  registrado que o último resync deu erro).
 - [ ] Vídeo no FEED (bloco contido 1:1/16:9 com play+badge+barra de
   progresso) e vídeo no INTERIOR do carrossel — só o Reels 9:16 foi feito.
 - [ ] Geração de vídeo por IA — explicitamente fora de escopo (usuário
@@ -155,6 +167,23 @@ O que foi construído agora:
    isoladamente com `git revert <hash>` sem perder o resto.
 4. Você disse que vai trazer ajustes de LAYOUT (tipografia/estrutura dos
    5 presets) — não mexi em nada disso além do que já estava aprovado.
+5. **Por que parei o trabalho autônomo aqui:** revisei o roadmap (seção 4)
+   procurando mais itens seguros pra adiantar sozinho. Tudo que resta
+   precisa de uma decisão sua ou de credencial externa antes de eu poder
+   codar com segurança — não é falta de tarefa, é dependência real:
+   - **B9/B13/B14** (overrides de card, seed de presets, editor visual):
+     o próprio roadmap já marca como "pro teu retorno" — é trabalho de
+     design visual, não dá pra adiantar sem seu olho.
+   - **Sprint C** (Graph API): precisa você criar/autorizar o app IG
+     Business e me passar client_id/secret — não posso gerar isso sozinho.
+   - **Sprint D completo** (Remotion + b-roll + legendas): precisa decisão
+     de licença comercial do Remotion + chave de provider de b-roll
+     (Pexels/Pixabay) + acesso ao TikTok Content Posting API.
+   - **Sprint E** (Viral Radar): precisa escolher/pagar um provider de
+     coleta (Apify ou similar).
+   - Por isso o trabalho autônomo desta madrugada ficou concentrado em
+     **verificar e endurecer** o que já foi construído (ver item de
+     `video_error` acima) em vez de começar sprint novo sem seu aval.
 
 ---
 
