@@ -5,7 +5,7 @@
 // do projeto era env var global (Stripe, Telegram, providers de IA).
 // AES-256-GCM com a lib `crypto` nativa do Node — sem dependência nova.
 // ============================================================
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 const ALGO = "aes-256-gcm";
 const IV_LEN = 12;
@@ -44,4 +44,35 @@ export function decryptSecret(payload: string): string {
   const decipher = createDecipheriv(ALGO, key, iv);
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+}
+
+const STATE_TTL_MS = 10 * 60 * 1000; // 10min — tempo de sobra pro dono completar o diálogo OAuth
+
+/**
+ * Assina um `clientId` pro parâmetro `state` do OAuth (CSRF sem precisar
+ * de tabela de sessão nova): payload = clientId + timestamp, HMAC-SHA256
+ * com a mesma chave mestra de SECRETS_ENCRYPTION_KEY.
+ */
+export function signOAuthState(clientId: string): string {
+  const key = keyFromEnv();
+  const payload = `${clientId}.${Date.now()}`;
+  const sig = createHmac("sha256", key).update(payload).digest("base64url");
+  return `${Buffer.from(payload).toString("base64url")}.${sig}`;
+}
+
+/** Valida um `state` gerado por `signOAuthState`; retorna o clientId ou `null` se inválido/expirado. */
+export function verifyOAuthState(state: string): string | null {
+  const key = keyFromEnv();
+  const [payloadB64, sig] = state.split(".");
+  if (!payloadB64 || !sig) return null;
+  const payload = Buffer.from(payloadB64, "base64url").toString("utf8");
+  const expectedSig = createHmac("sha256", key).update(payload).digest("base64url");
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expectedSig);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+
+  const [clientId, tsRaw] = payload.split(".");
+  const ts = Number(tsRaw);
+  if (!clientId || !Number.isFinite(ts) || Date.now() - ts > STATE_TTL_MS) return null;
+  return clientId;
 }

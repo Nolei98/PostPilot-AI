@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 /* eslint-disable @next/next/no-img-element */
 import {
   addSource,
+  disconnectInstagram,
   saveBrandTemplate,
   saveDefaultFormat,
   saveIgProfile,
@@ -32,11 +33,15 @@ import { NICHES } from "@/lib/niches";
 import { LayoutPreview } from "@/components/LayoutPreview";
 import { PREVIEW_LAYOUTS, PREVIEW_FORMATS } from "@/lib/layout-preview";
 import type { CardBrand, LayoutPreset } from "@/lib/render-shared";
-import type { BrandKit, NotificationConfig, SourceConfig } from "@/lib/types";
+import type { BrandKit, NotificationConfig, SocialConnection, SourceConfig } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams?: { ig?: string; reason?: string };
+}) {
   const supabase = createClient();
   const shell = await getShellData();
 
@@ -71,9 +76,17 @@ export default async function SettingsPage() {
     .eq("client_id", shell.activeClientId ?? "")
     .maybeSingle();
 
+  const { data: igConn } = await supabase
+    .from("social_connections")
+    .select("*")
+    .eq("client_id", shell.activeClientId ?? "")
+    .eq("status", "connected")
+    .maybeSingle();
+
   const sourceList = (sources ?? []) as SourceConfig[];
   const notifConfig = notif as NotificationConfig | null;
   const brandKit = bk as BrandKit | null;
+  const socialConnection = igConn as SocialConnection | null;
 
   // Marca real do cliente (cores/fonte/rótulo) — os previews de layout
   // (kit v2 §7.7) usam a identidade de verdade, não uma cor genérica.
@@ -470,6 +483,57 @@ export default async function SettingsPage() {
             </div>
             <SubmitButton savingLabel="Salvando...">Salvar formato</SubmitButton>
           </form>
+        </Card>
+      </section>
+
+      {/* ===== Publicação automática (Sprint C — Graph API) ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Publicação automática</h2>
+        <Card className="p-4 space-y-3">
+          {searchParams?.ig === "connected" && (
+            <p className="rounded-control border border-success/40 bg-success/10 px-3 py-2 text-caption text-success">
+              ✓ Instagram conectado com sucesso.
+            </p>
+          )}
+          {searchParams?.ig === "error" && (
+            <p className="rounded-control border border-error/40 bg-error/10 px-3 py-2 text-caption text-error">
+              ✕ Não foi possível conectar
+              {searchParams.reason === "no_ig_business_account"
+                ? " — a Página do Facebook não tem uma conta Instagram Business/Creator vinculada."
+                : "."}
+            </p>
+          )}
+          {socialConnection ? (
+            <>
+              <p className="text-body text-content">
+                Conectado como <strong>@{socialConnection.ig_username}</strong>
+              </p>
+              <p className="text-micro text-subtle">
+                Posts agendados (botão &quot;Agendar&quot; na Fila) publicam
+                sozinhos no horário escolhido.
+              </p>
+              <form action={disconnectInstagram}>
+                <SubmitButton savingLabel="Desconectando...">
+                  Desconectar Instagram
+                </SubmitButton>
+              </form>
+            </>
+          ) : (
+            <>
+              <p className="text-micro text-subtle">
+                Conecte a conta Instagram Business/Creator deste cliente para
+                agendar posts e publicá-los automaticamente. Sem conexão, o
+                fluxo manual (copiar legenda + baixar arte + &quot;Postei&quot;)
+                continua funcionando normalmente.
+              </p>
+              <a
+                href={`/api/instagram/connect?clientId=${shell.activeClientId ?? ""}`}
+                className="inline-flex items-center justify-center gap-2 rounded-control bg-gradient-to-br from-[#E0219C] via-[#A020F0] to-[#7B2FF7] px-5 py-3 text-body font-medium text-white shadow-[0_0_34px_rgba(224,33,156,0.35)] transition-all hover:-translate-y-[2px] hover:shadow-[0_0_50px_rgba(224,33,156,0.6)]"
+              >
+                Conectar Instagram
+              </a>
+            </>
+          )}
         </Card>
       </section>
 

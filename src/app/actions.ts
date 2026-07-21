@@ -1395,6 +1395,30 @@ export async function saveDefaultFormat(formData: FormData) {
 }
 
 /**
+ * Desconecta o Instagram do cliente ativo (Sprint C). Não apaga a
+ * linha — só marca 'disconnected', pra manter o histórico e permitir
+ * reconectar sem perder o registro de quando foi conectado antes.
+ */
+export async function disconnectInstagram() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
+
+  const { error } = await supabase
+    .from("social_connections")
+    .update({ status: "disconnected" })
+    .eq("client_id", clientId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+}
+
+/**
  * Troca o cliente (tenant) ativo — grava o id num cookie que
  * getActiveClient() lê. Valida que o cliente pertence ao usuário
  * antes de gravar (a RLS já filtra, mas evita cookie com id alheio).
