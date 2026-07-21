@@ -362,6 +362,65 @@ Meta) — plugar a chave real depois não muda nenhum código.
   pra produção). Grátis, mas exige App Review do Meta pra ir além de "Tester".
 - **Aceite:** aprovar/agendar → publica sozinho; métricas reais gravadas por post. ✅
 
+#### 4.3.1 Setup real do app Meta — em andamento (2026-07-21, fim de tarde)
+
+**Descobertas importantes durante o setup de verdade (não estavam óbvias na doc do Meta):**
+- O Meta não deixa combinar caso de uso "Facebook" + "Instagram" no mesmo
+  app — escolhemos **"Instagram com Login do Instagram"** (fluxo 2024+, não
+  precisa de Página do Facebook). Isso mudou o código (commit `4a79846`):
+  endpoints trocaram de `graph.facebook.com` pra `api.instagram.com`/
+  `graph.instagram.com`, sem etapa de buscar Páginas — a conta IG Business
+  já vem direto na troca do `code` pelo token.
+- Pra conectar a própria conta em modo "Desenvolvimento" (antes do App
+  Review), precisa: (1) adicionar a conta como **"Testador do Instagram"**
+  em Funções do app → Adicionar pessoas (feito: `joaorodrigues.ia`,
+  convite aceito no Instagram) e (2) configurar a **redirect URI** em
+  "4. Configurar o login da empresa no Instagram" — **essa etapa exige
+  HTTPS**, `http://localhost` não é aceito (diferente do produto antigo
+  "Login do Facebook", que permite localhost puro).
+- Testamos túnel HTTPS grátis (`localtunnel`/loca.lt) pro localhost —
+  caiu sozinho repetidas vezes neste ambiente (rede do sandbox), mesmo
+  como processo rastreado. Não é confiável aqui.
+- **Solução adotada:** deploy no Vercel (projeto já linkado, `post-pilot-ai`).
+  Confirmado com você que só você usa produção — promovido
+  `feat/multi-tenant-brand-kit` direto pra produção (`vercel deploy --prod`).
+  Alias estável: **`https://post-pilot-ai-seven.vercel.app`**.
+  - ⚠️ Cada `vercel deploy` (preview) gera uma URL nova — não dá pra fixar
+    redirect URI nela. Por isso fomos de produção (alias fixo).
+  - `NEXT_PUBLIC_APP_URL` (Production e Preview) estava **vazio** no
+    Vercel — corrigido pra `https://post-pilot-ai-seven.vercel.app`
+    (Production) antes do build final, porque `NEXT_PUBLIC_*` é
+    embutido em build-time, não dá pra trocar depois sem rebuildar.
+  - Env vars adicionadas no Vercel (Production + Preview):
+    `META_APP_ID`, `META_APP_SECRET`, `SECRETS_ENCRYPTION_KEY`.
+  - Redirect URI final registrada no Meta (3 no total, pode limpar as
+    2 primeiras depois):
+    `http://localhost:3000/api/instagram/callback`,
+    `https://wise-needles-work.loca.lt/api/instagram/callback` (túnel morto,
+    pode remover), `https://post-pilot-ai-seven.vercel.app/api/instagram/callback`.
+
+**Onde exatamente paramos:** pedi pra você logar em
+`https://post-pilot-ai-seven.vercel.app/login` (sua conta real do
+PostPilot) pra eu testar "Conectar Instagram" contra o deploy de
+produção com o fluxo REAL (sem mock, `META_APP_ID` já configurado lá).
+Você pausou antes de logar.
+
+**Pra continuar quando voltar:**
+1. Logar em `https://post-pilot-ai-seven.vercel.app/login`.
+2. Ir em Ajustes → Publicação automática → Conectar Instagram.
+3. Se der certo: testar Agendar um post de verdade na fila e ver o job
+   `publish-scheduled-posts` publicar de verdade (precisa Inngest Cloud
+   configurado em produção — conferir `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY`
+   já estavam no Vercel antes desta sessão, então deve funcionar).
+4. Se der erro "Invalid redirect_uri" de novo: conferir se a env var
+   `NEXT_PUBLIC_APP_URL` de Production no Vercel ainda bate exatamente
+   com `https://post-pilot-ai-seven.vercel.app` (`vercel env ls production`).
+5. Depois de confirmar que funciona, considerar: (a) remover as redirect
+   URIs de teste (localhost/túnel morto) do Meta, (b) decidir se
+   `feat/multi-tenant-brand-kit` promovido em produção fica assim ou se
+   quer voltar a produção pro que tinha antes até merge oficial na `main`
+   — hoje produção Vercel = esta branch, não a `main`.
+
 ### 4.4 SPRINT D — Video Engine (clipes reais, não slideshow)
 > ⚠️ **Update 2026-07-21 (ver seção 0.4):** um MVP mais simples já foi
 > construído fora de ordem (pedido pontual do usuário) — upload manual +
