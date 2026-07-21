@@ -23,12 +23,14 @@ que já existia (B6-B12), não como reescrita. Tudo abaixo está **testado
 em teste automatizado) — sempre com dados reais da conta do usuário
 (`@joaorodrigues.ia`) antes de considerar pronto.
 
-**Ponto de restauração:** commit `<PREENCHIDO NO COMMIT — ver `git log`>`
-na branch `feat/multi-tenant-brand-kit`. Pra voltar pra ANTES desta sessão
-toda: `git log --oneline` e ache o commit anterior a esse (é o
-`e2617c3 feat(carousel): capa sempre com imagem...`, o topo do log antes
-de hoje) — `git reset --hard e2617c3` desfaz tudo abaixo (com CUIDADO,
-é destrutivo; prefira `git revert` ou uma branch nova se tiver dúvida).
+**Ponto de restauração:** commit `0a94a0e` ("feat(kit-v2): contraste
+automático + 5 layouts + página 1 unificada + Reels MVP") na branch
+`feat/multi-tenant-brand-kit`. Pra voltar pra ANTES desta sessão toda:
+`git reset --hard e2617c3` (o commit imediatamente anterior) — CUIDADO,
+é destrutivo; prefira `git revert 0a94a0e` ou uma branch nova se tiver
+dúvida. Qualquer commit DEPOIS de `0a94a0e` (ver `git log --oneline`) foi
+trabalho autônomo feito enquanto você dormia — cada um reverte isolado
+com `git revert <hash>`.
 
 ### 0.1 Contraste automático (Fase 1 do kit v2)
 - [x] `src/lib/contrast.ts`: luminância real medida na foto (não estimada),
