@@ -1,19 +1,15 @@
 // ============================================================
 // GET /api/instagram/callback — recebe o `code` do diálogo OAuth do
-// Facebook, troca por token de longa duração, acha a Página com conta
-// Instagram Business/Creator vinculada, e grava a conexão (token
-// cifrado) em social_connections. Redireciona pra /settings com o
-// resultado (?ig=connected|error).
+// Instagram (fluxo "Login do Instagram"), troca por token de curta
+// duração (a conta IG Business já vem junto, sem precisar de Página
+// do Facebook), troca de novo por um token de longa duração (~60
+// dias), e grava a conexão (token cifrado) em social_connections.
+// Redireciona pra /settings com o resultado (?ig=connected|error).
 // ============================================================
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { verifyOAuthState, encryptSecret } from "@/lib/crypto-secrets";
-import {
-  exchangeCodeForToken,
-  getLongLivedToken,
-  getFacebookPages,
-  getInstagramUsername,
-} from "@/lib/instagram-graph";
+import { exchangeCodeForToken, getLongLivedToken, getInstagramUsername } from "@/lib/instagram-graph";
 
 export async function GET(req: Request) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -42,15 +38,7 @@ export async function GET(req: Request) {
     const redirectUri = `${appUrl}/api/instagram/callback`;
     const shortLived = await exchangeCodeForToken(code, redirectUri);
     const longLived = await getLongLivedToken(shortLived.accessToken);
-    const pages = await getFacebookPages(longLived.accessToken);
-    const pageWithIg = pages.find((p) => p.instagram_business_account?.id);
-
-    if (!pageWithIg || !pageWithIg.instagram_business_account) {
-      return NextResponse.redirect(`${appUrl}/settings?ig=error&reason=no_ig_business_account`);
-    }
-
-    const igBusinessId = pageWithIg.instagram_business_account.id;
-    const igUsername = await getInstagramUsername(igBusinessId, pageWithIg.access_token);
+    const igUsername = await getInstagramUsername(shortLived.igUserId, longLived.accessToken);
     const expiresAt = new Date(Date.now() + longLived.expiresIn * 1000).toISOString();
 
     // A política RLS de social_connections só deixa passar se `clientId`
@@ -59,10 +47,9 @@ export async function GET(req: Request) {
       {
         client_id: clientId,
         platform: "instagram",
-        access_token: encryptSecret(pageWithIg.access_token),
-        ig_business_account_id: igBusinessId,
+        access_token: encryptSecret(longLived.accessToken),
+        ig_business_account_id: shortLived.igUserId,
         ig_username: igUsername,
-        facebook_page_id: pageWithIg.id,
         token_expires_at: expiresAt,
         status: "connected",
         connected_at: new Date().toISOString(),

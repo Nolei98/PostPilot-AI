@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   exchangeCodeForToken,
   getLongLivedToken,
-  getFacebookPages,
   getInstagramUsername,
   createMediaContainer,
   createCarouselContainer,
@@ -24,22 +23,16 @@ describe("instagram-graph (modo mock — sem META_APP_ID)", () => {
     if (originalSecret) process.env.META_APP_SECRET = originalSecret;
   });
 
-  it("exchangeCodeForToken retorna token mock sem rede", async () => {
+  it("exchangeCodeForToken retorna token + igUserId mock sem rede (sem precisar de Página do Facebook)", async () => {
     const r = await exchangeCodeForToken("fake-code", "https://app/callback");
     expect(r.accessToken).toBe("mock-short-lived-token");
-    expect(r.expiresIn).toBeGreaterThan(0);
+    expect(r.igUserId).toBe("mock-ig-business-id");
   });
 
   it("getLongLivedToken retorna token mock de longa duração", async () => {
     const r = await getLongLivedToken("mock-short-lived-token");
     expect(r.accessToken).toBe("mock-long-lived-token");
     expect(r.expiresIn).toBeGreaterThan(3600);
-  });
-
-  it("getFacebookPages retorna 1 página mock com conta IG vinculada", async () => {
-    const pages = await getFacebookPages("mock-user-token");
-    expect(pages).toHaveLength(1);
-    expect(pages[0].instagram_business_account?.id).toBe("mock-ig-business-id");
   });
 
   it("getInstagramUsername retorna handle mock", async () => {

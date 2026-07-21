@@ -1,6 +1,7 @@
 // ============================================================
 // GET /api/instagram/connect?clientId=... — inicia o diálogo OAuth
-// do Facebook (Meta for Developers) pra conectar a conta Instagram
+// do Instagram ("Instagram com Login do Instagram", fluxo 2024+, sem
+// precisar de Página do Facebook) pra conectar a conta Instagram
 // Business/Creator do cliente ativo. `state` é o clientId assinado
 // (HMAC, ver src/lib/crypto-secrets.ts) — evita CSRF sem precisar de
 // tabela de sessão nova.
@@ -9,14 +10,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { signOAuthState } from "@/lib/crypto-secrets";
 
-const GRAPH_OAUTH_VERSION = "v21.0";
 const SCOPES = [
-  "instagram_basic",
-  "instagram_content_publish",
-  "instagram_manage_insights",
-  "pages_show_list",
-  "pages_read_engagement",
-  "business_management",
+  "instagram_business_basic",
+  "instagram_business_content_publish",
+  "instagram_business_manage_insights",
 ].join(",");
 
 export async function GET(req: Request) {
@@ -47,14 +44,14 @@ export async function GET(req: Request) {
 
   if (!appId) {
     // Sem app do Meta configurado ainda: mock local — vai direto pro
-    // callback como se o Facebook tivesse aprovado, com um `code` fake.
+    // callback como se o Instagram tivesse aprovado, com um `code` fake.
     return NextResponse.redirect(
       `${redirectUri}?code=mock-oauth-code&state=${encodeURIComponent(state)}`
     );
   }
 
   const dialogUrl =
-    `https://www.facebook.com/${GRAPH_OAUTH_VERSION}/dialog/oauth` +
+    `https://www.instagram.com/oauth/authorize` +
     `?client_id=${appId}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&state=${encodeURIComponent(state)}` +
