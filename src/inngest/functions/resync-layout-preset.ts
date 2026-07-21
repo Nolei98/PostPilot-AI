@@ -245,7 +245,12 @@ export const resyncLayoutPreset = inngest.createFunction(
             .eq("id", post.id);
           return { updated: true };
         } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
           console.error(`[resync-layout-preset] falha no vídeo do post ${post.id}:`, err);
+          // Não derruba video_status/video_url — o vídeo antigo continua válido,
+          // só registra o erro em video_error pra ficar rastreável no banco
+          // (a UI só mostra esse campo quando video_status='error').
+          await supabase.from("posts").update({ video_error: message }).eq("id", post.id);
           return { updated: false };
         }
       });
