@@ -34,6 +34,12 @@ type Events = {
   "post/attach-video.requested": {
     data: { postId: string; userId: string };
   };
+  // Disparo manual pra reprocessar a fila de agendados agora (Sprint C)
+  // — o cron do publish-scheduled-posts já cobre isso a cada 5min.
+  "post/publish.requested": { data: Record<string, never> };
+  // Um post acabou de ser publicado via Graph API → dispara a coleta
+  // de métricas 24h/72h depois (Sprint C, collect-insights.ts).
+  "post/published": { data: { postId: string } };
 };
 
 export const inngest = new Inngest({

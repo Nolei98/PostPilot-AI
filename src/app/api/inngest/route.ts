@@ -13,8 +13,17 @@ import { generateCarousel } from "@/inngest/functions/generate-carousel";
 import { notifyPostReady } from "@/inngest/functions/notify";
 import { resyncLayoutPreset } from "@/inngest/functions/resync-layout-preset";
 import { attachVideo } from "@/inngest/functions/attach-video";
+import { publishScheduledPosts } from "@/inngest/functions/publish-scheduled-posts";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [scanNews, generatePost, generateCarousel, notifyPostReady, resyncLayoutPreset, attachVideo],
+  functions: [
+    scanNews,
+    generatePost,
+    generateCarousel,
+    notifyPostReady,
+    resyncLayoutPreset,
+    attachVideo,
+    publishScheduledPosts,
+  ],
 });
