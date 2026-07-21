@@ -203,4 +203,59 @@ describe("RLS: escrita cruzada bloqueada (with check)", () => {
       )
     ).rejects.toThrow();
   });
+
+  it("social_connections: A não vê nem escreve na conexão IG de B (033)", async () => {
+    const a = await signup(db, { email: "a-sc@x.com" });
+    const b = await signup(db, { email: "b-sc@x.com" });
+    const bClient = await clientOf(b);
+
+    await db.query(
+      "insert into social_connections (client_id, access_token, ig_username) values ($1, 'token-b', 'b.ig')",
+      [bClient]
+    );
+
+    const seenByA = await asUser(db, a, () =>
+      db.query("select * from social_connections where client_id = $1", [bClient])
+    );
+    expect(seenByA.rows).toHaveLength(0);
+
+    const updateResult = await asUser(db, a, () =>
+      db.query(
+        "update social_connections set status = 'disconnected' where client_id = $1",
+        [bClient]
+      )
+    );
+    // RLS filtra a linha antes do WITH CHECK rodar — não dá erro, só não afeta nenhuma linha.
+    expect(updateResult.affectedRows ?? 0).toBe(0);
+  });
+
+  it("post_metrics: A não vê métricas de posts de B (034)", async () => {
+    const a = await signup(db, { email: "a-pm@x.com" });
+    const b = await signup(db, { email: "b-pm@x.com" });
+    const bClient = await clientOf(b);
+
+    const { rows: srcRows } = await db.query<{ id: string }>(
+      "select id from source_configs where client_id = $1 limit 1",
+      [bClient]
+    );
+    const news = await db.query<{ id: string }>(
+      `insert into news_items (source_id, client_id, url, title, status)
+       values ($1, $2, 'https://ex.com/pm1', 'Notícia B', 'candidate') returning id`,
+      [srcRows[0].id, bClient]
+    );
+    const post = await db.query<{ id: string }>(
+      "insert into posts (news_item_id, user_id, client_id, hook, caption, hashtags, image_prompt) " +
+        "values ($1, $2, $3, 'h', 'c', '#h', 'p') returning id",
+      [news.rows[0].id, b, bClient]
+    );
+    await db.query(
+      "insert into post_metrics (post_id, metric_window, reach) values ($1, '24h', 500)",
+      [post.rows[0].id]
+    );
+
+    const seenByA = await asUser(db, a, () =>
+      db.query("select * from post_metrics where post_id = $1", [post.rows[0].id])
+    );
+    expect(seenByA.rows).toHaveLength(0);
+  });
 });

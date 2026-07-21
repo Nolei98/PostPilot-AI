@@ -273,7 +273,41 @@ export interface Post {
   video_poster_url: string | null;
   video_status: "none" | "processing" | "ready" | "error";
   video_error: string | null;
+  // Sprint C — publicação automática via Graph API. Erro do último
+  // tentativa de publicação (não derruba o status, que continua
+  // 'scheduled' até o próximo tick do job de publicação).
+  publish_error: string | null;
   created_at: string;
+}
+
+// Sprint C — conexão OAuth com rede social por cliente (Graph API).
+// Genérico por `platform` pensando no TikTok (Sprint D). O token de
+// acesso NUNCA trafega pro client-side — só lido/decifrado em código
+// de servidor (Server Actions, rotas de API, jobs Inngest).
+export interface SocialConnection {
+  id: string;
+  client_id: string;
+  platform: "instagram";
+  ig_business_account_id: string | null;
+  ig_username: string | null;
+  facebook_page_id: string | null;
+  token_expires_at: string | null;
+  status: "connected" | "error" | "disconnected";
+  connected_at: string;
+}
+
+// Sprint C — métricas reais coletadas via Graph API 24h/72h após a
+// publicação (ver src/inngest/functions/collect-insights.ts).
+export interface PostMetrics {
+  id: string;
+  post_id: string;
+  collected_at: string;
+  metric_window: "24h" | "72h";
+  reach: number | null;
+  saved: number | null;
+  shares: number | null;
+  likes: number | null;
+  comments: number | null;
 }
 
 // Post com a notícia de origem embutida (para o dashboard)
