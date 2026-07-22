@@ -19,6 +19,7 @@ import {
   saveVisualIdentity,
 } from "@/app/actions";
 import { IdentityForm } from "@/components/IdentityForm";
+import { EditTemplateButton } from "@/components/EditTemplateButton";
 import { BrandLabelForm } from "@/components/BrandLabelForm";
 import { AvatarFileInput } from "@/components/AvatarFileInput";
 import { BrandColorPicker } from "@/components/BrandColorPicker";
@@ -447,29 +448,34 @@ export default async function SettingsPage({
                 ) : (
                   <div className="flex gap-3 overflow-x-auto pb-1">
                     {options.map((tpl) => (
-                      <form key={tpl.id} action={saveTemplateSelection} className="shrink-0">
-                        <input type="hidden" name="surface" value={surface} />
-                        <input type="hidden" name="template_id" value={tpl.id} />
-                        <button
-                          type="submit"
-                          className={`block w-32 overflow-hidden rounded-control border-2 text-left transition-colors ${
-                            selectedId === tpl.id ? "border-primary" : "border-line hover:border-subtle"
-                          }`}
-                        >
-                          {tpl.thumbnail_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={tpl.thumbnail_url} alt={tpl.name} className="aspect-[4/5] w-full object-cover" />
-                          ) : (
-                            <div className="flex aspect-[4/5] w-full items-center justify-center bg-surface-2 text-micro text-subtle">
-                              sem preview
-                            </div>
-                          )}
-                          <p className="truncate px-2 py-1.5 text-micro text-content">
-                            {tpl.name}
-                            {selectedId === tpl.id && " ✓"}
-                          </p>
-                        </button>
-                      </form>
+                      <div key={tpl.id} className="shrink-0">
+                        <form action={saveTemplateSelection}>
+                          <input type="hidden" name="surface" value={surface} />
+                          <input type="hidden" name="template_id" value={tpl.id} />
+                          <button
+                            type="submit"
+                            className={`block w-32 overflow-hidden rounded-control border-2 text-left transition-colors ${
+                              selectedId === tpl.id ? "border-primary" : "border-line hover:border-subtle"
+                            }`}
+                          >
+                            {tpl.thumbnail_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={tpl.thumbnail_url} alt={tpl.name} className="aspect-[4/5] w-full object-cover" />
+                            ) : (
+                              <div className="flex aspect-[4/5] w-full items-center justify-center bg-surface-2 text-micro text-subtle">
+                                sem preview
+                              </div>
+                            )}
+                            <p className="truncate px-2 py-1.5 text-micro text-content">
+                              {tpl.name}
+                              {selectedId === tpl.id && " ✓"}
+                            </p>
+                          </button>
+                        </form>
+                        <div className="mt-1">
+                          <EditTemplateButton templateId={tpl.id} isSystem={tpl.is_system} />
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}

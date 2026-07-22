@@ -10,7 +10,14 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inngest } from "@/inngest/client";
-import type { BrandTemplate, CardLayoutOverride, IgProfile, Surface, VisualIdentity } from "@/lib/types";
+import type {
+  BrandTemplate,
+  CardLayoutOverride,
+  IgProfile,
+  Surface,
+  TemplateSpec,
+  VisualIdentity,
+} from "@/lib/types";
 import type { CardBrand } from "@/lib/carousel-render";
 import { resolvePostFontFamily } from "@/lib/font-data";
 
@@ -1509,6 +1516,101 @@ export async function saveTemplateSelection(formData: FormData) {
   if (error) throw new Error(error.message);
 
   revalidatePath("/settings");
+}
+
+/**
+ * Duplica um modelo (preset do sistema OU já seu) pra uma cópia própria
+ * editável do cliente ativo (Sprint B+, TAREFA B14) — nunca edita o preset
+ * do sistema em si (é compartilhado por todos). Se a origem já for uma
+ * cópia própria deste cliente, ainda assim duplica (edição sempre em
+ * cópia nova, mais previsível que mutar in-place).
+ */
+export async function duplicateTemplateForEditing(templateId: string): Promise<string> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
+
+  const { data: source, error: fetchError } = await supabase
+    .from("templates")
+    .select("surface, name, spec")
+    .eq("id", templateId)
+    .single();
+  if (fetchError || !source) throw new Error("Modelo não encontrado");
+
+  const { data: created, error } = await supabase
+    .from("templates")
+    .insert({
+      client_id: clientId,
+      surface: source.surface,
+      name: `${source.name} (meu)`,
+      spec: source.spec,
+      is_system: false,
+    })
+    .select("id")
+    .single();
+  if (error || !created) throw new Error(error?.message ?? "Erro ao duplicar modelo");
+
+  return created.id as string;
+}
+
+/** Salva a spec (e opcionalmente o nome) editada de um modelo PRÓPRIO do
+ * cliente ativo (B14). RLS garante que só edita templates do próprio
+ * cliente; o filtro is_system=false é defesa extra contra editar preset. */
+export async function saveTemplateSpec(templateId: string, spec: TemplateSpec, name?: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { error } = await supabase
+    .from("templates")
+    .update(name ? { spec, name } : { spec })
+    .eq("id", templateId)
+    .eq("is_system", false);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/settings");
+  revalidatePath(`/settings/templates/${templateId}`);
+}
+
+/**
+ * Renderiza uma prévia (PNG em data URL) de uma spec em edição — mesmo
+ * `renderFromSpec` usado no post de verdade (sem foto, fundo sólido da
+ * marca), pra o editor nunca divergir do resultado real. Conteúdo de
+ * exemplo fixo (a marca real do cliente ativo entra nas cores/fonte).
+ */
+export async function previewTemplateSpec(spec: TemplateSpec): Promise<string> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  const { data: bk } = await supabase
+    .from("brand_kits")
+    .select("*")
+    .eq("client_id", clientId ?? "")
+    .maybeSingle();
+
+  const brand = buildCardBrand(bk as Record<string, unknown> | null);
+  const { renderFromSpec } = await import("@/lib/template-render");
+  const { rasterizeSvg } = await import("@/lib/svg-render");
+  const svg = renderFromSpec(spec, brand, {
+    headline: "Um título forte que prende a atenção",
+    body: "Um resumo curto que dá contexto pro leitor em uma frase.",
+    cta: "DESLIZE PARA VER →",
+  });
+  const png = rasterizeSvg(svg);
+  return `data:image/png;base64,${png.toString("base64")}`;
 }
 
 /**
