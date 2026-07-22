@@ -399,27 +399,52 @@ Meta) — plugar a chave real depois não muda nenhum código.
     `https://wise-needles-work.loca.lt/api/instagram/callback` (túnel morto,
     pode remover), `https://post-pilot-ai-seven.vercel.app/api/instagram/callback`.
 
-**Onde exatamente paramos:** pedi pra você logar em
-`https://post-pilot-ai-seven.vercel.app/login` (sua conta real do
-PostPilot) pra eu testar "Conectar Instagram" contra o deploy de
-produção com o fluxo REAL (sem mock, `META_APP_ID` já configurado lá).
-Você pausou antes de logar.
+**Update 2026-07-21/22 (madrugada) — Conectou, mas não publicou:** você
+logou em produção e conectou o Instagram de verdade (confirmado no banco:
+`social_connections` com `ig_username=joaorodrigues.ia`, `ig_business_account_id`
+real, `status=connected`). Agendou um post — não publicou. Investigado sem
+mexer em código:
+- `posts` do agendamento: `status='scheduled'` ainda, `publish_error=null`,
+  `scheduled_for` já **passou** (23:48 UTC, checado ~00:01 UTC) → o job
+  `publish-scheduled-posts` **nunca tentou rodar** (se tivesse tentado e
+  falhado, `publish_error` teria mensagem; se tivesse publicado, status
+  mudaria). Não é bug de credencial/token — é o cron não disparando.
+- `GET https://post-pilot-ai-seven.vercel.app/api/inngest` devolve
+  `{"message":"Unauthorized"}` — consistente com o app **nunca ter sido
+  sincronizado no Inngest Cloud** para esta URL de produção. Isso porque
+  o deploy foi promovido manualmente via `vercel deploy --prod` (fora do
+  fluxo normal git push → integração Vercel↔Inngest que dispara o sync
+  automático).
+- Env vars conferidas: `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` presentes
+  em Production no Vercel, código lê do env padrão (sem hardcode/mock) —
+  configuração de código está correta, é puramente falta de sync no
+  dashboard.
 
 **Pra continuar quando voltar:**
-1. Logar em `https://post-pilot-ai-seven.vercel.app/login`.
-2. Ir em Ajustes → Publicação automática → Conectar Instagram.
-3. Se der certo: testar Agendar um post de verdade na fila e ver o job
-   `publish-scheduled-posts` publicar de verdade (precisa Inngest Cloud
-   configurado em produção — conferir `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY`
-   já estavam no Vercel antes desta sessão, então deve funcionar).
-4. Se der erro "Invalid redirect_uri" de novo: conferir se a env var
-   `NEXT_PUBLIC_APP_URL` de Production no Vercel ainda bate exatamente
-   com `https://post-pilot-ai-seven.vercel.app` (`vercel env ls production`).
-5. Depois de confirmar que funciona, considerar: (a) remover as redirect
-   URIs de teste (localhost/túnel morto) do Meta, (b) decidir se
-   `feat/multi-tenant-brand-kit` promovido em produção fica assim ou se
-   quer voltar a produção pro que tinha antes até merge oficial na `main`
-   — hoje produção Vercel = esta branch, não a `main`.
+1. Abrir o dashboard da Inngest (app "postpilot", ambiente Production) →
+   conferir se `https://post-pilot-ai-seven.vercel.app/api/inngest` está
+   registrado como app. Se não estiver ou estiver com erro: usar
+   "Sync new app" / re-sync apontando pra essa URL.
+2. Depois do sync, conferir se a function `publish-scheduled-posts`
+   aparece com o cron `*/5 * * * *` ativo.
+3. Reagendar (ou esperar o próximo tick de 5min num post já agendado)
+   e confirmar `posts.status` vira `published` + `ig_media_id` real.
+4. Se continuar sem disparar: checar se existe integração Vercel↔Inngest
+   instalada (vercel.com/integrations) — se não tiver, considerar
+   instalar pra deploys futuros sincronizarem sozinhos (evita repetir
+   esse passo manual toda vez que promover via CLI).
+5. Se der erro "Invalid redirect_uri" de novo no OAuth: conferir se a
+   env var `NEXT_PUBLIC_APP_URL` de Production no Vercel ainda bate
+   exatamente com `https://post-pilot-ai-seven.vercel.app`.
+6. Depois de confirmar que publica de verdade, considerar: (a) remover
+   as redirect URIs de teste (localhost/túnel morto) do Meta, (b) decidir
+   se `feat/multi-tenant-brand-kit` promovido em produção fica assim ou
+   se quer voltar a produção pro que tinha antes até merge oficial na
+   `main` — hoje produção Vercel = esta branch, não a `main`.
+
+Ponto de restauração local criado: git tag
+`restore-2026-07-21-inngest-sync-issue` (HEAD limpo, nenhuma mudança de
+código nesta investigação).
 
 ### 4.4 SPRINT D — Video Engine (clipes reais, não slideshow)
 > ⚠️ **Update 2026-07-21 (ver seção 0.4):** um MVP mais simples já foi
