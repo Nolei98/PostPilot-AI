@@ -223,6 +223,16 @@ export interface NewsItem {
 
 export type PostFormat = "single" | "carousel" | "video";
 
+/** Override manual por card do Template Studio (Sprint B+, TAREFA B9) —
+ * só tem efeito quando a superfície do card usa um modelo (template_
+ * selection); no motor antigo é ignorado. Ver migration 035. */
+export interface CardLayoutOverride {
+  /** false esconde wordmark/divisor/rótulo de marca só NESTE card. */
+  showLabel?: boolean;
+  /** força a cor do texto, ignorando a escolha automática por contraste. */
+  textColor?: "auto" | "light" | "dark";
+}
+
 /** Card de um post do tipo carrossel (ver carousel_cards) */
 export interface CarouselCardRow {
   id: string;
@@ -232,6 +242,7 @@ export interface CarouselCardRow {
   headline: string | null;
   body: string | null;
   image_url: string | null;
+  layout: CardLayoutOverride | null;
   created_at: string;
 }
 
@@ -319,6 +330,6 @@ export interface PostWithNews extends Post {
   // Presente só em posts format='carousel' (embed do PostgREST).
   carousel_cards?: Pick<
     CarouselCardRow,
-    "id" | "idx" | "role" | "headline" | "body" | "image_url"
+    "id" | "idx" | "role" | "headline" | "body" | "image_url" | "layout"
   >[];
 }

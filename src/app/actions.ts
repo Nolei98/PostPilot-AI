@@ -10,7 +10,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inngest } from "@/inngest/client";
-import type { BrandTemplate, IgProfile, VisualIdentity } from "@/lib/types";
+import type { BrandTemplate, CardLayoutOverride, IgProfile, Surface, VisualIdentity } from "@/lib/types";
 import type { CardBrand } from "@/lib/carousel-render";
 import { resolvePostFontFamily } from "@/lib/font-data";
 
@@ -1201,7 +1201,12 @@ export async function revertApproval(
  */
 export async function updateCarouselCard(
   cardId: string,
-  fields: { headline: string; body: string }
+  fields: {
+    headline: string;
+    body: string;
+    showLabel?: boolean;
+    textColor?: "auto" | "light" | "dark";
+  }
 ) {
   const supabase = createClient();
   const {
@@ -1212,7 +1217,7 @@ export async function updateCarouselCard(
   // RLS garante posse (via post). Pega o card + o cliente do post.
   const { data: card, error: cardErr } = await supabase
     .from("carousel_cards")
-    .select("id, post_id, idx, role, bg_url")
+    .select("id, post_id, idx, role, bg_url, layout")
     .eq("id", cardId)
     .single();
   if (cardErr || !card) throw new Error("Card não encontrado");
@@ -1224,6 +1229,8 @@ export async function updateCarouselCard(
   const lastIdx = (totalCards ?? 1) - 1;
   const pageKind =
     card.idx === 0 ? "cover" : card.idx === lastIdx ? "closing" : "interior";
+  const surface: Surface =
+    pageKind === "cover" ? "cover_image" : pageKind === "closing" ? "carousel_last" : "carousel_page";
 
   const { data: post } = await supabase
     .from("posts")
@@ -1249,42 +1256,81 @@ export async function updateCarouselCard(
   }
 
   const { resolvePostFontFamily } = await import("@/lib/font-data");
-  const { renderAndUploadCard } = await import("@/lib/carousel-render");
-  const imageUrl = await renderAndUploadCard(
-    card.post_id,
-    {
-      idx: card.idx,
-      role: card.role as "hook" | "value" | "cta",
-      headline: fields.headline,
-      body: fields.body,
-    },
-    {
-      colorBackground: bk?.color_background ?? "#0B0B12",
-      colorAccent: bk?.color_accent ?? "#7C5CFF",
-      colorText: bk?.color_text ?? "#FFFFFF",
-      fontFamily: resolvePostFontFamily(bk?.post_font_family),
-      brandName: bk?.brand_name ?? null,
-      wordmark: bk?.wordmark ?? null,
-      handle: bk?.ig_handle ?? null,
-      keywords: bk?.keywords ?? null,
-      brandMark: bk?.brand_mark ?? "auto",
-      layoutPreset: bk?.layout_preset ?? "editorial-noir",
-    },
-    pageKind,
-    bgBuf,
-    {
-      handle: bk?.ig_handle ?? "seuperfil.ia",
-      displayName: bk?.ig_display_name ?? "Seu Perfil",
-      avatarUrl: bk?.ig_avatar_url ?? null,
-      verified: bk?.ig_verified ?? false,
-      showProfileChip: bk?.show_profile_chip ?? true,
-    },
-    totalCards ?? 1
-  );
+  const cardBrand: CardBrand = {
+    colorBackground: bk?.color_background ?? "#0B0B12",
+    colorAccent: bk?.color_accent ?? "#7C5CFF",
+    colorText: bk?.color_text ?? "#FFFFFF",
+    fontFamily: resolvePostFontFamily(bk?.post_font_family),
+    brandName: bk?.brand_name ?? null,
+    wordmark: bk?.wordmark ?? null,
+    handle: bk?.ig_handle ?? null,
+    keywords: bk?.keywords ?? null,
+    brandMark: bk?.brand_mark ?? "auto",
+    layoutPreset: bk?.layout_preset ?? "editorial-noir",
+  };
+
+  // Override do card (B9) — merge com o que já existia, só os campos enviados.
+  const previousLayout = (card.layout as CardLayoutOverride | null) ?? {};
+  const layout: CardLayoutOverride = {
+    ...previousLayout,
+    ...(fields.showLabel !== undefined ? { showLabel: fields.showLabel } : {}),
+    ...(fields.textColor !== undefined ? { textColor: fields.textColor } : {}),
+  };
+
+  // Template Studio (B15): se o cliente escolheu um modelo pra essa
+  // superfície, edita/re-renderiza por ele (senão o texto voltaria a sair
+  // no motor antigo, revertendo silenciosamente a escolha de modelo).
+  const { resolveTemplateSpecs } = await import("@/lib/template-selection");
+  const templateSelection =
+    (bk?.template_selection as Partial<Record<Surface, string>> | null) ?? {};
+  const specs = await resolveTemplateSpecs(templateSelection, [surface]);
+  const chosenSpec = specs[surface];
+
+  let imageUrl: string;
+  if (chosenSpec) {
+    const { renderTemplateCardPng } = await import("@/lib/template-render");
+    const png = await renderTemplateCardPng(
+      chosenSpec,
+      cardBrand,
+      { headline: fields.headline, body: fields.body },
+      bgBuf,
+      { showLabel: layout.showLabel, textColor: layout.textColor }
+    );
+    const path = `${card.post_id}-card-${card.idx}.png`;
+    const admin = createAdminClient();
+    const { error: uploadError } = await admin.storage
+      .from("post-images")
+      .upload(path, png, { contentType: "image/png", upsert: true });
+    if (uploadError) throw new Error(`upload do card falhou: ${uploadError.message}`);
+    const { data: pub } = admin.storage.from("post-images").getPublicUrl(path);
+    imageUrl = `${pub.publicUrl}?v=${Date.now()}`;
+  } else {
+    const { renderAndUploadCard } = await import("@/lib/carousel-render");
+    imageUrl = await renderAndUploadCard(
+      card.post_id,
+      {
+        idx: card.idx,
+        role: card.role as "hook" | "value" | "cta",
+        headline: fields.headline,
+        body: fields.body,
+      },
+      cardBrand,
+      pageKind,
+      bgBuf,
+      {
+        handle: bk?.ig_handle ?? "seuperfil.ia",
+        displayName: bk?.ig_display_name ?? "Seu Perfil",
+        avatarUrl: bk?.ig_avatar_url ?? null,
+        verified: bk?.ig_verified ?? false,
+        showProfileChip: bk?.show_profile_chip ?? true,
+      },
+      totalCards ?? 1
+    );
+  }
 
   const { error } = await supabase
     .from("carousel_cards")
-    .update({ headline: fields.headline, body: fields.body, image_url: imageUrl })
+    .update({ headline: fields.headline, body: fields.body, image_url: imageUrl, layout })
     .eq("id", cardId);
   if (error) throw new Error(error.message);
   revalidatePath("/");

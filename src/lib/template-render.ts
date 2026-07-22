@@ -19,6 +19,7 @@ import {
 import type {
   TemplateSpec,
   TemplateElement,
+  TemplateElementType,
   TemplateAnchor,
 } from "@/lib/types";
 import type { LegibilityResult } from "@/lib/legibility";
@@ -197,6 +198,26 @@ export function renderFromSpec(
 </svg>`;
 }
 
+/** Override manual por card (Sprint B+, TAREFA B9) — ver CardLayoutOverride. */
+export interface TemplateCardOverride {
+  /** false esconde wordmark/divisor/rótulo de marca (visible:false neles). */
+  showLabel?: boolean;
+  /** força a cor do texto, ignorando a escolha automática por contraste. */
+  textColor?: "auto" | "light" | "dark";
+}
+
+const MARK_ELEMENT_TYPES: TemplateElementType[] = ["wordmark", "divider", "handleLabel"];
+
+/** Clona a spec escondendo os elementos de marca (showLabel:false do override). */
+function hideMarkElements(spec: TemplateSpec): TemplateSpec {
+  return {
+    ...spec,
+    elements: spec.elements.map((el) =>
+      MARK_ELEMENT_TYPES.includes(el.type) ? { ...el, visible: false } : el
+    ),
+  };
+}
+
 /**
  * Renderiza uma spec como PNG final — sobre uma foto (se `bgImage`) ou
  * sobre o fundo sólido da marca (se `null`). Sobre foto: mede a luminância
@@ -204,28 +225,41 @@ export function renderFromSpec(
  * claro/escuro pro texto e calibra um véu translúcido até bater WCAG 4.5:1
  * — nunca entrega card ilegível. Cor do texto "auto" nos elementos passa
  * a resolver pro tema calculado (via brand.colorText sobrescrito).
+ *
+ * `override` (B9): showLabel:false esconde a marca só neste card;
+ * textColor != "auto" força a cor do texto (e recalibra o véu pra ela),
+ * ignorando o tema escolhido automaticamente pela foto.
  */
 export async function renderTemplateCardPng(
   spec: TemplateSpec,
   brand: CardBrand,
   content: TemplateContent,
-  bgImage: Buffer | null
+  bgImage: Buffer | null,
+  override?: TemplateCardOverride
 ): Promise<Buffer> {
   const W = spec.canvas?.w ?? 1080;
   const H = spec.canvas?.h ?? 1350;
+  const effectiveSpec = override?.showLabel === false ? hideMarkElements(spec) : spec;
+  const forcedTextColor =
+    override?.textColor && override.textColor !== "auto" ? override.textColor : null;
 
   if (!bgImage) {
-    return rasterizeSvg(renderFromSpec(spec, brand, content));
+    const brandWithOverride = forcedTextColor
+      ? { ...brand, colorText: forcedTextColor === "light" ? "#FFFFFF" : "#111111" }
+      : brand;
+    return rasterizeSvg(renderFromSpec(effectiveSpec, brandWithOverride, content));
   }
 
   const resized = await sharp(bgImage).resize(W, H, { fit: "cover", position: "attention" }).toBuffer();
   const luminance = await measureImageLuminance(resized);
-  const theme = pickTheme(luminance);
+  // theme = tom do FUNDO (dark → texto claro); texto claro forçado implica
+  // fundo tratado como escuro, e vice-versa — mesma matemática do overlay.
+  const theme = forcedTextColor ? (forcedTextColor === "light" ? "dark" : "light") : pickTheme(luminance);
   const textColor = textColorForTheme(theme);
   const alpha = overlayAlphaFor(theme, textColor, luminance);
 
   const svg = renderFromSpec(
-    spec,
+    effectiveSpec,
     { ...brand, colorText: textColor },
     content,
     undefined,

@@ -31,7 +31,7 @@ import { CarouselDownload } from "@/components/CarouselDownload";
 import { CarouselEditor } from "@/components/CarouselEditor";
 import { resizeImageForUpload } from "@/lib/resizeImageClient";
 import { useToast } from "@/components/ui/Toast";
-import type { IgProfile, PostWithNews, VisualIdentity } from "@/lib/types";
+import type { IgProfile, PostWithNews, Surface, VisualIdentity } from "@/lib/types";
 
 type ExitDirection = "right" | "left" | null;
 
@@ -47,12 +47,15 @@ export function PostCard({
   profile,
   identityDefaults,
   hasInstagramConnected = false,
+  templateSelection = {},
 }: {
   post: PostWithNews;
   profile: IgProfile;
   identityDefaults: VisualIdentity;
   /** Sprint C — só habilita o botão "Agendar" se o cliente tiver Instagram conectado. */
   hasInstagramConnected?: boolean;
+  /** Template Studio (B9) — modelo escolhido por superfície do cliente ativo. */
+  templateSelection?: Partial<Record<Surface, string>>;
 }) {
   const HANDLE = profile.handle;
   const toast = useToast();
@@ -591,7 +594,7 @@ export function PostCard({
           Ajuste o texto de cada card. Salvar re-renderiza só aquele card
           com as cores/fonte da marca.
         </p>
-        <CarouselEditor cards={post.carousel_cards ?? []} />
+        <CarouselEditor cards={post.carousel_cards ?? []} templateSelection={templateSelection} />
       </Drawer>
 
       {/* ===== Modal da contra-capa (por post) ===== */}
