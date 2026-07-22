@@ -14,8 +14,10 @@ import { inngest } from "@/inngest/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateCarouselPackage } from "@/lib/ai/carousel";
 import { renderAndUploadCard, type CardBrand } from "@/lib/carousel-render";
+import { renderTemplateCardPng } from "@/lib/template-render";
+import { resolveTemplateSpecs } from "@/lib/template-selection";
 import { resolvePostFontFamily } from "@/lib/font-data";
-import type { IgProfile, NewsItem } from "@/lib/types";
+import type { IgProfile, NewsItem, Surface, TemplateSpec } from "@/lib/types";
 
 export const generateCarousel = inngest.createFunction(
   { id: "generate-carousel", retries: 2, concurrency: { limit: 2 } },
@@ -83,7 +85,20 @@ export const generateCarousel = inngest.createFunction(
         textProvider,
         card,
         profile,
+        templateSelection:
+          (data?.template_selection as Partial<Record<Surface, string>> | null | undefined) ?? {},
       };
+    });
+
+    // Template Studio (Sprint B+, B15): só busca specs pras superfícies que
+    // o cliente escolheu de propósito. Sem seleção → objeto vazio → cai no
+    // motor antigo (renderAndUploadCard), zero mudança pra quem não escolheu.
+    const templateSpecs = await step.run("fetch-templates", async () => {
+      return resolveTemplateSpecs(prefs.templateSelection, [
+        "cover_image",
+        "carousel_page",
+        "carousel_last",
+      ]);
     });
 
     const pkg = await step.run("generate-structure", async () => {
@@ -159,15 +174,38 @@ export const generateCarousel = inngest.createFunction(
         // card 0 = capa; último = fechamento (mesmo tratamento @0verlens da
         // capa, sem "deslize p/ ver"); demais = card interior.
         const pageKind = card.idx === 0 ? "cover" : card.idx === lastIdx ? "closing" : "interior";
-        const imageUrl = await renderAndUploadCard(
-          postId,
-          card,
-          prefs.card,
-          pageKind,
-          bgBuf,
-          prefs.profile,
-          pkg.cards.length
-        );
+        const surface: Surface =
+          pageKind === "cover" ? "cover_image" : pageKind === "closing" ? "carousel_last" : "carousel_page";
+        const chosenSpec: TemplateSpec | undefined = templateSpecs[surface];
+
+        let imageUrl: string;
+        if (chosenSpec) {
+          // Template Studio (B15): cliente escolheu um modelo pra essa
+          // superfície — renderiza pela spec em vez do motor antigo.
+          const png = await renderTemplateCardPng(
+            chosenSpec,
+            prefs.card,
+            { headline: card.headline ?? undefined, body: card.body ?? undefined },
+            bgBuf
+          );
+          const path = `${postId}-card-${card.idx}.png`;
+          const { error: uploadError } = await supabase.storage
+            .from("post-images")
+            .upload(path, png, { contentType: "image/png", upsert: true });
+          if (uploadError) throw new Error(`upload do card falhou: ${uploadError.message}`);
+          const { data: pub } = supabase.storage.from("post-images").getPublicUrl(path);
+          imageUrl = `${pub.publicUrl}?v=${Date.now()}`;
+        } else {
+          imageUrl = await renderAndUploadCard(
+            postId,
+            card,
+            prefs.card,
+            pageKind,
+            bgBuf,
+            prefs.profile,
+            pkg.cards.length
+          );
+        }
         const { data: inserted, error } = await supabase
           .from("carousel_cards")
           .insert({

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { renderFromSpec } from "@/lib/template-render";
+import sharp from "sharp";
+import { renderFromSpec, renderTemplateCardPng } from "@/lib/template-render";
 import { coverPreset, cardPreset } from "@/lib/template-presets";
 import { rasterizeSvg } from "@/lib/svg-render";
 import type { CardBrand } from "@/lib/carousel-render";
@@ -60,5 +61,48 @@ describe("renderFromSpec (rasteriza)", () => {
       expect(png.length).toBeGreaterThan(1000);
       expect([png[0], png[1], png[2], png[3]]).toEqual([0x89, 0x50, 0x4e, 0x47]);
     }
+  });
+});
+
+describe("renderTemplateCardPng", () => {
+  it("sem foto: usa fundo sólido da marca (mesmo caminho de renderFromSpec)", async () => {
+    const png = await renderTemplateCardPng(coverPreset, brand, { headline: "Sem foto" }, null);
+    expect(png.length).toBeGreaterThan(1000);
+    expect([png[0], png[1], png[2], png[3]]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  });
+
+  it("com foto escura: escolhe texto claro e compõe overlay sem quebrar", async () => {
+    const darkPhoto = await sharp({
+      create: { width: 200, height: 200, channels: 3, background: { r: 10, g: 10, b: 10 } },
+    })
+      .jpeg()
+      .toBuffer();
+    const png = await renderTemplateCardPng(coverPreset, brand, { headline: "Sobre foto escura" }, darkPhoto);
+    expect(png.length).toBeGreaterThan(1000);
+    expect([png[0], png[1], png[2], png[3]]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  });
+
+  it("com foto clara: escolhe texto escuro e compõe overlay sem quebrar", async () => {
+    const lightPhoto = await sharp({
+      create: { width: 200, height: 200, channels: 3, background: { r: 245, g: 245, b: 245 } },
+    })
+      .jpeg()
+      .toBuffer();
+    const png = await renderTemplateCardPng(coverPreset, brand, { headline: "Sobre foto clara" }, lightPhoto);
+    expect(png.length).toBeGreaterThan(1000);
+    expect([png[0], png[1], png[2], png[3]]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  });
+
+  it("dimensão final bate com o canvas da spec (video_cover 1080x1920)", async () => {
+    const reelSpec: TemplateSpec = { ...coverPreset, canvas: { w: 1080, h: 1920 } };
+    const photo = await sharp({
+      create: { width: 300, height: 300, channels: 3, background: { r: 100, g: 100, b: 100 } },
+    })
+      .jpeg()
+      .toBuffer();
+    const png = await renderTemplateCardPng(reelSpec, brand, { headline: "Reel" }, photo);
+    const meta = await sharp(png).metadata();
+    expect(meta.width).toBe(1080);
+    expect(meta.height).toBe(1920);
   });
 });
