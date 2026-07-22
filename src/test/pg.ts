@@ -5,6 +5,7 @@
 // policies de RLS e o trigger de signup como estão em produção.
 // ============================================================
 import { PGlite } from "@electric-sql/pglite";
+import { vector } from "@electric-sql/pglite/vector";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -37,16 +38,17 @@ export type Db = PGlite;
 
 /** Boota o pglite, aplica shims + todas as migrations e os grants. */
 export async function bootTestDb(): Promise<Db> {
-  const db = new PGlite();
+  const db = new PGlite({ extensions: { vector } });
   await db.exec(SHIM);
 
   const files = readdirSync(MIG_DIR)
     .filter((f) => f.endsWith(".sql"))
     .sort();
   for (const f of files) {
-    // gen_random_uuid é core no PG do pglite — a linha de extension é dispensável.
+    // pgcrypto não existe no pglite (gen_random_uuid é core) — remove só
+    // essa linha; `create extension vector` (023) precisa continuar.
     const sql = readFileSync(path.join(MIG_DIR, f), "utf8").replace(
-      /create extension[^;]*;/gi,
+      /create extension[^;]*pgcrypto[^;]*;/gi,
       ""
     );
     await db.exec(sql);

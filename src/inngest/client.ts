@@ -9,16 +9,37 @@ import { EventSchemas, Inngest } from "inngest";
 type Events = {
   // Disparado pelo cron ou manualmente — inicia a varredura de feeds.
   // scanRunId só vem no disparo manual (botão "Varrer agora") — usado
-  // pra reportar o status de volta na tabela scan_runs.
-  "news/scan.requested": { data: { scanRunId?: string } };
+  // pra reportar o status de volta na tabela scan_runs. clientId (manual)
+  // restringe a varredura às fontes do cliente ativo.
+  "news/scan.requested": { data: { scanRunId?: string; clientId?: string } };
   // Uma notícia passou do threshold e virou candidata → gerar post
   "post/generate.requested": {
+    data: { newsItemId: string; userId: string };
+  };
+  // Gerar um CARROSSEL a partir de uma notícia (fluxo separado do post single)
+  "post/generate-carousel.requested": {
     data: { newsItemId: string; userId: string };
   };
   // Post pronto para aprovação → notificar no Telegram
   "post/ready.notify": {
     data: { postId: string; userId: string };
   };
+  // Layout preset (Ajustes) mudou → re-renderiza em background os posts
+  // pendentes do cliente (carrosséis + página 1/contra-capa dos únicos).
+  "post/resync-layout.requested": {
+    data: { clientId: string; userId: string };
+  };
+  // Usuário anexou um vídeo a um post pendente (Fase 4, kit v2 §3) →
+  // compõe o quadro Reels 9:16 em background (ffmpeg).
+  "post/attach-video.requested": {
+    data: { postId: string; userId: string };
+  };
+  // Disparo manual pra reprocessar a fila de agendados agora (Sprint C)
+  // — o cron do publish-scheduled-posts já cobre isso a cada 5min.
+  "post/publish.requested": { data: Record<string, never> };
+  // Um post acabou de ser publicado via Graph API → dispara a coleta
+  // de métricas 24h/72h depois (Sprint C, collect-insights.ts).
+  "post/published": { data: { postId: string } };
 };
 
 export const inngest = new Inngest({

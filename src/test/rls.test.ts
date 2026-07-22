@@ -50,6 +50,31 @@ describe("signup trigger (handle_new_user)", () => {
   });
 });
 
+describe("cleanup 024: notification_configs enxuto", () => {
+  it("não tem mais colunas de marca; mantém telegram + active_client_id", async () => {
+    const { rows } = await db.query<{ column_name: string }>(
+      "select column_name from information_schema.columns where table_name = 'notification_configs'"
+    );
+    const cols = rows.map((r) => r.column_name);
+    // migradas para brand_kits → devem ter sumido
+    for (const gone of [
+      "niche",
+      "brand_name",
+      "ig_handle",
+      "color_accent",
+      "post_font_family",
+      "text_provider",
+      "template_apply_mode",
+    ]) {
+      expect(cols).not.toContain(gone);
+    }
+    // per-usuário → devem permanecer
+    for (const kept of ["telegram_chat_id", "notify_on_candidate", "active_client_id"]) {
+      expect(cols).toContain(kept);
+    }
+  });
+});
+
 describe("RLS: isolamento entre tenants", () => {
   it("clients: cada usuário só enxerga os próprios", async () => {
     const a = await signup(db, { email: "a-cli@x.com" });
@@ -116,6 +141,45 @@ describe("RLS: isolamento entre tenants", () => {
   });
 });
 
+describe("RLS templates (028): sistema público, custom por dono", () => {
+  const SPEC = `'{"surface":"cover_image","canvas":{"w":1080,"h":1350},"elements":[]}'::jsonb`;
+
+  it("preset do sistema é legível por qualquer usuário; custom só do dono", async () => {
+    const a = await signup(db, { email: "a-tpl@x.com" });
+    const b = await signup(db, { email: "b-tpl@x.com" });
+    const ca = await clientOf(a);
+
+    // preset do sistema (admin/service role): client_id null, is_system true
+    await db.query(
+      `insert into templates (client_id, surface, name, spec, is_system) values (null, 'cover_image', 'Prisma', ${SPEC}, true)`
+    );
+    // template custom do A
+    await db.query(
+      `insert into templates (client_id, surface, name, spec) values ($1, 'cover_image', 'Meu', ${SPEC})`,
+      [ca]
+    );
+
+    // B enxerga o preset do sistema, mas NÃO o custom de A
+    const seenByB = await asUser(db, b, () =>
+      db.query<{ name: string }>("select name from templates order by name")
+    );
+    const names = seenByB.rows.map((r) => r.name);
+    expect(names).toContain("Prisma");
+    expect(names).not.toContain("Meu");
+  });
+
+  it("usuário não consegue criar um preset do sistema (client_id null)", async () => {
+    const a = await signup(db, { email: "a-tpl2@x.com" });
+    await expect(
+      asUser(db, a, () =>
+        db.query(
+          `insert into templates (client_id, surface, name, spec, is_system) values (null, 'cover_image', 'Hack', ${SPEC}, true)`
+        )
+      )
+    ).rejects.toThrow();
+  });
+});
+
 describe("RLS: escrita cruzada bloqueada (with check)", () => {
   it("A não consegue criar client para o usuário B", async () => {
     const a = await signup(db, { email: "a-w1@x.com" });
@@ -138,5 +202,60 @@ describe("RLS: escrita cruzada bloqueada (with check)", () => {
         db.query("insert into brand_kits (client_id, brand_name) values ($1, 'hack')", [bClient])
       )
     ).rejects.toThrow();
+  });
+
+  it("social_connections: A não vê nem escreve na conexão IG de B (033)", async () => {
+    const a = await signup(db, { email: "a-sc@x.com" });
+    const b = await signup(db, { email: "b-sc@x.com" });
+    const bClient = await clientOf(b);
+
+    await db.query(
+      "insert into social_connections (client_id, access_token, ig_username) values ($1, 'token-b', 'b.ig')",
+      [bClient]
+    );
+
+    const seenByA = await asUser(db, a, () =>
+      db.query("select * from social_connections where client_id = $1", [bClient])
+    );
+    expect(seenByA.rows).toHaveLength(0);
+
+    const updateResult = await asUser(db, a, () =>
+      db.query(
+        "update social_connections set status = 'disconnected' where client_id = $1",
+        [bClient]
+      )
+    );
+    // RLS filtra a linha antes do WITH CHECK rodar — não dá erro, só não afeta nenhuma linha.
+    expect(updateResult.affectedRows ?? 0).toBe(0);
+  });
+
+  it("post_metrics: A não vê métricas de posts de B (034)", async () => {
+    const a = await signup(db, { email: "a-pm@x.com" });
+    const b = await signup(db, { email: "b-pm@x.com" });
+    const bClient = await clientOf(b);
+
+    const { rows: srcRows } = await db.query<{ id: string }>(
+      "select id from source_configs where client_id = $1 limit 1",
+      [bClient]
+    );
+    const news = await db.query<{ id: string }>(
+      `insert into news_items (source_id, client_id, url, title, status)
+       values ($1, $2, 'https://ex.com/pm1', 'Notícia B', 'candidate') returning id`,
+      [srcRows[0].id, bClient]
+    );
+    const post = await db.query<{ id: string }>(
+      "insert into posts (news_item_id, user_id, client_id, hook, caption, hashtags, image_prompt) " +
+        "values ($1, $2, $3, 'h', 'c', '#h', 'p') returning id",
+      [news.rows[0].id, b, bClient]
+    );
+    await db.query(
+      "insert into post_metrics (post_id, metric_window, reach) values ($1, '24h', 500)",
+      [post.rows[0].id]
+    );
+
+    const seenByA = await asUser(db, a, () =>
+      db.query("select * from post_metrics where post_id = $1", [post.rows[0].id])
+    );
+    expect(seenByA.rows).toHaveLength(0);
   });
 });

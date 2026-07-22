@@ -13,6 +13,11 @@
 import { inngest } from "@/inngest/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generatePostPackage } from "@/lib/ai/generate";
+import {
+  embedText,
+  toPgVector,
+  DUPLICATE_MAX_DISTANCE,
+} from "@/lib/ai/embedding";
 import { generatePostImage, renderAndUploadTemplateArt } from "@/lib/image";
 import { resolvePostFontFamily } from "@/lib/font-data";
 import type {
@@ -134,7 +139,7 @@ export const generatePost = inngest.createFunction(
     const applyTemplate = prefs.applyMode === "all";
 
     // 3. Gera o pacote de texto no idioma e provider configurados
-    const pkg = await step.run("generate-text", async () => {
+    let pkg = await step.run("generate-text", async () => {
       return generatePostPackage(
         {
           title: news.title,
@@ -146,6 +151,43 @@ export const generatePost = inngest.createFunction(
         prefs.textProvider
       );
     });
+
+    // 3b. Guardrail anti-duplicata (intra-cliente): se a legenda ficou
+    //     parecida demais com outro post do MESMO cliente, regenera uma
+    //     vez pedindo um ângulo novo. Guarda o embedding pra comparar
+    //     com futuros posts. Em modo mock o embedding é determinístico.
+    let embedding = await step.run("embed-caption", () => embedText(pkg.caption));
+
+    const duplicateId = await step.run("check-duplicate", async () => {
+      const { data, error } = await supabase.rpc("find_duplicate_caption", {
+        p_client_id: news.client_id,
+        p_embedding: toPgVector(embedding),
+        p_max_distance: DUPLICATE_MAX_DISTANCE,
+      });
+      if (error) {
+        console.error("[generate-post] find_duplicate_caption:", error.message);
+        return null;
+      }
+      return (data as string | null) ?? null;
+    });
+
+    if (duplicateId) {
+      pkg = await step.run("regenerate-text", async () => {
+        return generatePostPackage(
+          {
+            title: news.title,
+            summary: news.summary,
+            url: news.url,
+            language,
+            niche: prefs.niche,
+            angleHint:
+              "Já existe um post deste cliente muito parecido com este.",
+          },
+          prefs.textProvider
+        );
+      });
+      embedding = await step.run("re-embed-caption", () => embedText(pkg.caption));
+    }
 
     // 3. Cria o Post como draft. Se o modo for 'all', já grava os
     //    valores da identidade visual como override do post (editável
@@ -178,6 +220,19 @@ export const generatePost = inngest.createFunction(
         .single();
       if (error) throw new Error(`Erro ao criar post: ${error.message}`);
       return data.id as string;
+    });
+
+    // Guarda o embedding da legenda (best-effort): se a migration 023
+    // ainda não rodou, o update falha em silêncio e o post segue normal.
+    await step.run("store-embedding", async () => {
+      const { error } = await supabase
+        .from("posts")
+        .update({ caption_embedding: toPgVector(embedding) })
+        .eq("id", postId);
+      if (error) {
+        console.warn("[generate-post] caption_embedding não salvo:", error.message);
+      }
+      return null;
     });
 
     // Plano free → arte sai com a marca "feito com PostPilot"

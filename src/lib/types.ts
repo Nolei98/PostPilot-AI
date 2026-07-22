@@ -33,6 +33,7 @@ export interface BrandKit {
   post_language: string;
   text_provider: "claude" | "gemini" | "pollinations";
   image_provider: "fal" | "gemini" | "pollinations" | "stock";
+  default_format: "single" | "carousel"; // formato que o pipeline gera
   niche: string | null;
   // perfil IG
   ig_handle: string;
@@ -55,7 +56,94 @@ export interface BrandKit {
   logo_url: string | null;
   show_brand_logo: boolean;
   post_font_family: string;
+  // identidade de rótulo/tipografia (Sprint B+, @0verlens) — migration 027.
+  // O handle do rótulo reusa ig_handle acima.
+  keywords: string[] | null; // {DESIGN, ARTE, TECH}
+  wordmark: string | null; // OVERLENS® (divisor da capa)
+  font_heading_url: string | null; // fonte embutida no Satori
+  brand_mark: BrandMark; // tratamento de marca padrão dos cards
+  template_defaults: TemplateDefaults;
+  template_selection: Partial<Record<Surface, string>>; // modelo escolhido por superfície (migration 028)
+  layout_preset: string; // "editorial-noir" | "brutalism" | ... (Fase 3, migration 030)
+  single_post_style: string; // "cover" | "centered" (kit v2 §3, migration 031)
   created_at: string;
+}
+
+/** Superfície de peça no Template Studio (migration 028). */
+export type Surface = "cover_image" | "video_cover" | "carousel_page" | "carousel_last";
+
+/** Tipo de elemento posicionável num template (ver HANDOFF seção 6B.3). */
+export type TemplateElementType =
+  | "wordmark" | "divider" | "handleLabel" | "headline" | "body"
+  | "cta" | "badge" | "dots" | "logo" | "media" | "shape";
+
+export type TemplateAnchor =
+  | "top-left" | "top-center" | "top-right"
+  | "center-left" | "center" | "center-right"
+  | "bottom-left" | "bottom-center" | "bottom-right";
+
+export interface TemplateElement {
+  id: string;
+  type: TemplateElementType;
+  anchor: TemplateAnchor;
+  offset: { x: number; y: number }; // 0–1 relativo ao canvas
+  size?: { fontSize?: number; maxWidth?: number };
+  style?: {
+    color?: string; font?: string; weight?: number; tracking?: number;
+    lineHeight?: number; align?: "left" | "center" | "right";
+    case?: "upper" | "none"; opacity?: number;
+  };
+  bind?: string; // de onde vem o conteúdo (ex.: content.headline)
+  z?: number;
+  visible?: boolean;
+  locked?: boolean;
+}
+
+export interface TemplateSpec {
+  surface: Surface;
+  canvas: { w: number; h: number };
+  elements: TemplateElement[];
+}
+
+/** Modelo do Template Studio (preset do sistema ou custom do cliente). */
+export interface Template {
+  id: string;
+  client_id: string | null; // null = preset do sistema
+  surface: Surface;
+  name: string;
+  spec: TemplateSpec;
+  thumbnail_url: string | null;
+  is_system: boolean;
+  created_at: string;
+}
+
+/** Tratamento de marca de um card/capa (ver HANDOFF-overlens-template.md). */
+export type BrandMark =
+  | "wordmark"
+  | "handle"
+  | "icon"
+  | "wordmark+handle"
+  | "none"
+  | "auto";
+
+/**
+ * Contrato de layout (template_defaults no Brand Kit; layout por card
+ * sobrescreve). Campos opcionais — o renderer aplica defaults sensatos.
+ * Ver HANDOFF-overlens-template.md seção 5.
+ */
+export interface TemplateDefaults {
+  background?: "image" | "solid" | "gradient";
+  colorGrade?: { enabled: boolean; darken: number; desaturate: number };
+  labelPosition?: "auto" | "top" | "bottom";
+  showLabel?: "auto" | true | false;
+  textColor?: "auto" | "light" | "dark";
+  scrim?: "auto" | "on" | "off";
+  scrimMaxAlpha?: number;
+  blur?: "off" | "on";
+  brandMark?: BrandMark;
+  colorScheme?: "brand" | "inverse" | "mono-light" | "mono-dark" | "accent";
+  showDivider?: boolean;
+  contrastTarget?: number;
 }
 
 export interface SourceConfig {
@@ -69,38 +157,17 @@ export interface SourceConfig {
   created_at: string;
 }
 
+/**
+ * Config per-USUÁRIO. Depois da migration 024, guarda só notificação
+ * (Telegram) e o cliente ativo — toda a identidade de marca vive em
+ * [[BrandKit]] por cliente.
+ */
 export interface NotificationConfig {
   id: string;
   user_id: string;
   telegram_chat_id: string | null;
   notify_on_candidate: boolean;
-  post_language: string; // idioma dos posts gerados (ex: "pt-BR", "en")
-  ig_handle: string; // @ do perfil (sem @)
-  ig_display_name: string; // nome exibido no topo do post
-  ig_avatar_url: string | null; // foto de perfil
-  ig_verified: boolean; // selo azul ao lado do nome
-  show_profile_chip: boolean; // renderizar o chip na arte?
-  // Identidade visual default da arte
-  color_background: string;
-  color_accent: string;
-  color_text: string;
-  color_keyword_box: string;
-  tpl_keyword: string;
-  tpl_top_text: string;
-  tpl_bottom_text: string;
-  tpl_cta_enabled: boolean; // mostra "COMENTE:" acima da palavra-chave na contra-capa
-  template_apply_mode: TemplateApplyMode;
-  // Provider de IA escolhido em Ajustes (default: gemini/gemini)
-  text_provider: "claude" | "gemini" | "pollinations";
-  image_provider: "fal" | "gemini" | "pollinations" | "stock";
-  // Template da marca: nome, logo + fonte usadas na renderização das artes
-  brand_name: string | null;
-  logo_url: string | null;
-  show_brand_logo: boolean; // liga/desliga o selo da logo nas artes geradas
-  post_font_family: string; // chave de PostFontKey (ver src/lib/font-data.ts)
-  // Nicho do negócio — escolhido no cadastro, ajustável depois.
-  // Direciona o tom dos posts gerados e as fontes RSS padrão.
-  niche: string | null;
+  active_client_id: string | null; // cliente ativo (fan-out do cron)
   created_at: string;
 }
 
@@ -154,11 +221,26 @@ export interface NewsItem {
   created_at: string;
 }
 
+export type PostFormat = "single" | "carousel" | "video";
+
+/** Card de um post do tipo carrossel (ver carousel_cards) */
+export interface CarouselCardRow {
+  id: string;
+  post_id: string;
+  idx: number;
+  role: "hook" | "value" | "cta";
+  headline: string | null;
+  body: string | null;
+  image_url: string | null;
+  created_at: string;
+}
+
 export interface Post {
   id: string;
   news_item_id: string;
   user_id: string;
   client_id: string;
+  format: PostFormat;
   hook: string;
   caption: string;
   hashtags: string;
@@ -184,7 +266,48 @@ export interface Post {
   tpl_color_accent: string | null;
   tpl_color_text: string | null;
   tpl_color_keyword_box: string | null;
+  // Vídeo anexado (Fase 4, kit v2 §3) — upload manual, composto em
+  // background (Inngest + ffmpeg) no quadro Reels 9:16. video_status
+  // controla o estado assíncrono; video_url só existe quando 'ready'.
+  video_url: string | null;
+  video_poster_url: string | null;
+  video_status: "none" | "processing" | "ready" | "error";
+  video_error: string | null;
+  // Sprint C — publicação automática via Graph API. Erro do último
+  // tentativa de publicação (não derruba o status, que continua
+  // 'scheduled' até o próximo tick do job de publicação).
+  publish_error: string | null;
   created_at: string;
+}
+
+// Sprint C — conexão OAuth com rede social por cliente (Graph API).
+// Genérico por `platform` pensando no TikTok (Sprint D). O token de
+// acesso NUNCA trafega pro client-side — só lido/decifrado em código
+// de servidor (Server Actions, rotas de API, jobs Inngest).
+export interface SocialConnection {
+  id: string;
+  client_id: string;
+  platform: "instagram";
+  ig_business_account_id: string | null;
+  ig_username: string | null;
+  facebook_page_id: string | null;
+  token_expires_at: string | null;
+  status: "connected" | "error" | "disconnected";
+  connected_at: string;
+}
+
+// Sprint C — métricas reais coletadas via Graph API 24h/72h após a
+// publicação (ver src/inngest/functions/collect-insights.ts).
+export interface PostMetrics {
+  id: string;
+  post_id: string;
+  collected_at: string;
+  metric_window: "24h" | "72h";
+  reach: number | null;
+  saved: number | null;
+  shares: number | null;
+  likes: number | null;
+  comments: number | null;
 }
 
 // Post com a notícia de origem embutida (para o dashboard)
@@ -193,4 +316,9 @@ export interface PostWithNews extends Post {
     NewsItem,
     "title" | "url" | "viral_score" | "image_url" | "image_license_hint"
   >;
+  // Presente só em posts format='carousel' (embed do PostgREST).
+  carousel_cards?: Pick<
+    CarouselCardRow,
+    "id" | "idx" | "role" | "headline" | "body" | "image_url"
+  >[];
 }

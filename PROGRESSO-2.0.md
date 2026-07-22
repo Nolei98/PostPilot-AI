@@ -5,7 +5,185 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `feat/multi-tenant-brand-kit` (não mexer na `main`).
-**Última atualização:** 2026-07-18.
+**Última atualização:** 2026-07-21 — Sprint C (Graph API) completo, ver §4.3.
+
+> ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
+> coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0. Sessão 2026-07-21 — kit v2 (5 layouts + vídeo Reels MVP)
+
+Sessão longa, fora da ordem do roadmap original (o usuário trouxe um "kit de
+design" próprio — `AGENT_PROMPT.md` + `postpilot-layouts.html` — com um
+pedido específico: sistema de identidades de layout ortogonais à cor da
+marca, contraste automático, e depois vídeo). Tratei como uma extensão do
+que já existia (B6-B12), não como reescrita. Tudo abaixo está **testado
+(193 testes verdes), `tsc`/`eslint` limpos, e verificado ao vivo** (não só
+em teste automatizado) — sempre com dados reais da conta do usuário
+(`@joaorodrigues.ia`) antes de considerar pronto.
+
+**Ponto de restauração:** commit `0a94a0e` ("feat(kit-v2): contraste
+automático + 5 layouts + página 1 unificada + Reels MVP") na branch
+`feat/multi-tenant-brand-kit`. Pra voltar pra ANTES desta sessão toda:
+`git reset --hard e2617c3` (o commit imediatamente anterior) — CUIDADO,
+é destrutivo; prefira `git revert 0a94a0e` ou uma branch nova se tiver
+dúvida. Qualquer commit DEPOIS de `0a94a0e` (ver `git log --oneline`) foi
+trabalho autônomo feito enquanto você dormia — cada um reverte isolado
+com `git revert <hash>`.
+
+### 0.1 Contraste automático (Fase 1 do kit v2)
+- [x] `src/lib/contrast.ts`: luminância real medida na foto (não estimada),
+  limiar 0.55 → tema claro/escuro, razão WCAG mínima 4.5:1, overlay
+  calibrado (nunca fixo/às cegas). 13 testes (casos de borda 0/0.54/0.55/1).
+- [x] Aplicado em TODO lugar que desenha texto sobre foto: capa/interior/
+  fechamento do carrossel, página 1 do post único, quadro Reels, overlay
+  de vídeo (luminância medida do **frame de pôster**, não do vídeo inteiro).
+
+### 0.2 Página 1 do post único unificada com o motor de layouts
+- Antes: página 1 (foto+hook) usava um compositor genérico separado
+  (`composeTemplate`, removido), sem contraste automático, com chip fixo
+  no topo, sem wordmark. Só a contra-capa usava o motor novo.
+- [x] Unificado: página 1 agora usa o MESMO motor de 5 layouts que a capa
+  do carrossel (`buildPageOneCoverSvg` em `image.ts`) — decisão do usuário:
+  **sem chip** (Instagram já mostra o perfil por cima do post) e **com
+  wordmark**, igual à capa.
+- [x] **2 variações de post único** (kit v2 §3): `brand_kits.single_post_style`
+  (`cover` default | `centered`) — "estilo capa" (wordmark+título) vs
+  "fonte no meio" (frase centralizada minimalista, sem marca nenhuma,
+  usando a MESMA fonte de destaque do layout escolhido). Seletor em
+  Ajustes ("Estilo do post único"), migration 031 (aplicada).
+- [x] Bug real achado e corrigido: os 4 layouts alternativos confundiam
+  "página 1" com "contra-capa" (mesma heurística `overlay presente + sem
+  swipe hint`) e desenhavam os ícones de ação indevidamente — corrigido
+  com `showActionIcons` explícito nos 4 arquivos `layout-*.ts` + teste
+  de regressão.
+
+### 0.3 5 identidades de layout completas (Fase 3 do kit v2)
+Preset ortogonal à cor da marca — `brand_kits.layout_preset` (migration
+030, aplicada): `editorial-noir` (padrão) | `brutalism` | `serif-luxe` |
+`swiss-mono` | `pop-creator`. Cada um em `src/lib/layout-{nome}.ts`
+(exceto editorial-noir, que é o `carousel-render.ts` original).
+- [x] Título do card INTERIOR nível-capa (auto-fit por comprimento, mesma
+  lógica da capa) nos 5 — não era assim antes; título era menor no miolo.
+  Corpo escala proporcional ao título.
+- [x] Corpo/título maiores, tipografia por preset (Anton/DM Serif Display/
+  Inter 800/Varela Round + IBM Plex Mono), bugs de colisão de linha
+  corrigidos ao vivo (Anton precisa de `line-height` maior que o normal).
+- [x] **20 previews** em Ajustes (`LayoutPreview.tsx` + `layout-preview.ts`):
+  5 layouts × 4 formatos (capa/carrossel/vídeo/híbrido), SVG puro (sem
+  rasterizar), reaproveita os MESMOS builders do render real — nunca
+  desalinha do que sai de verdade. Vídeo/híbrido são aproximação estática
+  (motor de vídeo real só compõe foto/vídeo real, não gera preview
+  animado).
+- [ ] Layout ainda **não finalizado visualmente** — usuário disse que vai
+  trazer ajustes de layout depois. Não mexer em tipografia/estrutura dos
+  5 presets sem pedido explícito dele.
+
+### 0.4 Reels 9:16 — motor de vídeo real (Fase 4 do kit v2 — NÃO é o SPRINT D completo)
+⚠️ **Isto é um MVP simplificado, não o Video Engine do §4.4 abaixo**
+(aquele pede Remotion + b-roll automático + legendas queimadas + TikTok).
+O que foi construído agora:
+- [x] **Upload manual** do usuário (sem geração por IA de vídeo) — botão
+  "Anexar vídeo" em qualquer post pendente (single). Server Action
+  `uploadPostVideo` sobe o arquivo bruto (máx 50MB) e dispara o
+  processamento em BACKGROUND (Inngest) — nunca síncrono (ffmpeg pode
+  levar dezenas de segundos).
+- [x] **Motor ffmpeg** (`src/lib/video.ts`, via `ffmpeg-static` +
+  `fluent-ffmpeg`): extrai frame de pôster, mede contraste nele, encaixa
+  o vídeo enviado pela LARGURA (nunca corta lateral — regra crítica do
+  kit), completa topo/base com extensão desfocada do próprio vídeo,
+  sobrepõe overlay de texto (wordmark/título, motor de 5 layouts).
+  Testado com vídeo 16:9 sintético → saída 1080×1920 exata, sem cortar.
+- [x] **Achado de infra real (só apareceu rodando, não em teoria):**
+  `ffmpeg-static` precisa entrar em `experimental.serverComponentsExternalPackages`
+  no `next.config.mjs` — sem isso o Next tenta "bundlar" o binário e
+  quebra (`spawn .../vendor-chunks/ffmpeg.exe ENOENT`). Já corrigido.
+  Também adicionado `outputFileTracingIncludes` pra Vercel empacotar o
+  binário na função serverless (250MB de limite, ffmpeg-static tem ~80MB
+  — cabe folgado).
+- [x] Job `attach-video` (Inngest): nunca deixa exceção escapar — sempre
+  grava `video_status` ('processing'|'ready'|'error') no post, mesmo se
+  o encode falhar.
+- [x] UI na fila (`PostCard.tsx`) e em Prontos (`ReadyPostCard.tsx`):
+  player nativo quando pronto, estado "processando", botão de baixar
+  vídeo.
+- [x] **Testado ponta a ponta com dados reais** (não só sintético): post
+  real do usuário, upload real, ffmpeg real, resultado real com
+  wordmark/@handle/layout da conta de verdade.
+- [x] Migration 032 (aplicada): `posts.video_url`, `video_poster_url`,
+  `video_status`, `video_error`.
+
+**Pendências conhecidas do vídeo:**
+- [x] **Resolvido (trabalho autônomo pós-restore point, ver commit
+  seguinte):** `resync-layout-preset` agora TAMBÉM reprocessa posts de
+  vídeo já prontos (`format='video'`, `video_status='ready'`) quando o
+  layout muda — reusa o `-video-source.mp4` já guardado no Storage, não
+  precisa o usuário reenviar o arquivo. Testado disparando o job de
+  verdade (Inngest dev server) contra o post real com vídeo — sem erro.
+- [x] **Verificação extra (madrugada, pós-restore):** conferi por que o
+  `Last-Modified` do vídeo não tinha mudado depois do resync — era falso
+  alarme, o `curl -I` bateu numa cópia em cache do CDN por eu ter
+  esquecido o `?v=` de cache-busting que a própria coluna `video_url` já
+  carrega. Com o `?v=` certo, `Last-Modified` bate exatamente com o
+  horário de conclusão do job — o resync funcionou.
+- [x] **Fix pequeno feito na mesma madrugada** (commit `f57b302`): o
+  bloco de resync de vídeo só logava falha no console, sem gravar nada
+  no banco — diferente do `attach-video`, que sempre grava
+  `video_status`/`video_error`. Agora, se o resync de um vídeo falhar,
+  `video_error` é atualizado (vídeo antigo continua válido, só fica
+  registrado que o último resync deu erro).
+- [ ] Vídeo no FEED (bloco contido 1:1/16:9 com play+badge+barra de
+  progresso) e vídeo no INTERIOR do carrossel — só o Reels 9:16 foi feito.
+- [ ] Geração de vídeo por IA — explicitamente fora de escopo (usuário
+  escolheu só upload manual).
+- **Dependência de ambiente:** `npx inngest-cli dev` PRECISA estar rodando
+  local pra vídeo processar (upload sem isso fica "processando" pra
+  sempre, sem erro — não é bug, é falta do dev server; em produção com
+  Inngest Cloud configurado isso não acontece).
+
+### Migrations desta sessão (todas aplicadas no Supabase pelo usuário)
+- [x] `030_layout_preset.sql` — `brand_kits.layout_preset`.
+- [x] `031_single_post_style.sql` — `brand_kits.single_post_style`.
+- [x] `032_video_posts.sql` — `posts.video_url/video_poster_url/video_status/video_error`.
+
+### Arquivos novos desta sessão
+`src/lib/render-shared.ts` (tipos/constantes compartilhados), `layout-brutalism.ts`,
+`layout-serif-luxe.ts`, `layout-swiss-mono.ts`, `layout-pop-creator.ts`,
+`layout-centered.ts` (fonte no meio), `layout-preview.ts` + `LayoutPreview.tsx`
+(previews), `contrast.ts`, `profile-chip.ts`, `video.ts` (motor ffmpeg),
+`inngest/functions/resync-layout-preset.ts`, `inngest/functions/attach-video.ts`,
+`docs/layouts-spec.md` (spec pra IA de design externa).
+
+### Pra continuar amanhã
+1. `npm run dev` + `npx inngest-cli dev -u http://localhost:3000/api/inngest`
+   (os dois — vídeo e resync de layout dependem do Inngest).
+2. Se algo quebrou: `git log --oneline` e ache o commit desta sessão
+   (mensagem começando com `feat(kit-v2)` ou similar — ver o commit mais
+   recente antes de mexer). `git diff <hash-do-commit-de-hoje>` mostra
+   exatamente o que mudou hoje.
+3. Trabalho autônomo que rodei DEPOIS do ponto de restauração (se houver):
+   ver commits subsequentes — cada um é um passo seguro pra reverter
+   isoladamente com `git revert <hash>` sem perder o resto.
+4. Você disse que vai trazer ajustes de LAYOUT (tipografia/estrutura dos
+   5 presets) — não mexi em nada disso além do que já estava aprovado.
+5. **Por que parei o trabalho autônomo aqui:** revisei o roadmap (seção 4)
+   procurando mais itens seguros pra adiantar sozinho. Tudo que resta
+   precisa de uma decisão sua ou de credencial externa antes de eu poder
+   codar com segurança — não é falta de tarefa, é dependência real:
+   - **B9/B13/B14** (overrides de card, seed de presets, editor visual):
+     o próprio roadmap já marca como "pro teu retorno" — é trabalho de
+     design visual, não dá pra adiantar sem seu olho.
+   - **Sprint C** (Graph API): precisa você criar/autorizar o app IG
+     Business e me passar client_id/secret — não posso gerar isso sozinho.
+   - **Sprint D completo** (Remotion + b-roll + legendas): precisa decisão
+     de licença comercial do Remotion + chave de provider de b-roll
+     (Pexels/Pixabay) + acesso ao TikTok Content Posting API.
+   - **Sprint E** (Viral Radar): precisa escolher/pagar um provider de
+     coleta (Apify ou similar).
+   - Por isso o trabalho autônomo desta madrugada ficou concentrado em
+     **verificar e endurecer** o que já foi construído (ver item de
+     `video_error` acima) em vez de começar sprint novo sem seu aval.
 
 ---
 
@@ -26,33 +204,49 @@ migrations aplicadas no Supabase. Além dele, foi feita a base de testes.
 - [x] **Fan-out "só cliente ativo"** (custo 1x): o cron gera só para o cliente
   ativo de cada dono (`notification_configs.active_client_id`); o scan manual
   ("Varrer agora") varre só o cliente ativo.
-- [x] **Base de testes** (34 verdes): unit (mock) + integração RLS (pglite) +
-  uniqueness. **e2e** (Playwright, 2 verdes) contra a stack real. **CI** em
-  GitHub Actions (mock, sem secrets).
+- [x] **Base de testes** (67 verdes): unit (mock) + integração RLS/uniqueness/pgvector
+  (pglite). **e2e** (Playwright, 3 verdes: multi-tenant + carrossel) contra a stack real.
+  **CI** em GitHub Actions (mock, sem secrets).
 
 ### Migrations aplicadas no Supabase
 - [x] `020_multitenant_brand_kit.sql` — clients + brand_kits + client_id + backfill + RLS + trigger.
 - [x] `021_active_client.sql` — `active_client_id` (fan-out).
 - [x] `022_client_scoped_uniques.sql` — unique `(client_id, feed_url)` em fontes; `unique(client_id, news_item_id)` em posts (idempotência).
+- [x] `023_caption_embedding.sql` — pgvector + `posts.caption_embedding` + RPC `find_duplicate_caption`.
+- [x] `024_drop_migrated_brand_columns.sql` — remove de notification_configs as colunas migradas p/ brand_kit.
+- [x] `025_carousel.sql` — `posts.format` + `carousel_cards` + RLS.
+- [x] `026_default_format.sql` — `brand_kits.default_format` (gatilho single/carousel por cliente).
 
-### Commits
-- `2a9cc35` feat: multi-tenant + Brand Kit por cliente
-- `4842bc9` test(e2e): Playwright multi-tenant contra a stack real
+**Todas as migrations (020–026) aplicadas no Supabase.**
+
+### Também já pronto (backend + UI + testes)
+- [x] **Anti-duplicata por embedding** (pgvector): generate-post embeda a legenda, acha post do mesmo cliente parecido demais e regenera 1x com "novo ângulo". Mock determinístico ($0). **Runtime confirmado** (RPC casta text→vector no Supabase real).
+- [x] **Limpeza**: notification_configs enxuto (só telegram + active_client_id).
+- [x] **Carousel Engine COMPLETO**: estrutura (7–10 cards, mock+real) + render SVG+Brand Kit → PNG (resvg) + job `generate-carousel` + **UI na fila (galeria, editar card, baixar zip)** + gatilho por cliente. **Rodou ponta a ponta em runtime**: scan → generate-carousel → notify (COMPLETED); cards renderizam com a marca (verificado visualmente).
+
+### Commits (branch feat/multi-tenant-brand-kit, no origin)
+- `2a9cc35` multi-tenant + Brand Kit · `4842bc9` e2e · `ea7b124` docs · pgvector · limpeza · carousel backend · carousel UI · carousel e2e · gatilho · carousel v2 (editar/zip).
+- **Testes: 67 (unit+pglite) + 3 e2e**, todos verdes.
 
 ---
 
 ## 2. Como rodar e testar
 
 ```bash
-npm run dev         # app em http://localhost:3000
-npm test            # unit + integração RLS + uniqueness (mock, sem chaves)
-npm run test:e2e    # Playwright (LOCAL only — cria/apaga usuário efêmero no Supabase real)
-npx tsc --noEmit    # typecheck
+npm run dev              # app em http://localhost:3000
+npx inngest-cli@latest dev -u http://localhost:3000/api/inngest   # jobs (OBRIGATÓRIO no dev)
+npm test                 # unit + integração RLS/uniqueness/pgvector (mock, sem chaves)
+npm run test:e2e         # Playwright (LOCAL only — cria/apaga usuário efêmero no Supabase real)
+npx tsc --noEmit         # typecheck
 ```
 
+- **⚠️ Inngest local:** qualquer coisa que dispare job (Varrer agora, gerar post/carrossel)
+  precisa do **Inngest Dev Server** rodando junto (`npx inngest-cli dev`). Sem ele:
+  `ECONNREFUSED` → "Não foi possível iniciar a varredura". Dashboard: `localhost:8288`.
+  Em produção (Vercel) é o contrário: setar `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY`.
 - **CI** (`.github/workflows/ci.yml`): roda `tsc` + `npm test` em todo push/PR, em modo mock.
 - **e2e não roda no CI** (precisa Supabase real; o CI é mock). É local-only.
-- Testes de RLS usam **pglite** (Postgres em WASM, sem Docker) aplicando as migrations reais.
+- Testes de RLS/pgvector usam **pglite** (Postgres em WASM, sem Docker) aplicando as migrations reais.
 
 ---
 
@@ -67,47 +261,198 @@ npx tsc --noEmit    # typecheck
 | Server actions (marca, troca de cliente, fontes) | `src/app/actions.ts` |
 | Geração (lê brand_kit do cliente da notícia) | `src/inngest/functions/generate-post.ts` |
 | Scan + fan-out por cliente ativo | `src/inngest/functions/scan-news.ts` |
+| Anti-duplicata (embedding + RPC) | `src/lib/ai/embedding.ts` |
+| Carrossel: estrutura IA | `src/lib/ai/carousel.ts` |
+| Carrossel: render SVG→PNG | `src/lib/carousel-render.ts` |
+| Carrossel: job Inngest | `src/inngest/functions/generate-carousel.ts` |
+| Carrossel: UI (galeria/editar/baixar) | `src/components/PostCard.tsx`, `CarouselEditor.tsx`, `CarouselDownload.tsx` |
 | Harness de teste (pglite + migrations reais) | `src/test/pg.ts` |
-| Testes RLS / uniqueness | `src/test/rls.test.ts`, `src/test/uniqueness.test.ts` |
+| Testes (RLS, uniqueness, pgvector, carousel) | `src/test/*.test.ts` |
 | e2e | `e2e/*.ts`, `playwright.config.ts` |
 
 ---
 
 ## 4. O que falta (em ordem)
 
-### 4.0 Verificação em produção (rápido, você)
-- [ ] Trocar de cliente no app não dá erro; **Varrer agora** só traz notícia do cliente ativo.
-- [ ] Editar marca (logo/cor/nicho) num cliente e conferir que **não vaza** para outro.
+### 4.0 Verificação — ✅ FEITA
+- [x] Multi-tenant testado no app (troca/cria cliente, isolamento). Migrations aplicadas.
+- [x] Pipeline rodou em runtime (scan → carrossel → notify) e renderizou com a marca.
+- Nota: erro de hidratação + "carrossel sem imagem" que apareceram no browser do dono
+  eram **extensão do browser** (não reproduz em aba anônima / Chromium limpo). App correta.
 - [ ] (Opcional) Abrir o PR: https://github.com/Nolei98/PostPilot-AI/pull/new/feat/multi-tenant-brand-kit
+- [ ] (Opcional) Merge de `feat/multi-tenant-brand-kit` na `main` quando quiser.
 
-### 4.1 Limpeza pós-verificação (PR pequeno)
-- [ ] Dropar de `notification_configs` as colunas de marca já migradas para `brand_kits`
-      (ig_*, cores, tpl_*, brand_name, logo_url, show_brand_logo, post_font_family,
-      niche, providers, post_language). **Só depois** de confirmar que nada mais lê elas.
-- **Aceite:** app funciona igual; `grep` não acha leitura dessas colunas em `notification_configs`.
+### 4.1 Limpeza pós-verificação — ✅ FEITO
+- [x] Dropar de `notification_configs` as colunas migradas (migration 024, aplicada).
+      Type `NotificationConfig` enxuto; teste de guard de schema no pglite.
 
-### 4.2 SPRINT B — Carousel Engine (primeiro formato novo)
-- [ ] `posts.format` (`single | carousel | video`) + tabela `carousel_cards`
-      (post_id, idx, role hook|value|cta, headline, body, image_url).
-- [ ] Prompt do Sonnet → JSON estrito (7–10 cards, card 0 = gancho, último = CTA,
-      usa `tone_of_voice`/nicho do brand_kit; retry se JSON inválido).
-- [ ] Render dos cards 1080×1350 com **Satori + resvg** (já instalado), aplicando o
-      Brand Kit (cores/fonte/logo/chip); upload no Storage.
-- [ ] Função Inngest `generate-carousel` (reusa o padrão de `generate-post`);
-      **modo mock** ($0) com texto fixo + card gradiente.
-- [ ] Fila/Prontos: galeria com swipe; editar 1 card re-renderiza só ele; download zip.
-- [ ] **Testes**: parse do JSON (unit), idempotência do carrossel, mock verde.
-- **Aceite:** um tema gera carrossel de 7–10 cards de marca, aprovável/editável/baixável; roda em mock.
+### 4.2 SPRINT B — Carousel Engine
+Backend pronto e testado; falta a camada de UI e o gatilho.
+- [x] `posts.format` + `carousel_cards` (migration 025, aplicada) + RLS.
+- [x] Estrutura via IA (`src/lib/ai/carousel.ts`): 7–10 cards, card 0 = gancho,
+      último = CTA, mock + real (claude/gemini/pollinations), validação + retry.
+- [x] Render do card (`src/lib/carousel-render.ts`): SVG 1080×1350 com Brand Kit →
+      PNG via resvg (`rasterizeSvg`), upload no bucket `post-images`. `buildCardSvg`
+      é puro/testado; smoke test rasteriza PNG real.
+- [x] Job `generate-carousel` (Inngest) registrado em `api/inngest/route.ts`; roda mock.
+- [x] **UI de aprovação (v1)** na fila: post `format='carousel'` mostra a galeria dos
+      cards (reusa `CarouselPreview`); controles single-only (prompt de imagem,
+      contra-capa) escondidos. `image_url` do post = card do gancho → aparece como
+      thumbnail em Prontos/Telegram sem mudar nada lá. Guardado por `format` → posts
+      single intactos.
+- [x] **UI de aprovação (v2)**: download zip dos PNGs (`CarouselDownload`, jszip) +
+      editar o texto de 1 card e re-renderizar só ele (`CarouselEditor` +
+      `updateCarouselCard`). e2e cobre galeria + download + editor.
+- [x] **Gatilho (v1)**: preferência por cliente `brand_kits.default_format`
+      (single|carousel, default single). O `scan-news` despacha `generate-post` ou
+      `generate-carousel` conforme o cliente. Ajustes tem o seletor "Formato dos posts".
+      Migration 026 aplicada.
+- [ ] *(opcional)* galeria/edição de carrossel também na tela Prontos (hoje mostra o
+      card do gancho como thumbnail — funcional).
+- **SPRINT B COMPLETO** ✅ — gera, mostra, edita, baixa, aprova; gatilho por cliente.
+- Runtime confirmado: RPC `find_duplicate_caption` casta `text→vector` no Supabase real.
 
-### 4.3 SPRINT C — Graph API (publicação auto + fecha o loop de métricas)
-- [ ] OAuth de conta IG Business/Creator por cliente (token por `client_id`).
-- [ ] Publicação automática (single + carrossel) + agendamento via `scheduled_for`
-      (campos `scheduled`/`published`/`ig_media_id` já existem no schema).
-- [ ] `collect-insights` (Inngest, 24h/72h): alcance/salvamentos/compartilhamentos →
-      tabela `post_metrics`; comparar com o score previsto do Haiku.
-- **Aceite:** aprovar → agenda → publica; métricas reais gravadas por post.
+### 4.2b SPRINT B+ — Acabamento @0verlens + Template Studio  📄 [HANDOFF-overlens-template.md](./HANDOFF-overlens-template.md)
+Extensão do Carousel Engine: capas/cards com acabamento sofisticado (estilo @0verlens),
+**legibilidade adaptativa** ao fundo e **Template Studio** (galeria de modelos + editor
+visual). Brief completo + prompt mestre no arquivo linkado acima. **Ainda não iniciado.**
+- [x] **B6** — Estender Brand Kit (migration 027): `keywords`, `wordmark`, `font_heading_url`, `brand_mark`, `template_defaults` (reusa `ig_handle` como handle) + tipos `BrandMark`/`TemplateDefaults` + seção "Identidade de rótulo" em Ajustes (`BrandLabelForm`) com **preview ao vivo** + `saveBrandLabel` + teste de schema (pglite). *Fonte Geist (`font_heading_url` upload) fica no B8 quando embutir no Satori.* Decisões: **Geist** + editor **server-side**.
+- [x] **B7** — Motor de legibilidade adaptativa (`src/lib/legibility.ts`): `contrastRatio` (WCAG), `measureBands` (sharp: L+desvio por faixa), `decideLegibility` (puro: cor/posição/scrim/auto-hide/override), `resolveLegibility`. 13 testes.
+- [x] **B8** — Render @0verlens via **SVG+resvg** (decisão: NÃO introduzi Satori às cegas — reuso o pipeline que já renderiza): `buildCoverSvg` (divisor `———— WORDMARK ————` + headline auto-fit + "DESLIZE PARA VER") + `brandLabelText`/label nos cards por `brand_mark`. **Verificado visualmente** (capa sai bonita). Fonte: usa a família atual (Geist entra quando o .ttf for fornecido).
+- [ ] **B9** — Overrides manuais na fila por card (`layout` → `carousel_cards`), re-render só do card. *(UI — pro teu retorno; precisa migration de `carousel_cards.layout`.)*
+- [x] **B10** — Integrado no `generate-carousel` (card 0 = capa via `isCover`); passa wordmark/handle/keywords/brand_mark; best-effort se 027 ausente.
+- [x] **B11** — `templates` (presets sistema + custom por cliente) + `brand_kits.template_selection` (migration 028) + tipos `Template`/`Surface`/`TemplateSpec` + RLS (sistema público, custom por dono). 2 testes RLS.
+- [x] **B12** — `renderFromSpec` (`src/lib/template-render.ts`): desenha a spec (anchor/offset/style/bind → SVG), resolve cor auto/accent + legibilidade, wrap, z-order, visible. `template-presets.ts` = cover+card como spec. **Verificado visualmente**: capa por spec == capa hardcode do B8. Testes.
+- [ ] **B13** — Seed ≥4 presets/superfície no banco (os 2 base já existem como spec em `template-presets.ts`; falta variar marca×cor×fundo e inserir em `templates`). *(design visual — pro teu retorno.)*
+- [ ] **B14** — Editor visual interativo (drag+resize, snapping, camadas, undo/redo, live preview server-side). *(UI grande, precisa iteração visual — pro teu retorno.)*
+- [ ] **B15** — Pipeline usa `template_selection` por superfície. *(depende de B12/B13.)*
+- **Decisões travadas:** fonte = **Geist** (falta o arquivo .ttf p/ embutir no resvg); editor = **preview server-side**.
+- **Migrations a aplicar quando voltar:** `027_brand_label_identity.sql` (✅ já aplicou), `028_templates.sql` (pendente — aditiva, código não depende dela em runtime ainda).
+- **Decisão de engenharia (autônoma):** o brief pedia Satori; usei o render **SVG+resvg** que já existe e funciona (evita dep nova + risco). O contrato `spec` (B12) pode ser desenhado sobre esse mesmo render. Reverter pra Satori é possível se você preferir.
+- Depende de: Sprint D (Remotion) para a montagem de vídeo do `video_cover` (aqui só o branding/legenda).
+
+### 4.3 SPRINT C — Graph API (publicação auto + fecha o loop de métricas) — ✅ COMPLETO (2026-07-21)
+Implementado em 5 passos (C1-C5), cada um commitado isolado — ver
+`git log --oneline` a partir de `6e23b03`. **Mock-first** (mesmo padrão
+dos providers de IA/imagem): sem `META_APP_ID`/`META_APP_SECRET` no
+ambiente, tudo funciona em mock determinístico ($0, testável sem app do
+Meta) — plugar a chave real depois não muda nenhum código.
+- [x] **C1** — Schema (`social_connections`, `post_metrics`, `posts.publish_error`),
+      cifragem AES-256-GCM (`src/lib/crypto-secrets.ts` — primeiro segredo por
+      tenant do projeto), cliente Graph API mock-first (`src/lib/instagram-graph.ts`).
+- [x] **C2** — OAuth conectar/desconectar: `/api/instagram/connect` + `/callback`
+      (state assinado via HMAC, CSRF sem tabela de sessão nova), seção
+      "Publicação automática" em Ajustes.
+- [x] **C3** — Botão "🗓 Agendar" na Fila (ao lado de Aprovar), habilitado só com
+      IG conectado, modal com datetime-local → `schedulePost` (status='scheduled').
+- [x] **C4** — Job `publish-scheduled-posts` (cron 5min): publica single/carrossel/
+      vídeo via Graph API, marca 'published' + `ig_media_id`; falha grava só
+      `publish_error` (não derruba o status, tenta de novo).
+- [x] **C5** — Job `collect-insights` (evento `post/published`, `step.sleep` 24h+72h)
+      grava em `post_metrics`. **Gap achado testando:** post agendado sumia da UI
+      até publicar — sem visibilidade nem cancelamento. Corrigido junto: aba
+      "Agendados" em Prontos (data/hora + cancelar) + badge de alcance em Postados.
+- **Tudo verificado AO VIVO** (Playwright, conta real `@joaorodrigues.ia`, modo
+  mock): connect→callback→conectado, Agendar→apareceu em Agendados→cancelar
+  voltou pra Fila, e um ciclo completo aprovar→agendar→job de publicação→
+  status='published'+ig_media_id real (mock) confirmado direto no banco.
+- **Pendência real (não é código):** só publica de verdade depois que você
+  criar o app no Meta for Developers e me passar `META_APP_ID`/`META_APP_SECRET`
+  (+ `SECRETS_ENCRYPTION_KEY`, já gerada localmente em `.env.local` — gere outra
+  pra produção). Grátis, mas exige App Review do Meta pra ir além de "Tester".
+- **Aceite:** aprovar/agendar → publica sozinho; métricas reais gravadas por post. ✅
+
+#### 4.3.1 Setup real do app Meta — em andamento (2026-07-21, fim de tarde)
+
+**Descobertas importantes durante o setup de verdade (não estavam óbvias na doc do Meta):**
+- O Meta não deixa combinar caso de uso "Facebook" + "Instagram" no mesmo
+  app — escolhemos **"Instagram com Login do Instagram"** (fluxo 2024+, não
+  precisa de Página do Facebook). Isso mudou o código (commit `4a79846`):
+  endpoints trocaram de `graph.facebook.com` pra `api.instagram.com`/
+  `graph.instagram.com`, sem etapa de buscar Páginas — a conta IG Business
+  já vem direto na troca do `code` pelo token.
+- Pra conectar a própria conta em modo "Desenvolvimento" (antes do App
+  Review), precisa: (1) adicionar a conta como **"Testador do Instagram"**
+  em Funções do app → Adicionar pessoas (feito: `joaorodrigues.ia`,
+  convite aceito no Instagram) e (2) configurar a **redirect URI** em
+  "4. Configurar o login da empresa no Instagram" — **essa etapa exige
+  HTTPS**, `http://localhost` não é aceito (diferente do produto antigo
+  "Login do Facebook", que permite localhost puro).
+- Testamos túnel HTTPS grátis (`localtunnel`/loca.lt) pro localhost —
+  caiu sozinho repetidas vezes neste ambiente (rede do sandbox), mesmo
+  como processo rastreado. Não é confiável aqui.
+- **Solução adotada:** deploy no Vercel (projeto já linkado, `post-pilot-ai`).
+  Confirmado com você que só você usa produção — promovido
+  `feat/multi-tenant-brand-kit` direto pra produção (`vercel deploy --prod`).
+  Alias estável: **`https://post-pilot-ai-seven.vercel.app`**.
+  - ⚠️ Cada `vercel deploy` (preview) gera uma URL nova — não dá pra fixar
+    redirect URI nela. Por isso fomos de produção (alias fixo).
+  - `NEXT_PUBLIC_APP_URL` (Production e Preview) estava **vazio** no
+    Vercel — corrigido pra `https://post-pilot-ai-seven.vercel.app`
+    (Production) antes do build final, porque `NEXT_PUBLIC_*` é
+    embutido em build-time, não dá pra trocar depois sem rebuildar.
+  - Env vars adicionadas no Vercel (Production + Preview):
+    `META_APP_ID`, `META_APP_SECRET`, `SECRETS_ENCRYPTION_KEY`.
+  - Redirect URI final registrada no Meta (3 no total, pode limpar as
+    2 primeiras depois):
+    `http://localhost:3000/api/instagram/callback`,
+    `https://wise-needles-work.loca.lt/api/instagram/callback` (túnel morto,
+    pode remover), `https://post-pilot-ai-seven.vercel.app/api/instagram/callback`.
+
+**Update 2026-07-21/22 (madrugada) — Conectou, mas não publicou:** você
+logou em produção e conectou o Instagram de verdade (confirmado no banco:
+`social_connections` com `ig_username=joaorodrigues.ia`, `ig_business_account_id`
+real, `status=connected`). Agendou um post — não publicou. Investigado sem
+mexer em código:
+- `posts` do agendamento: `status='scheduled'` ainda, `publish_error=null`,
+  `scheduled_for` já **passou** (23:48 UTC, checado ~00:01 UTC) → o job
+  `publish-scheduled-posts` **nunca tentou rodar** (se tivesse tentado e
+  falhado, `publish_error` teria mensagem; se tivesse publicado, status
+  mudaria). Não é bug de credencial/token — é o cron não disparando.
+- `GET https://post-pilot-ai-seven.vercel.app/api/inngest` devolve
+  `{"message":"Unauthorized"}` — consistente com o app **nunca ter sido
+  sincronizado no Inngest Cloud** para esta URL de produção. Isso porque
+  o deploy foi promovido manualmente via `vercel deploy --prod` (fora do
+  fluxo normal git push → integração Vercel↔Inngest que dispara o sync
+  automático).
+- Env vars conferidas: `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` presentes
+  em Production no Vercel, código lê do env padrão (sem hardcode/mock) —
+  configuração de código está correta, é puramente falta de sync no
+  dashboard.
+
+**Pra continuar quando voltar:**
+1. Abrir o dashboard da Inngest (app "postpilot", ambiente Production) →
+   conferir se `https://post-pilot-ai-seven.vercel.app/api/inngest` está
+   registrado como app. Se não estiver ou estiver com erro: usar
+   "Sync new app" / re-sync apontando pra essa URL.
+2. Depois do sync, conferir se a function `publish-scheduled-posts`
+   aparece com o cron `*/5 * * * *` ativo.
+3. Reagendar (ou esperar o próximo tick de 5min num post já agendado)
+   e confirmar `posts.status` vira `published` + `ig_media_id` real.
+4. Se continuar sem disparar: checar se existe integração Vercel↔Inngest
+   instalada (vercel.com/integrations) — se não tiver, considerar
+   instalar pra deploys futuros sincronizarem sozinhos (evita repetir
+   esse passo manual toda vez que promover via CLI).
+5. Se der erro "Invalid redirect_uri" de novo no OAuth: conferir se a
+   env var `NEXT_PUBLIC_APP_URL` de Production no Vercel ainda bate
+   exatamente com `https://post-pilot-ai-seven.vercel.app`.
+6. Depois de confirmar que publica de verdade, considerar: (a) remover
+   as redirect URIs de teste (localhost/túnel morto) do Meta, (b) decidir
+   se `feat/multi-tenant-brand-kit` promovido em produção fica assim ou
+   se quer voltar a produção pro que tinha antes até merge oficial na
+   `main` — hoje produção Vercel = esta branch, não a `main`.
+
+Ponto de restauração local criado: git tag
+`restore-2026-07-21-inngest-sync-issue` (HEAD limpo, nenhuma mudança de
+código nesta investigação).
 
 ### 4.4 SPRINT D — Video Engine (clipes reais, não slideshow)
+> ⚠️ **Update 2026-07-21 (ver seção 0.4):** um MVP mais simples já foi
+> construído fora de ordem (pedido pontual do usuário) — upload manual +
+> ffmpeg overlay (wordmark/título, motor de contraste) em quadro Reels
+> 9:16. NÃO tem b-roll automático, NÃO tem legendas queimadas, NÃO usa
+> Remotion, NÃO publica (fica na fila pra aprovação manual, igual
+> foto/carrossel). O que falta abaixo continua de pé.
 - [ ] Roteiro (Sonnet): gancho 0–3s + beats + CTA; 9:16; duração por rede.
 - [ ] Montagem com **b-roll real** (Pexels/Pixabay Video ou upload) + legendas
       queimadas + logo/chip via **Remotion** (⚠️ checar licença comercial do Remotion).
@@ -130,6 +475,11 @@ npx tsc --noEmit    # typecheck
 
 ## 5. Decisões pendentes
 
+### pgvector / anti-duplicata — ✅ IMPLEMENTADO (intra-cliente)
+Feito conforme descrito abaixo, mas **só intra-cliente** e com **stub no mock**
+(mantém a suíte a $0). Ver `src/lib/ai/embedding.ts` + migration 023 +
+`find_duplicate_caption`. Explicação mantida abaixo para referência.
+
 ### pgvector / anti-duplicata por embedding — **o que é**
 `pgvector` é uma extensão do Postgres que guarda **vetores** (listas de números) e
 calcula **similaridade** entre eles. Um "embedding" é a representação numérica de um
@@ -145,8 +495,9 @@ demais de outra, **regenerar com "novo ângulo"** — evitando conteúdo repetid
    o prompt), então dedup **entre** clientes é discutível — cada um *deve* falar do mesmo
    fato à sua maneira. O ganho real seria evitar repetição **dentro** do mesmo cliente.
 
-**Decisão a tomar:** implementar o guardrail de similaridade (só intra-cliente, com stub
-no mock) — **sim / não / depois**. Se sim, entra provavelmente junto do Sprint E.
+**Status:** ✅ implementado (intra-cliente, stub no mock, runtime confirmado). Migration 023.
+Extensão futura possível: guardrail *cross-cliente* — deferido (cada cliente deve poder
+falar do mesmo fato à sua voz).
 
 ---
 

@@ -16,8 +16,10 @@ import {
   approvePost,
   discardPost,
   removeTemplateFromPost,
+  schedulePost,
   updatePost,
   uploadPostImage,
+  uploadPostVideo,
 } from "@/app/actions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardActions } from "@/components/ui/Card";
@@ -25,6 +27,8 @@ import { Drawer } from "@/components/ui/Drawer";
 import { Modal } from "@/components/ui/Modal";
 import { Input, Textarea } from "@/components/ui/Input";
 import { CarouselPreview } from "@/components/CarouselPreview";
+import { CarouselDownload } from "@/components/CarouselDownload";
+import { CarouselEditor } from "@/components/CarouselEditor";
 import { resizeImageForUpload } from "@/lib/resizeImageClient";
 import { useToast } from "@/components/ui/Toast";
 import type { IgProfile, PostWithNews, VisualIdentity } from "@/lib/types";
@@ -42,14 +46,18 @@ export function PostCard({
   post,
   profile,
   identityDefaults,
+  hasInstagramConnected = false,
 }: {
   post: PostWithNews;
   profile: IgProfile;
   identityDefaults: VisualIdentity;
+  /** Sprint C — só habilita o botão "Agendar" se o cliente tiver Instagram conectado. */
+  hasInstagramConnected?: boolean;
 }) {
   const HANDLE = profile.handle;
   const toast = useToast();
   const [editing, setEditing] = useState(false);
+  const [cardsOpen, setCardsOpen] = useState(false);
   const [hook, setHook] = useState(post.hook);
   const [caption, setCaption] = useState(post.caption);
   const [hashtags, setHashtags] = useState(post.hashtags);
@@ -61,6 +69,16 @@ export function PostCard({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, startUpload] = useTransition();
   const [removingTpl, startRemoveTpl] = useTransition();
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [uploadingVideo, startVideoUpload] = useTransition();
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState(() => {
+    const d = new Date(Date.now() + 5 * 60 * 1000);
+    d.setSeconds(0, 0);
+    // datetime-local espera horário LOCAL sem timezone (YYYY-MM-DDTHH:mm)
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  });
 
   function handleToggleTemplate(checked: boolean) {
     if (checked) {
@@ -94,6 +112,24 @@ export function PostCard({
         if (!result.ok) setUploadError(result.error ?? "Falha ao subir imagem.");
       } catch {
         setUploadError("Falha ao subir imagem. Tente um arquivo menor.");
+      }
+    });
+  }
+
+  function handleVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setVideoError(null);
+    startVideoUpload(async () => {
+      try {
+        const fd = new FormData();
+        fd.set("post_id", post.id);
+        fd.set("video", file);
+        const result = await uploadPostVideo(fd);
+        if (!result.ok) setVideoError(result.error ?? "Falha ao subir vídeo.");
+      } catch {
+        setVideoError("Falha ao subir vídeo. Tente um arquivo menor.");
       }
     });
   }
@@ -148,8 +184,31 @@ export function PostCard({
   }
 
   const score = post.news_items.viral_score;
+  // Corta por CODE POINT (Array.from), não por índice de string: caption.slice(0,120)
+  // corta no meio de um par substituto UTF-16 sempre que um emoji (ex: 🚨) cai na
+  // fronteira — o caractere quebrado ("\uD83D" solto) é serializado de forma
+  // diferente no HTML da SSR vs. no texto hidratado no cliente, causando o erro
+  // de hydration mismatch ("Text content did not match").
+  const captionChars = [...caption];
   const shortCaption =
-    caption.length > 120 && !expanded ? caption.slice(0, 120) + "…" : caption;
+    captionChars.length > 120 && !expanded
+      ? captionChars.slice(0, 120).join("") + "…"
+      : caption;
+
+  // Carrossel (format='carousel'): a galeria são os cards renderizados,
+  // em ordem. Post single: página de conteúdo + contra-capa (se houver).
+  const isCarousel = post.format === "carousel";
+  const cardImages = (post.carousel_cards ?? [])
+    .slice()
+    .sort((a, b) => a.idx - b.idx)
+    .map((c) => c.image_url)
+    .filter((u): u is string => !!u);
+  const previewImages =
+    isCarousel && cardImages.length > 0
+      ? cardImages
+      : [post.image_url, post.closing_image_url].filter(
+          (u): u is string => !!u
+        );
 
   /** Toca a animação de saída e só então executa a action */
   function exitAndRun(direction: Exclude<ExitDirection, null>, action: () => Promise<void>) {
@@ -226,9 +285,8 @@ export function PostCard({
           </div>
         )}
 
-        {/* Prompt de imagem (gerado junto com o post) — copie e cole no
-            Gemini/nano banana pra criar a arte manualmente, depois suba
-            o resultado aqui pra substituir a imagem atual do post. */}
+        {/* Single: prompt de imagem + upload manual (carrossel não usa). */}
+        {!isCarousel && (
         <div className="space-y-1.5 border-b border-line px-4 py-2.5">
           <div className="flex items-center justify-between gap-2">
             <span className="text-micro text-subtle">🎨 Prompt de imagem</span>
@@ -266,20 +324,67 @@ export function PostCard({
             />
           </label>
           {uploadError && <p className="text-micro text-error">{uploadError}</p>}
+
+          {/* Vídeo anexado (Fase 4, kit v2 §3) — upload manual, composto
+              em background (Inngest + ffmpeg) no quadro Reels 9:16. */}
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <span className="text-micro text-subtle">🎬 Reels (vídeo)</span>
+            {post.video_status === "processing" && (
+              <span className="text-micro text-warning">Processando…</span>
+            )}
+          </div>
+          <label
+            className={`flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content ${
+              post.video_status === "processing" ? "opacity-50" : ""
+            }`}
+          >
+            <span>
+              {uploadingVideo
+                ? "Enviando…"
+                : post.video_status === "processing"
+                  ? "Vídeo em processamento…"
+                  : post.video_status === "ready"
+                    ? "Trocar vídeo (reprocessa)"
+                    : "Anexar vídeo (.mp4/.mov)"}
+            </span>
+            <input
+              type="file"
+              accept="video/mp4,video/quicktime"
+              className="hidden"
+              disabled={uploadingVideo || post.video_status === "processing"}
+              onChange={handleVideoUpload}
+            />
+          </label>
+          {videoError && <p className="text-micro text-error">{videoError}</p>}
+          {post.video_status === "error" && !videoError && (
+            <p className="text-micro text-error">
+              Falha ao processar o vídeo{post.video_error ? `: ${post.video_error}` : "."} Tente de novo.
+            </p>
+          )}
         </div>
+        )}
 
         {/* ===== Preview fiel ao Instagram ===== */}
         <div className="bg-black">
           {/* Header (foto/nome/@) removido: já aparece no chip da imagem — evita redundância */}
 
-          {/* Conteúdo (página 1) + fechamento (página 2, se aplicado) */}
-          <CarouselPreview
-            images={[post.image_url, post.closing_image_url].filter(
-              (u): u is string => !!u
-            )}
-            alt={post.hook}
-            className="aspect-[4/5] w-full"
-          />
+          {/* Vídeo pronto (Reels 9:16) vira a mídia principal do post —
+              senão, mesma preview de sempre (single: pág 1 + contra-capa;
+              carrossel: todos os cards, em ordem). */}
+          {post.video_status === "ready" && post.video_url ? (
+            <video
+              src={post.video_url}
+              poster={post.video_poster_url ?? undefined}
+              controls
+              className="aspect-[9/16] w-full bg-black"
+            />
+          ) : (
+            <CarouselPreview
+              images={previewImages}
+              alt={post.hook}
+              className="aspect-[4/5] w-full"
+            />
+          )}
 
           <div className="flex gap-4 px-3 py-2.5">
             {/* coração / comentário / compartilhar — fiéis ao IG */}
@@ -302,9 +407,27 @@ export function PostCard({
             )}
             <p className="mt-1 text-secondary">{hashtags}</p>
           </div>
+          {isCarousel && (
+            <div className="flex flex-col gap-2 px-3 pb-3">
+              {(post.carousel_cards?.length ?? 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCardsOpen(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-control bg-surface-2 px-3 py-2 text-caption text-muted transition-colors hover:text-content"
+                >
+                  ✎ Editar cards
+                </button>
+              )}
+              <CarouselDownload
+                images={previewImages}
+                name={`carrossel-${post.id.slice(0, 8)}`}
+              />
+            </div>
+          )}
         </div>
 
-        {/* ===== Contra-capa (por post) — sempre ajustável na fila ===== */}
+        {/* ===== Contra-capa (por post) — só para post single ===== */}
+        {!isCarousel && (
         <div className="flex items-center justify-between border-t border-line px-4 py-2.5">
           <label className="flex cursor-pointer items-center gap-2">
             <input
@@ -330,6 +453,7 @@ export function PostCard({
             </button>
           )}
         </div>
+        )}
 
         {/* ===== Ações — 1 clique, sem manual ===== */}
         <CardActions>
@@ -345,6 +469,19 @@ export function PostCard({
             }
           >
             ✓ Aprovar
+          </Button>
+          <Button
+            variant="secondary"
+            className="flex-1"
+            disabled={isPending || exit !== null || !hasInstagramConnected}
+            title={
+              hasInstagramConnected
+                ? undefined
+                : "Conecte o Instagram em Ajustes para agendar"
+            }
+            onClick={() => setScheduling(true)}
+          >
+            🗓 Agendar
           </Button>
           <Button
             variant="warning"
@@ -442,6 +579,19 @@ export function PostCard({
             </Button>
           </div>
         </div>
+      </Drawer>
+
+      {/* ===== Drawer de edição dos cards do carrossel ===== */}
+      <Drawer
+        open={cardsOpen}
+        onClose={() => setCardsOpen(false)}
+        title="Editar cards do carrossel"
+      >
+        <p className="mb-3 text-caption text-muted">
+          Ajuste o texto de cada card. Salvar re-renderiza só aquele card
+          com as cores/fonte da marca.
+        </p>
+        <CarouselEditor cards={post.carousel_cards ?? []} />
       </Drawer>
 
       {/* ===== Modal da contra-capa (por post) ===== */}
@@ -547,6 +697,48 @@ export function PostCard({
             página de conteúdo não é alterada. Os valores acima valem só
             para este post; o default de Ajustes não muda.
           </p>
+        </div>
+      </Modal>
+
+      {/* ===== Modal de agendamento (Sprint C) ===== */}
+      <Modal
+        open={scheduling}
+        onClose={() => setScheduling(false)}
+        title="Agendar publicação"
+      >
+        <div className="space-y-4">
+          <p className="text-caption text-muted">
+            O post publica sozinho no Instagram no horário escolhido — sem
+            precisar copiar legenda nem baixar arte.
+          </p>
+          <label className="block space-y-1.5">
+            <span className="block text-caption text-muted">Data e hora</span>
+            <input
+              type="datetime-local"
+              value={scheduledFor}
+              min={new Date(Date.now() + 60 * 1000).toISOString().slice(0, 16)}
+              onChange={(e) => setScheduledFor(e.target.value)}
+              className="w-full rounded-control border border-line bg-surface-2 px-3 py-2.5 text-body text-content outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
+            />
+          </label>
+          <div className="flex gap-2">
+            <Button
+              className="flex-1"
+              loading={isPending}
+              onClick={() => {
+                setScheduling(false);
+                exitAndRun("right", async () => {
+                  await schedulePost(post.id, new Date(scheduledFor).toISOString());
+                  toast("🗓 Post agendado.");
+                });
+              }}
+            >
+              Confirmar agendamento
+            </Button>
+            <Button variant="ghost" onClick={() => setScheduling(false)}>
+              Cancelar
+            </Button>
+          </div>
         </div>
       </Modal>
     </>

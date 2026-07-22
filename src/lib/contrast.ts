@@ -1,0 +1,94 @@
+// ============================================================
+// Contraste automático por LUMINÂNCIA DA IMAGEM (carrossel + post único).
+// Decide o tema claro/escuro do texto pela luminância real do fundo (não
+// mais cor de marca fixa) e calibra um overlay translúcido só o
+// suficiente pra bater a meta WCAG — nunca entrega um slide ilegível.
+//
+// Reaproveita a matemática WCAG de legibility.ts (Sprint B+, que mede
+// bandas fixas topo/base pro rótulo do Template Studio); aqui a medição é
+// da imagem INTEIRA (ou de uma região específica, ex. a banda de
+// identidade da capa/fechamento), usada pelo pipeline real do carrossel.
+// ============================================================
+import sharp from "sharp";
+import { relLuminance, type RGB } from "@/lib/legibility";
+
+export type Theme = "light" | "dark";
+
+export const LUMINANCE_THRESHOLD = 0.55;
+export const MIN_CONTRAST = 4.5;
+
+function hexToRgb(hex: string): RGB {
+  const bytes = hex.replace("#", "").match(/.{2}/g);
+  if (!bytes) return [0, 0, 0];
+  return bytes.slice(0, 3).map((h) => parseInt(h, 16)) as RGB;
+}
+
+/** Tema pela luminância do fundo: L >= 0.55 → claro (texto escuro); senão → escuro (texto claro). */
+export function pickTheme(luminance: number): Theme {
+  return luminance >= LUMINANCE_THRESHOLD ? "light" : "dark";
+}
+
+/** Luminância relativa (0–1) de uma cor sólida (hex) — pra fundo de
+ * marca (sem foto), onde não há imagem pra medir. */
+export function relativeLuminanceOfHex(hex: string): number {
+  return relLuminance(hexToRgb(hex));
+}
+
+/** Cor de texto WCAG-segura pro tema escolhido (hex). */
+export function textColorForTheme(theme: Theme): string {
+  return theme === "dark" ? "#FFFFFF" : "#0A0A0A";
+}
+
+/** Razão de contraste WCAG entre uma cor de texto (hex) e a luminância (0–1) do fundo. */
+export function contrastRatio(textHex: string, bgLuminance: number): number {
+  const textLum = relLuminance(hexToRgb(textHex));
+  const hi = Math.max(textLum, bgLuminance);
+  const lo = Math.min(textLum, bgLuminance);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** true quando a razão de contraste fica abaixo da meta WCAG (default 4.5). */
+export function needsOverlay(textHex: string, bgLuminance: number, minRatio = MIN_CONTRAST): boolean {
+  return contrastRatio(textHex, bgLuminance) < minRatio;
+}
+
+/**
+ * Opacidade mínima (0–maxAlpha, passos de 0.1) de um overlay — preto no
+ * tema escuro (escurece ainda mais se precisar), branco no tema claro
+ * (clareia) — pra bater a meta de contraste do texto contra o fundo.
+ * 0 = já está bom, não precisa de overlay.
+ */
+export function overlayAlphaFor(
+  theme: Theme,
+  textHex: string,
+  bgLuminance: number,
+  maxAlpha = 0.7
+): number {
+  let alpha = 0;
+  let lum = bgLuminance;
+  while (needsOverlay(textHex, lum, MIN_CONTRAST) && alpha < maxAlpha) {
+    alpha = Math.round((alpha + 0.1) * 10) / 10;
+    lum = theme === "dark" ? bgLuminance * (1 - alpha) : bgLuminance + (1 - bgLuminance) * alpha;
+  }
+  return alpha;
+}
+
+/**
+ * Luminância relativa média de uma imagem (0=preto, 1=branco). Amostra
+ * pequena (48x60) — suficiente pra decidir tema, muito mais barato que
+ * processar a foto inteira.
+ */
+export async function measureImageLuminance(photo: Buffer): Promise<number> {
+  const { data, info } = await sharp(photo)
+    .resize(48, 60, { fit: "cover" })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const channels = info.channels;
+  let sum = 0;
+  const n = data.length / channels;
+  for (let i = 0; i < data.length; i += channels) {
+    sum += relLuminance([data[i], data[i + 1], data[i + 2]]);
+  }
+  return n ? sum / n : 0;
+}

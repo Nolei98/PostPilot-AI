@@ -7,13 +7,18 @@ import { createClient } from "@/lib/supabase/server";
 /* eslint-disable @next/next/no-img-element */
 import {
   addSource,
+  disconnectInstagram,
   saveBrandTemplate,
+  saveDefaultFormat,
   saveIgProfile,
+  saveLayoutPreset,
+  saveSinglePostStyle,
   saveNiche,
   saveTelegramChatId,
   saveVisualIdentity,
 } from "@/app/actions";
 import { IdentityForm } from "@/components/IdentityForm";
+import { BrandLabelForm } from "@/components/BrandLabelForm";
 import { AvatarFileInput } from "@/components/AvatarFileInput";
 import { BrandColorPicker } from "@/components/BrandColorPicker";
 import { AppShell } from "@/components/ui/AppShell";
@@ -23,13 +28,20 @@ import { DeleteSourceButton } from "@/components/DeleteSourceButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getMonthlyQuota } from "@/lib/subscription";
 import { PLANS } from "@/lib/plans";
-import { POST_FONTS } from "@/lib/font-data";
+import { POST_FONTS, resolvePostFontFamily } from "@/lib/font-data";
 import { NICHES } from "@/lib/niches";
-import type { BrandKit, NotificationConfig, SourceConfig } from "@/lib/types";
+import { LayoutPreview } from "@/components/LayoutPreview";
+import { PREVIEW_LAYOUTS, PREVIEW_FORMATS } from "@/lib/layout-preview";
+import type { CardBrand, LayoutPreset } from "@/lib/render-shared";
+import type { BrandKit, NotificationConfig, SocialConnection, SourceConfig } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams?: { ig?: string; reason?: string };
+}) {
   const supabase = createClient();
   const shell = await getShellData();
 
@@ -64,9 +76,31 @@ export default async function SettingsPage() {
     .eq("client_id", shell.activeClientId ?? "")
     .maybeSingle();
 
+  const { data: igConn } = await supabase
+    .from("social_connections")
+    .select("*")
+    .eq("client_id", shell.activeClientId ?? "")
+    .eq("status", "connected")
+    .maybeSingle();
+
   const sourceList = (sources ?? []) as SourceConfig[];
   const notifConfig = notif as NotificationConfig | null;
   const brandKit = bk as BrandKit | null;
+  const socialConnection = igConn as SocialConnection | null;
+
+  // Marca real do cliente (cores/fonte/rótulo) — os previews de layout
+  // (kit v2 §7.7) usam a identidade de verdade, não uma cor genérica.
+  const previewBrand: CardBrand = {
+    colorBackground: brandKit?.color_background ?? "#0B0B12",
+    colorAccent: brandKit?.color_accent ?? "#7C5CFF",
+    colorText: brandKit?.color_text ?? "#FFFFFF",
+    fontFamily: resolvePostFontFamily(brandKit?.post_font_family),
+    brandName: brandKit?.brand_name ?? null,
+    wordmark: brandKit?.wordmark ?? null,
+    handle: brandKit?.ig_handle ?? null,
+    keywords: brandKit?.keywords ?? null,
+    brandMark: brandKit?.brand_mark ?? "auto",
+  };
 
   const fieldClasses =
     "w-full rounded-control border border-line bg-surface-2 px-3 py-2.5 text-body text-content placeholder:text-subtle outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25";
@@ -314,6 +348,192 @@ export default async function SettingsPage() {
               Salvar template da marca
             </SubmitButton>
           </form>
+        </Card>
+      </section>
+
+      {/* ===== Layout das artes (Fase 3) ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Layout das artes</h2>
+        <Card className="p-4">
+          <form action={saveLayoutPreset} className="space-y-3">
+            <div className="space-y-1.5">
+              <label htmlFor="layout_preset" className="block text-caption text-muted">
+                Estilo visual dos cards (capa, interior e fechamento)
+              </label>
+              <select
+                id="layout_preset"
+                name="layout_preset"
+                defaultValue={brandKit?.layout_preset ?? "editorial-noir"}
+                className={fieldClasses}
+              >
+                <option value="editorial-noir">Editorial Noir (padrão)</option>
+                <option value="brutalism">Brutalismo Editorial</option>
+                <option value="serif-luxe">Serif Luxe</option>
+                <option value="swiss-mono">Swiss Mono</option>
+                <option value="pop-creator">Pop Creator</option>
+              </select>
+              <p className="text-micro text-subtle">
+                Salvar re-renderiza na hora os carrosséis e fechamentos já na fila com o novo layout.
+              </p>
+            </div>
+            <SubmitButton savingLabel="Salvando layout...">
+              Salvar layout
+            </SubmitButton>
+          </form>
+        </Card>
+
+        {/* Previews (kit v2 §7.7): 5 layouts × 4 formatos, com a cor/fonte
+            reais da marca — decida olhando antes de trocar acima. */}
+        <div className="mt-4 space-y-4">
+          {PREVIEW_LAYOUTS.map((layout) => (
+            <Card
+              key={layout.key}
+              className={`p-4 ${
+                (brandKit?.layout_preset ?? "editorial-noir") === layout.key
+                  ? "ring-2 ring-primary"
+                  : ""
+              }`}
+            >
+              <p className="mb-3 text-body font-semibold">{layout.label}</p>
+              <div className="flex gap-4 overflow-x-auto pb-1">
+                {PREVIEW_FORMATS.map((fmt) => (
+                  <div key={fmt.key} className="shrink-0">
+                    <LayoutPreview
+                      layoutPreset={layout.key as LayoutPreset}
+                      format={fmt.key}
+                      brand={previewBrand}
+                    />
+                    <p className="mt-1.5 text-center text-micro text-subtle">{fmt.label}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      {/* ===== Estilo do post único (kit v2 §3) ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Estilo do post único</h2>
+        <Card className="p-4">
+          <form action={saveSinglePostStyle} className="space-y-3">
+            <div className="space-y-1.5">
+              <label htmlFor="single_post_style" className="block text-caption text-muted">
+                Como a página 1 (foto + título) é composta
+              </label>
+              <select
+                id="single_post_style"
+                name="single_post_style"
+                defaultValue={brandKit?.single_post_style ?? "cover"}
+                className={fieldClasses}
+              >
+                <option value="cover">Estilo capa (com wordmark, igual ao carrossel)</option>
+                <option value="centered">Fonte no meio (minimalista, sem marca)</option>
+              </select>
+              <p className="text-micro text-subtle">
+                &quot;Fonte no meio&quot; usa a mesma tipografia do layout escolhido acima, só centralizada e sem wordmark — deixa a foto respirar. Salvar re-renderiza a página 1 dos posts únicos já na fila.
+              </p>
+            </div>
+            <SubmitButton savingLabel="Salvando estilo...">
+              Salvar estilo
+            </SubmitButton>
+          </form>
+        </Card>
+      </section>
+
+      {/* ===== Identidade de rótulo (@0verlens / Sprint B+) ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Identidade de rótulo</h2>
+        <Card className="p-4">
+          <BrandLabelForm
+            fieldClasses={fieldClasses}
+            handle={brandKit?.ig_handle ?? "seuperfil.ia"}
+            accent={brandKit?.color_accent ?? "#7C5CFF"}
+            initial={{
+              wordmark: brandKit?.wordmark ?? "",
+              keywords: (brandKit?.keywords ?? []).join(", "),
+              brandMark: brandKit?.brand_mark ?? "auto",
+            }}
+          />
+        </Card>
+      </section>
+
+      {/* ===== Formato dos posts ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Formato dos posts</h2>
+        <Card className="p-4">
+          <form action={saveDefaultFormat} className="space-y-3">
+            <div className="space-y-1.5">
+              <label htmlFor="default_format" className="block text-caption text-muted">
+                O que o piloto gera para cada notícia candidata
+              </label>
+              <select
+                id="default_format"
+                name="default_format"
+                defaultValue={brandKit?.default_format ?? "single"}
+                className={fieldClasses}
+              >
+                <option value="single">Post único (imagem 4:5)</option>
+                <option value="carousel">Carrossel (7–10 cards)</option>
+              </select>
+              <p className="text-micro text-subtle">
+                Vale para as próximas gerações deste cliente. Carrossel usa as
+                cores/fonte da marca em cada card.
+              </p>
+            </div>
+            <SubmitButton savingLabel="Salvando...">Salvar formato</SubmitButton>
+          </form>
+        </Card>
+      </section>
+
+      {/* ===== Publicação automática (Sprint C — Graph API) ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Publicação automática</h2>
+        <Card className="p-4 space-y-3">
+          {searchParams?.ig === "connected" && (
+            <p className="rounded-control border border-success/40 bg-success/10 px-3 py-2 text-caption text-success">
+              ✓ Instagram conectado com sucesso.
+            </p>
+          )}
+          {searchParams?.ig === "error" && (
+            <p className="rounded-control border border-error/40 bg-error/10 px-3 py-2 text-caption text-error">
+              ✕ Não foi possível conectar
+              {searchParams.reason === "no_ig_business_account"
+                ? " — a Página do Facebook não tem uma conta Instagram Business/Creator vinculada."
+                : "."}
+            </p>
+          )}
+          {socialConnection ? (
+            <>
+              <p className="text-body text-content">
+                Conectado como <strong>@{socialConnection.ig_username}</strong>
+              </p>
+              <p className="text-micro text-subtle">
+                Posts agendados (botão &quot;Agendar&quot; na Fila) publicam
+                sozinhos no horário escolhido.
+              </p>
+              <form action={disconnectInstagram}>
+                <SubmitButton savingLabel="Desconectando...">
+                  Desconectar Instagram
+                </SubmitButton>
+              </form>
+            </>
+          ) : (
+            <>
+              <p className="text-micro text-subtle">
+                Conecte a conta Instagram Business/Creator deste cliente para
+                agendar posts e publicá-los automaticamente. Sem conexão, o
+                fluxo manual (copiar legenda + baixar arte + &quot;Postei&quot;)
+                continua funcionando normalmente.
+              </p>
+              <a
+                href={`/api/instagram/connect?clientId=${shell.activeClientId ?? ""}`}
+                className="inline-flex items-center justify-center gap-2 rounded-control bg-gradient-to-br from-[#E0219C] via-[#A020F0] to-[#7B2FF7] px-5 py-3 text-body font-medium text-white shadow-[0_0_34px_rgba(224,33,156,0.35)] transition-all hover:-translate-y-[2px] hover:shadow-[0_0_50px_rgba(224,33,156,0.6)]"
+              >
+                Conectar Instagram
+              </a>
+            </>
+          )}
         </Card>
       </section>
 

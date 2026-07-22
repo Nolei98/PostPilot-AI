@@ -9,9 +9,23 @@ import { serve } from "inngest/next";
 import { inngest } from "@/inngest/client";
 import { scanNews } from "@/inngest/functions/scan-news";
 import { generatePost } from "@/inngest/functions/generate-post";
+import { generateCarousel } from "@/inngest/functions/generate-carousel";
 import { notifyPostReady } from "@/inngest/functions/notify";
+import { resyncLayoutPreset } from "@/inngest/functions/resync-layout-preset";
+import { attachVideo } from "@/inngest/functions/attach-video";
+import { publishScheduledPosts } from "@/inngest/functions/publish-scheduled-posts";
+import { collectInsights } from "@/inngest/functions/collect-insights";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [scanNews, generatePost, notifyPostReady],
+  functions: [
+    scanNews,
+    generatePost,
+    generateCarousel,
+    notifyPostReady,
+    resyncLayoutPreset,
+    attachVideo,
+    publishScheduledPosts,
+    collectInsights,
+  ],
 });
