@@ -6,8 +6,16 @@
 //
 // Reusa o pipeline SVG+resvg existente (decisão: sem Satori).
 // ============================================================
+import sharp from "sharp";
 import { wrapText, type CardBrand } from "@/lib/carousel-render";
 import { brandLabelText } from "@/lib/carousel-render";
+import { rasterizeSvg } from "@/lib/svg-render";
+import {
+  measureImageLuminance,
+  pickTheme,
+  textColorForTheme,
+  overlayAlphaFor,
+} from "@/lib/contrast";
 import type {
   TemplateSpec,
   TemplateElement,
@@ -127,16 +135,28 @@ function renderDivider(
   <text x="${cx}" y="${y + 8}" font-family="${family}" font-weight="600" font-size="26" letter-spacing="6" fill="${accent}" text-anchor="middle">${escapeXml(wm)}</text>`;
 }
 
+export interface RenderSpecOptions {
+  /** Pula o fundo sólido da marca — usado quando uma foto vai ser
+   * composta por baixo (renderTemplateCardPng). */
+  transparentBg?: boolean;
+  /** Escurece (dark) ou clareia (light) o fundo com um véu translúcido,
+   * calibrado pelo motor de contraste (contrast.ts) — mesma matemática
+   * já usada no resto do pipeline (luminância → tema → alpha WCAG). */
+  overlay?: { theme: "light" | "dark"; alpha: number };
+}
+
 /**
- * Renderiza uma spec completa em SVG. Fundo sólido da marca por enquanto
- * (background image/gradiente e legibilidade sobre foto entram depois).
+ * Renderiza uma spec completa em SVG. Fundo sólido da marca por padrão;
+ * com `opts.transparentBg` o fundo fica vazio (photo composta por fora,
+ * ver renderTemplateCardPng) e `opts.overlay` desenha o véu de legibilidade.
  * Elementos não suportados (media/logo/badge/dots/shape) são ignorados.
  */
 export function renderFromSpec(
   spec: TemplateSpec,
   brand: CardBrand,
   content: TemplateContent,
-  legibility?: LegibilityResult
+  legibility?: LegibilityResult,
+  opts?: RenderSpecOptions
 ): string {
   const W = spec.canvas?.w ?? 1080;
   const H = spec.canvas?.h ?? 1350;
@@ -164,9 +184,53 @@ export function renderFromSpec(
     })
     .join("\n  ");
 
+  const bgRect = opts?.transparentBg ? "" : `<rect width="${W}" height="${H}" fill="${bg}"/>`;
+  const overlayRect = opts?.overlay
+    ? `<rect width="${W}" height="${H}" fill="${opts.overlay.theme === "dark" ? "#000000" : "#FFFFFF"}" fill-opacity="${opts.overlay.alpha}"/>`
+    : "";
+
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <rect width="${W}" height="${H}" fill="${bg}"/>
+  ${bgRect}
   <rect x="0" y="0" width="${W}" height="14" fill="${accent}"/>
+  ${overlayRect}
   ${body}
 </svg>`;
+}
+
+/**
+ * Renderiza uma spec como PNG final — sobre uma foto (se `bgImage`) ou
+ * sobre o fundo sólido da marca (se `null`). Sobre foto: mede a luminância
+ * real (mesmo motor de contraste.ts do resto do pipeline), escolhe tema
+ * claro/escuro pro texto e calibra um véu translúcido até bater WCAG 4.5:1
+ * — nunca entrega card ilegível. Cor do texto "auto" nos elementos passa
+ * a resolver pro tema calculado (via brand.colorText sobrescrito).
+ */
+export async function renderTemplateCardPng(
+  spec: TemplateSpec,
+  brand: CardBrand,
+  content: TemplateContent,
+  bgImage: Buffer | null
+): Promise<Buffer> {
+  const W = spec.canvas?.w ?? 1080;
+  const H = spec.canvas?.h ?? 1350;
+
+  if (!bgImage) {
+    return rasterizeSvg(renderFromSpec(spec, brand, content));
+  }
+
+  const resized = await sharp(bgImage).resize(W, H, { fit: "cover", position: "attention" }).toBuffer();
+  const luminance = await measureImageLuminance(resized);
+  const theme = pickTheme(luminance);
+  const textColor = textColorForTheme(theme);
+  const alpha = overlayAlphaFor(theme, textColor, luminance);
+
+  const svg = renderFromSpec(
+    spec,
+    { ...brand, colorText: textColor },
+    content,
+    undefined,
+    { transparentBg: true, overlay: { theme, alpha } }
+  );
+  const overlay = rasterizeSvg(svg);
+  return sharp(resized).composite([{ input: overlay, top: 0, left: 0 }]).png().toBuffer();
 }

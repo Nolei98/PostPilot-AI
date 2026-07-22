@@ -1423,6 +1423,49 @@ export async function saveSinglePostStyle(formData: FormData) {
 }
 
 /**
+ * Salva o modelo escolhido do Template Studio (Sprint B+, B15) pra UMA
+ * superfície (cover_image/carousel_page/carousel_last) do cliente ativo —
+ * merge em brand_kits.template_selection (jsonb), as outras superfícies
+ * ficam intactas. Vale só pras PRÓXIMAS gerações (sem resync dos posts já
+ * na fila, ao contrário de layout_preset/single_post_style).
+ */
+export async function saveTemplateSelection(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
+
+  const surfaces = ["cover_image", "video_cover", "carousel_page", "carousel_last"];
+  const surface = String(formData.get("surface") ?? "");
+  if (!surfaces.includes(surface)) throw new Error("Superfície inválida");
+  const templateId = String(formData.get("template_id") ?? "");
+  if (!templateId) throw new Error("Modelo inválido");
+
+  const { data: bk, error: fetchError } = await supabase
+    .from("brand_kits")
+    .select("template_selection")
+    .eq("client_id", clientId)
+    .maybeSingle();
+  if (fetchError) throw new Error(fetchError.message);
+
+  const current = (bk?.template_selection as Record<string, string> | null) ?? {};
+  const next = { ...current, [surface]: templateId };
+
+  const { error } = await supabase
+    .from("brand_kits")
+    .update({ template_selection: next })
+    .eq("client_id", clientId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/settings");
+}
+
+/**
  * Salva o formato padrão de geração do cliente ativo (single | carousel).
  * O scan-news usa isso para decidir qual job disparar em cada candidata.
  */
