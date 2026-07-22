@@ -137,6 +137,21 @@ export async function createCarouselContainer(
   return json.id;
 }
 
+export type ContainerStatusCode = "EXPIRED" | "ERROR" | "FINISHED" | "IN_PROGRESS" | "PUBLISHED";
+
+/**
+ * Consulta se um container de mídia terminou de processar. A Graph API cria o
+ * container e devolve o id na hora, mas o processamento (download/transcodificação
+ * da imagem/vídeo) é assíncrono — publicar antes de `FINISHED` falha com
+ * "Media ID is not available".
+ */
+export async function getContainerStatus(containerId: string, accessToken: string): Promise<ContainerStatusCode> {
+  if (!hasMetaApp()) return "FINISHED";
+  const url = `${IG_API_BASE}/${containerId}?fields=status_code&access_token=${encodeURIComponent(accessToken)}`;
+  const data = await igFetch<{ status_code: ContainerStatusCode }>(url);
+  return data.status_code;
+}
+
 /** Publica um container já criado; retorna o id da mídia publicada. */
 export async function publishMedia(igUserId: string, accessToken: string, creationId: string): Promise<string> {
   if (!hasMetaApp()) {
