@@ -15,6 +15,7 @@ import {
   saveSinglePostStyle,
   saveNiche,
   saveTelegramChatId,
+  saveTemplateSelection,
   saveVisualIdentity,
 } from "@/app/actions";
 import { IdentityForm } from "@/components/IdentityForm";
@@ -33,7 +34,7 @@ import { NICHES } from "@/lib/niches";
 import { LayoutPreview } from "@/components/LayoutPreview";
 import { PREVIEW_LAYOUTS, PREVIEW_FORMATS } from "@/lib/layout-preview";
 import type { CardBrand, LayoutPreset } from "@/lib/render-shared";
-import type { BrandKit, NotificationConfig, SocialConnection, SourceConfig } from "@/lib/types";
+import type { BrandKit, NotificationConfig, SocialConnection, SourceConfig, Surface, Template } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,20 @@ export default async function SettingsPage({
     .eq("client_id", shell.activeClientId ?? "")
     .eq("status", "connected")
     .maybeSingle();
+
+  // Template Studio (Sprint B+, B13/B15): presets do sistema + os do
+  // próprio cliente, só pras superfícies já ligadas no pipeline real.
+  const { data: templates } = await supabase
+    .from("templates")
+    .select("*")
+    .or(`is_system.eq.true,client_id.eq.${shell.activeClientId ?? ""}`)
+    .order("name");
+  const templateList = (templates ?? []) as Template[];
+  const WIRED_SURFACES: { key: Surface; label: string }[] = [
+    { key: "cover_image", label: "Capa / post único" },
+    { key: "carousel_page", label: "Cards interiores do carrossel" },
+    { key: "carousel_last", label: "Fechamento do carrossel" },
+  ];
 
   const sourceList = (sources ?? []) as SourceConfig[];
   const notifConfig = notif as NotificationConfig | null;
@@ -409,6 +424,58 @@ export default async function SettingsPage({
               </div>
             </Card>
           ))}
+        </div>
+      </section>
+
+      {/* ===== Template Studio (Sprint B+, B13/B15) ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Modelos (Template Studio)</h2>
+        <p className="mb-3 text-caption text-muted">
+          Modelos novos, com composição livre de marca e texto. Escolher um
+          aqui vale só para as próximas gerações de carrossel — sem escolha,
+          continua no layout de cima.
+        </p>
+        <div className="space-y-4">
+          {WIRED_SURFACES.map(({ key: surface, label }) => {
+            const options = templateList.filter((t) => t.surface === surface);
+            const selectedId = brandKit?.template_selection?.[surface];
+            return (
+              <Card key={surface} className="p-4">
+                <p className="mb-3 text-body font-semibold">{label}</p>
+                {options.length === 0 ? (
+                  <p className="text-caption text-subtle">Nenhum modelo disponível ainda.</p>
+                ) : (
+                  <div className="flex gap-3 overflow-x-auto pb-1">
+                    {options.map((tpl) => (
+                      <form key={tpl.id} action={saveTemplateSelection} className="shrink-0">
+                        <input type="hidden" name="surface" value={surface} />
+                        <input type="hidden" name="template_id" value={tpl.id} />
+                        <button
+                          type="submit"
+                          className={`block w-32 overflow-hidden rounded-control border-2 text-left transition-colors ${
+                            selectedId === tpl.id ? "border-primary" : "border-line hover:border-subtle"
+                          }`}
+                        >
+                          {tpl.thumbnail_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={tpl.thumbnail_url} alt={tpl.name} className="aspect-[4/5] w-full object-cover" />
+                          ) : (
+                            <div className="flex aspect-[4/5] w-full items-center justify-center bg-surface-2 text-micro text-subtle">
+                              sem preview
+                            </div>
+                          )}
+                          <p className="truncate px-2 py-1.5 text-micro text-content">
+                            {tpl.name}
+                            {selectedId === tpl.id && " ✓"}
+                          </p>
+                        </button>
+                      </form>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
       </section>
 
