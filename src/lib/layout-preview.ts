@@ -15,6 +15,7 @@
 // ============================================================
 import { CARD_W, CARD_H, CLOSING_CORNER_MARGIN, type CardBrand, type LayoutPreset } from "@/lib/render-shared";
 import { buildCoverSvg, buildCardSvg } from "@/lib/carousel-render";
+import { feedVideoLayoutParts } from "@/lib/image";
 import { buildBrutalismCoverSvg, buildBrutalismCardSvg } from "@/lib/layout-brutalism";
 import { buildSerifLuxeCoverSvg, buildSerifLuxeCardSvg } from "@/lib/layout-serif-luxe";
 import { buildSwissMonoCoverSvg, buildSwissMonoCardSvg } from "@/lib/layout-swiss-mono";
@@ -211,47 +212,35 @@ export function buildVideoPreview(preset: LayoutPreset, brand: CardBrand): strin
   return wrapAsReelsFrame(cover, brand);
 }
 
-/** Vídeo FEED (4:5, migration 036) — o vídeo NÃO cobre o quadro inteiro:
- * fica só na caixa de cima (até `blurBandTop`, onde a banda de
- * identidade da capa começa) — o resto do quadro (banda de identidade,
- * já desenhada pela própria capa com fundo sólido) fica como está,
- * exatamente igual à composição real (ver composeFeedVideo em video.ts:
- * vídeo na caixa + cor sólida amostrada no rodapé). Aqui a caixa vira
- * hachura + play, já que não há vídeo real pra mostrar no mockup. */
-function wrapAsFeedVideoFrame(coverSvg: string, brand: CardBrand, boxHeight: number): string {
-  const accent = brand.colorAccent || "#7C5CFF";
-  const playCx = CARD_W / 2;
-  const playCy = boxHeight / 2;
-  const playR = 54;
-  const margin = 18;
-  // A hachura + borda tracejada ficam ANTES do resto do SVG (logo após
-  // <defs> impossível de saber a posição exata sem parsear — mais simples
-  // injetar um <defs> próprio + desenhar por cima logo no início do body,
-  // via replace da tag de abertura, garantindo que fique ATRÁS do texto
-  // da capa (que só existe na banda abaixo de boxHeight, então não colide).
-  // Injetado no FIM (antes de </svg>) — mesmo assim fica visualmente por
-  // cima só da região 0..boxHeight, que nunca colide com o texto da capa
-  // (sempre desenhado a partir de blurBandTop === boxHeight pra baixo).
-  const patchId = "video-feed-hatch";
-  const boxLayer = `<defs><pattern id="${patchId}" width="28" height="28" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-      <rect width="28" height="28" fill="#15151a"/>
-      <line x1="0" y1="0" x2="0" y2="28" stroke="#26262e" stroke-width="14"/>
-    </pattern></defs>
-    <rect x="0" y="0" width="${CARD_W}" height="${boxHeight}" fill="url(#${patchId})"/>
-    <rect x="${margin}" y="${margin}" width="${CARD_W - margin * 2}" height="${boxHeight - margin * 2}" fill="none" stroke="${accent}" stroke-opacity="0.6" stroke-width="3" stroke-dasharray="14 10" rx="18"/>
-    <circle cx="${playCx}" cy="${playCy}" r="${playR}" fill="#000" fill-opacity="0.45"/>
-    <path d="M ${playCx - 18} ${playCy - 26} L ${playCx - 18} ${playCy + 26} L ${playCx + 24} ${playCy} Z" fill="#fff"/>
-    <text x="24" y="52" font-family="IBM Plex Mono" font-weight="700" font-size="24" letter-spacing="2" fill="#fff">VÍDEO</text>`;
-  return appendOverlay(coverSvg, boxLayer);
-}
-
-/** Vídeo feed — 1 frame 4:5, vídeo só na caixa de cima (sem letterbox no
- * resto — a banda de identidade embaixo já é sólida por padrão). */
+/** Vídeo feed — moldura 16:9 ("tamanho YouTube") com cantos
+ * arredondados, dentro do quadro 4:5, fundo sólido (padrão preto) +
+ * texto na seção dele — MESMA geometria do render real
+ * (feedVideoLayoutParts, image.ts), só que aqui a moldura vira hachura
+ * + play (não há vídeo real pra mostrar no mockup) em vez do buraco
+ * transparente que o ffmpeg preenche de verdade. */
 export function buildFeedVideoPreview(preset: LayoutPreset, brand: CardBrand): string {
-  const { svg, blurBandTop } = previewCoverRender(preset, "O título do seu próximo vídeo", brand, {
-    showSwipeHint: true,
-  });
-  return wrapAsFeedVideoFrame(svg, brand, blurBandTop);
+  const { bg, frame, dividerSvg, headlineSvg } = feedVideoLayoutParts(
+    "O título do seu próximo vídeo",
+    brand
+  );
+  const accent = brand.colorAccent || "#7C5CFF";
+  const playCx = frame.x + frame.w / 2;
+  const playCy = frame.y + frame.h / 2;
+  const playR = 54;
+  const patchId = "video-feed-hatch";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
+  <defs><pattern id="${patchId}" width="28" height="28" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+    <rect width="28" height="28" fill="#15151a"/>
+    <line x1="0" y1="0" x2="0" y2="28" stroke="#26262e" stroke-width="14"/>
+  </pattern></defs>
+  <rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>
+  <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="url(#${patchId})"/>
+  <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="none" stroke="${accent}" stroke-opacity="0.6" stroke-width="3" stroke-dasharray="14 10"/>
+  <circle cx="${playCx}" cy="${playCy}" r="${playR}" fill="#000" fill-opacity="0.45"/>
+  <path d="M ${playCx - 18} ${playCy - 26} L ${playCx - 18} ${playCy + 26} L ${playCx + 24} ${playCy} Z" fill="#fff"/>
+  ${dividerSvg}
+  ${headlineSvg}
+</svg>`;
 }
 
 /** Modelo com vídeo — capa em vídeo (9:16, play) + 1 interior estático (4:5). */

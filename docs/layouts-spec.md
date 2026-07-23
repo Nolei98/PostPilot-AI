@@ -157,25 +157,28 @@ layout acima) é encaixada pela LARGURA no rodapé do quadro, e o topo é
 preenchido com uma extensão desfocada do próprio vídeo/foto (nunca corta
 lateral). O texto usa o MESMO preset de layout escolhido em Ajustes.
 
-## Vídeo feed (4:5) — adicionado 2026-07-23, redesenhado no mesmo dia (migration 036)
+## Vídeo feed (4:5) — adicionado 2026-07-23, redesenhado 2x no mesmo dia (migration 036)
 
 Segundo formato de vídeo, `format: "video_feed"` — MESMO upload manual
-do usuário, mas SEM o quadro 9:16 do Reels. Diferente da 1ª versão
-(vídeo cobrindo o quadro 1080×1350 inteiro), o vídeo fica só numa
-**caixa de cima** (altura = `blurBandTop`, a mesma variável que já
-delimita onde a banda de identidade da capa começa — dinâmica por
-headline, igual ao Reels/capa) — cover-fit dentro dessa caixa, sem
-esticar/cortar fora dela. O RESTANTE do quadro (banda de identidade,
-rodapé) vira uma **cor SÓLIDA amostrada do próprio vídeo** (média RGB
-do frame de pôster, `buildFeedVideoOverlay` em image.ts) — não um véu
-translúcido sobre vídeo, porque ali não tem vídeo nenhum atrás pra
-"velar"; é cor pura escolhida pra combinar com a paleta do vídeo.
-Wordmark + título (mesmo motor de layout dos 5 presets) desenham em
-cima dessa cor sólida, com a cor de texto escolhida por contraste real
-(claro/escuro) contra ela. `composeFeedVideo` (video.ts) monta isso via
-`pad` do ffmpeg: vídeo na caixa de cima, preenchimento sólido no resto.
-Publica no Instagram pelo mesmo container REELS do Graph API (só a
-proporção do vídeo muda, não o tipo de mídia). Anexado no post pelo
-mesmo botão de upload da Fila, numa opção separada ("Anexar Feed
-(4:5)") — um post só guarda 1 vídeo por vez; trocar de formato
-reprocessa por cima do que já tinha.
+do usuário, mas SEM o quadro 9:16 do Reels. Versão final (a 1ª e a 2ª
+tentativa foram descartadas — vídeo cobrindo o quadro inteiro, depois
+uma caixa no topo com cor sólida amostrada — nenhuma batia com o
+protótipo de referência): o vídeo vive numa **MOLDURA própria, tamanho
+YouTube (16:9), cantos arredondados (32px), com margem lateral de 90px**
+(igual ao `editorial-noir-prototype.html`, seção 06 "Modelos com
+vídeo") — nunca cobre o quadro inteiro. Fundo do card é **SÓLIDO,
+padrão PRETO** (`#0A0A0A`, ou `colorBackground` da marca) — não depende
+de luminância/cor do vídeo. Ordem vertical (cada elemento na SUA seção,
+nunca sobrepostos): divisor (wordmark) → moldura do vídeo → título.
+`feedVideoLayoutParts` (image.ts) calcula a geometria (a moldura sobe
+sozinha se o título tiver mais linhas, igual ao resto do sistema:
+grupo cresce de baixo pra cima a partir de uma margem de rodapé fixa).
+`buildFeedVideoOverlay` desenha o fundo sólido com um **buraco
+arredondado transparente** exatamente do tamanho da moldura (via SVG
+`<mask>`) — `composeFeedVideo` (video.ts) encaixa o vídeo (cover-fit)
+atrás desse buraco via `pad` do ffmpeg; os cantos arredondados saem de
+graça (o buraco já corta o vídeo na forma certa, não precisa mascarar
+o vídeo em si). Publica no Instagram pelo mesmo container REELS do
+Graph API. Anexado no post pelo mesmo botão de upload da Fila, numa
+opção separada ("Anexar Feed (4:5)") — um post só guarda 1 vídeo por
+vez; trocar de formato reprocessa por cima do que já tinha.

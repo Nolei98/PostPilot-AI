@@ -64,7 +64,7 @@ function escapeXml(s: string): string {
  * quebra) que a IA às vezes gera — as fontes embutidas (Inter/Sora/Space
  * Grotesk) não têm esses glifos, e o resvg desenha um quadrado com "?"
  * no lugar (tofu) em vez de simplesmente pular o caractere. */
-function stripEmoji(s: string): string {
+export function stripEmoji(s: string): string {
   return s
     .replace(/[\p{Extended_Pictographic}‍️]/gu, "")
     .replace(/[‐‑‒–—―]/g, "-") // travessões → hífen normal
@@ -121,7 +121,7 @@ export function brandLabelText(brand: CardBrand): string | null {
 }
 
 /** Tamanho de fonte da headline da capa/fechamento por comprimento (auto-fit simples). */
-function coverHeadlineSize(headline: string): { size: number; lineH: number; maxChars: number } {
+export function coverHeadlineSize(headline: string): { size: number; lineH: number; maxChars: number } {
   const n = headline.length;
   if (n <= 36) return { size: 104, lineH: 114, maxChars: 15 };
   if (n <= 64) return { size: 86, lineH: 96, maxChars: 19 };

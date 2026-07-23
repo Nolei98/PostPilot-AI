@@ -120,20 +120,18 @@ export async function composeReelsVideo(videoBuffer: Buffer, overlayPng: Buffer)
 
 /**
  * Compõe o quadro FEED 4:5 final (migration 036): o vídeo enviado fica
- * SÓ na caixa de cima (`boxHeight` px, cover-fit, corta o excesso
- * lateral) — NÃO cobre o quadro inteiro. O restante (rodapé, onde mora
- * a banda de identidade) é preenchido com `bgColorHex` (cor sólida
- * amostrada do próprio vídeo — ver buildFeedVideoOverlay em image.ts),
- * não uma extensão desfocada: aqui não tem "resto de vídeo" pra
- * estender, é cor pura escolhida pra combinar. O overlay de texto (PNG
- * transparente acima da caixa, texto na banda) vai por cima de tudo.
- * Retorna o .mp4 final (h264, mesmo áudio do original se houver).
+ * SÓ na sua MOLDURA (16:9, "tamanho YouTube", cantos arredondados,
+ * `frame` calculado por buildFeedVideoOverlay em image.ts) — cover-fit
+ * dentro dela, nunca esticado pro quadro inteiro. O overlay (PNG com um
+ * buraco arredondado exatamente do tamanho da moldura, fundo sólido +
+ * texto no resto) fica por cima: o vídeo só aparece através do buraco,
+ * o que garante os cantos arredondados sem precisar mascarar o vídeo
+ * em si. Retorna o .mp4 final (h264, mesmo áudio do original se houver).
  */
 export async function composeFeedVideo(
   videoBuffer: Buffer,
   overlayPng: Buffer,
-  boxHeight: number,
-  bgColorHex: string
+  frame: { x: number; y: number; w: number; h: number }
 ): Promise<Buffer> {
   const inPath = tmpPath("in.mp4");
   const overlayPath = tmpPath("overlay.png");
@@ -142,11 +140,10 @@ export async function composeFeedVideo(
     fs.writeFileSync(inPath, videoBuffer);
     fs.writeFileSync(overlayPath, overlayPng);
 
-    const padColor = `0x${bgColorHex.replace("#", "")}`;
-    const box = Math.max(1, Math.min(FEED_VIDEO_H, Math.round(boxHeight)));
+    const { x, y, w, h } = frame;
     const filter = [
-      `[0:v]scale=${FEED_VIDEO_W}:${box}:force_original_aspect_ratio=increase,crop=${FEED_VIDEO_W}:${box},setsar=1,` +
-        `pad=${FEED_VIDEO_W}:${FEED_VIDEO_H}:0:0:color=${padColor}[bg]`,
+      `[0:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,` +
+        `pad=${FEED_VIDEO_W}:${FEED_VIDEO_H}:${x}:${y}:color=black[bg]`,
       `[bg][1:v]overlay=0:0[outv]`,
     ].join(";");
 

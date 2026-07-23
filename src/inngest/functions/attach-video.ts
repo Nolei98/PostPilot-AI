@@ -65,10 +65,11 @@ export const attachVideo = inngest.createFunction(
         const poster = await extractPosterFrame(videoBuffer, 0.5);
         let finalVideo: Buffer;
         if (isFeed) {
-          // Feed 4:5: vídeo só na caixa de cima, rodapé em cor sólida
-          // amostrada do próprio vídeo (ver buildFeedVideoOverlay).
-          const { overlayPng, blurBandTop, bgColorHex } = await buildFeedVideoOverlay(post.hook ?? "", cardBrand, poster);
-          finalVideo = await composeFeedVideo(videoBuffer, overlayPng, blurBandTop, bgColorHex);
+          // Feed 4:5: vídeo numa MOLDURA própria (16:9, cantos
+          // arredondados) — fundo sólido (padrão preto) + texto na
+          // seção dele, nunca sobrepostos (ver buildFeedVideoOverlay).
+          const { overlayPng, frame } = buildFeedVideoOverlay(post.hook ?? "", cardBrand);
+          finalVideo = await composeFeedVideo(videoBuffer, overlayPng, frame);
         } else {
           // Reels 9:16: overlay já em 1080x1350, encaixado no rodapé do quadro maior.
           const overlay = await buildReelsVideoOverlayPng(post.hook ?? "", cardBrand, poster);

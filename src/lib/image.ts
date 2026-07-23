@@ -22,7 +22,7 @@ import { FONT_FAMILY } from "@/lib/font-data";
 import { rasterizeSvg } from "@/lib/svg-render";
 import { searchStockPhoto, fetchStockPhotoBuffer } from "@/lib/stock-photos";
 import { buildProfileChipLayers } from "@/lib/profile-chip";
-import { buildCoverSvg, composePhotoBg, type CardBrand } from "@/lib/carousel-render";
+import { buildCoverSvg, composePhotoBg, coverHeadlineSize, stripEmoji, wrapText, type CardBrand } from "@/lib/carousel-render";
 import { buildBrutalismCoverSvg } from "@/lib/layout-brutalism";
 import { buildSerifLuxeCoverSvg } from "@/lib/layout-serif-luxe";
 import { buildSwissMonoCoverSvg } from "@/lib/layout-swiss-mono";
@@ -82,7 +82,6 @@ import {
   measureImageLuminance,
   overlayAlphaFor,
 } from "@/lib/contrast";
-import { relLuminance } from "@/lib/legibility";
 
 /** Template de marca default (posts antigos / config ausente) */
 const DEFAULT_BRAND: BrandTemplate = { logoUrl: null, showLogo: true, fontFamily: FONT_FAMILY };
@@ -713,54 +712,113 @@ export async function buildReelsVideoOverlayPng(
   return rasterizeSvg(svg);
 }
 
-/** Média RGB de uma imagem inteira (0-255 por canal) — usada pra achar
- * a cor de fundo que "combina" com o vídeo do feed (§ vídeo feed 4:5).
- * Amostra pequena (24x30), barato, suficiente pra uma média de cor. */
-async function averageColorHex(photo: Buffer): Promise<string> {
-  const { data, info } = await sharp(photo)
-    .resize(24, 30)
-    .removeAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const channels = info.channels;
-  let r = 0, g = 0, b = 0;
-  const n = data.length / channels;
-  for (let i = 0; i < data.length; i += channels) {
-    r += data[i]; g += data[i + 1]; b += data[i + 2];
-  }
-  const [rr, gg, bb] = n ? [r / n, g / n, b / n].map(Math.round) : [11, 11, 18];
-  return "#" + [rr, gg, bb].map((v) => v.toString(16).padStart(2, "0")).join("");
+/** Retângulo do vídeo dentro do quadro feed (4:5) — TAMANHO YOUTUBE
+ * (16:9), como uma "moldurinha" própria, nunca o quadro inteiro (ver
+ * editorial-noir-prototype.html, seção 06 "Modelos com vídeo": o vídeo
+ * é um retângulo com cantos arredondados dentro do card, texto abaixo,
+ * NUNCA colado nas bordas). Margem lateral igual ao `pad` da capa
+ * (90px) — a mesma margem segura usada em todo o resto do sistema. */
+export interface FeedVideoFrame {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  radius: number;
+}
+
+const FEED_FRAME_MARGIN_X = 90;
+const FEED_FRAME_W = WIDTH - FEED_FRAME_MARGIN_X * 2;
+const FEED_FRAME_H = Math.round((FEED_FRAME_W * 9) / 16); // 16:9, "tamanho YouTube"
+const FEED_FRAME_RADIUS = 32;
+const FEED_GAP_FRAME_TO_HEADLINE = 56;
+const FEED_GAP_DIVIDER_TO_FRAME = 44;
+
+/**
+ * Peças reaproveitáveis do layout do vídeo FEED — divisor (wordmark) +
+ * headline + geometria da moldura, SEM decidir o que vai dentro dela
+ * (o render real usa um buraco transparente pro vídeo; o preview de
+ * Ajustes usa uma hachura + play, já que não há vídeo real pra mostrar
+ * ali) — evita duas fontes de verdade pra mesma geometria/posição.
+ */
+export function feedVideoLayoutParts(
+  headline: string,
+  cardBrand: CardBrand
+): { bg: string; text: string; frame: FeedVideoFrame; dividerSvg: string; headlineSvg: string } {
+  const family = cardBrand.fontFamily || "Inter";
+  const bg = cardBrand.colorBackground || "#0A0A0A"; // padrão preto (kit v2, editorial-noir-prototype.html)
+  const accent = cardBrand.colorAccent || "#7C5CFF";
+  const text = cardBrand.colorText || "#FFFFFF";
+  const cx = WIDTH / 2;
+
+  const wm = (cardBrand.wordmark || cardBrand.brandName || "").toUpperCase();
+  const headlineText = stripEmoji(headline ?? "");
+  const { size, lineH, maxChars } = coverHeadlineSize(headlineText);
+  const lines = wrapText(headlineText, maxChars).slice(0, 4);
+
+  const bottomEdge = HEIGHT - 120;
+  const headStartY = bottomEdge - (lines.length - 1) * lineH;
+  const frameBottomY = headStartY - Math.round(FEED_GAP_FRAME_TO_HEADLINE + size * 0.6);
+  const frameTopY = frameBottomY - FEED_FRAME_H;
+  const dividerY = frameTopY - FEED_GAP_DIVIDER_TO_FRAME;
+  const frame: FeedVideoFrame = {
+    x: FEED_FRAME_MARGIN_X,
+    y: frameTopY,
+    w: FEED_FRAME_W,
+    h: FEED_FRAME_H,
+    radius: FEED_FRAME_RADIUS,
+  };
+
+  const halfText = wm ? (wm.length * 22) / 2 + 24 : 0;
+  const dividerSvg = wm
+    ? `<line x1="${FEED_FRAME_MARGIN_X}" y1="${dividerY}" x2="${cx - halfText}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.45" stroke-width="1.5"/>
+  <line x1="${cx + halfText}" y1="${dividerY}" x2="${WIDTH - FEED_FRAME_MARGIN_X}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.45" stroke-width="1.5"/>
+  <text x="${cx}" y="${dividerY + 8}" font-family="${family}" font-weight="600" font-size="26" letter-spacing="6" fill="${accent}" text-anchor="middle">${escapeXmlLocal(wm)}</text>`
+    : "";
+
+  const headlineSvg = `<text font-family="${family}" font-weight="800" font-size="${size}" fill="${text}" text-anchor="middle" letter-spacing="-1">${tspansLocal(lines, cx, headStartY, lineH)}</text>`;
+
+  return { bg, text, frame, dividerSvg, headlineSvg };
 }
 
 /**
- * Overlay do vídeo FEED (4:5, migration 036) — diferente do Reels: o
- * vídeo não cobre o quadro inteiro, só a caixa de cima (altura
- * `blurBandTop`); a banda de identidade (rodapé) vira uma cor SÓLIDA
- * amostrada do próprio vídeo (não um véu translúcido sobre o vídeo —
- * aqui não tem vídeo nenhum atrás pra "velar", é cor pura escolhida pra
- * combinar). Por isso o SVG sai SEM fundo e SEM overlay (transparent,
- * sem opts.overlay) — o ffmpeg (composeFeedVideo, video.ts) quem pinta
- * a cor sólida por baixo via `pad`, preenchendo exatamente a área onde
- * o vídeo não chega.
+ * Overlay do vídeo FEED (4:5, migration 036) — o vídeo vive numa
+ * MOLDURA própria (16:9, cantos arredondados, com margem — nunca cobre
+ * o quadro inteiro), igual ao protótipo Editorial Noir: divisor
+ * (wordmark) → moldura do vídeo → título, cada um na sua seção, nunca
+ * sobrepostos. Fundo SÓLIDO (cor da marca, padrão preto — `--ink` do
+ * protótipo) — sem depender de luminância/cor do vídeo, mesma lógica
+ * já usada pros cards sem foto (bg sólido + cor de texto da marca).
+ * O SVG desenha o fundo com um RECÂNGULO ARREDONDADO TRANSPARENTE bem
+ * no lugar da moldura (via `mask`) — o ffmpeg (composeFeedVideo,
+ * video.ts) encaixa o vídeo exatamente atrás desse buraco.
  */
-export async function buildFeedVideoOverlay(
+export function buildFeedVideoOverlay(
   headline: string,
-  cardBrand: CardBrand,
-  posterFrame: Buffer
-): Promise<{ overlayPng: Buffer; blurBandTop: number; bgColorHex: string }> {
-  const bgColorHex = await averageColorHex(posterFrame);
-  const luminance = relLuminance(
-    bgColorHex
-      .replace("#", "")
-      .match(/.{2}/g)!
-      .map((h) => parseInt(h, 16)) as [number, number, number]
-  );
-  const theme = pickTheme(luminance);
-  const textColor = textColorForTheme(theme);
-  const { svg, blurBandTop } = buildPageOneCoverSvg(headline, { ...cardBrand, colorText: textColor }, true, {
-    showSwipeHint: false,
-  });
-  return { overlayPng: rasterizeSvg(svg), blurBandTop, bgColorHex };
+  cardBrand: CardBrand
+): { overlayPng: Buffer; frame: FeedVideoFrame } {
+  const { bg, frame, dividerSvg, headlineSvg } = feedVideoLayoutParts(headline, cardBrand);
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
+  <defs>
+    <mask id="feed-video-hole">
+      <rect width="100%" height="100%" fill="#fff"/>
+      <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="${WIDTH}" height="${HEIGHT}" fill="${bg}" mask="url(#feed-video-hole)"/>
+  ${dividerSvg}
+  ${headlineSvg}
+</svg>`;
+
+  return { overlayPng: rasterizeSvg(svg), frame };
+}
+
+function escapeXmlLocal(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function tspansLocal(lines: string[], x: number, startY: number, lineH: number): string {
+  return lines.map((l, i) => `<tspan x="${x}" y="${startY + i * lineH}">${escapeXmlLocal(l)}</tspan>`).join("");
 }
 
 /** Exposto apenas para QA visual (debug route) — Fatia 1 do Reels
