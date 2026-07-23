@@ -29,11 +29,14 @@ export const REELS_H = 1920;
  * constante de composeReelsFrame em image.ts (imagem estática). */
 export const REELS_TOP_EXTENSION = REELS_H - 1350;
 
-function tmpPath(name: string): string {
-  return path.join(os.tmpdir(), `postpilot-video-${process.pid}-${Date.now()}-${name}`);
+/** Caminho temporário único (pid+timestamp evita colisão entre execuções
+ * concorrentes) — reusado pela montagem automática (video-assembly.ts). */
+export function tmpPath(name: string): string {
+  return path.join(os.tmpdir(), `postpilot-video-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${name}`);
 }
 
-async function runFfmpeg(args: string[]): Promise<void> {
+/** Roda o binário do ffmpeg (ffmpeg-static, sem depender do sistema). */
+export async function runFfmpeg(args: string[]): Promise<void> {
   if (!ffmpegPath) throw new Error("Binário do ffmpeg (ffmpeg-static) não encontrado");
   await execFileAsync(ffmpegPath, args, { maxBuffer: 1024 * 1024 * 64 });
 }

@@ -51,7 +51,9 @@ export interface VideoScriptInput {
 
 export const MIN_BEATS = 2;
 export const MAX_BEATS = 4;
-const HOOK_MAX_SECONDS = 3;
+/** duração assumida do hook (script.hook não carrega "seconds" — timeline
+ * de montagem, video-assembly.ts, deriva daqui + beats + resto p/ cta). */
+export const HOOK_MAX_SECONDS = 3;
 
 const LANGUAGE_NAMES: Record<string, string> = {
   "pt-BR": "português do Brasil",
