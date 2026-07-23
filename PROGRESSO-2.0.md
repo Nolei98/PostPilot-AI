@@ -481,9 +481,9 @@ deploy novo (hash do endpoint muda) é preciso re-sincronizar com o mesmo `curl
 > 9:16. NÃO tem b-roll automático, NÃO tem legendas queimadas, NÃO usa
 > Remotion, NÃO publica (fica na fila pra aprovação manual, igual
 > foto/carrossel). O que falta abaixo continua de pé.
-- [ ] Roteiro (Sonnet): gancho 0–3s + beats + CTA; 9:16; duração por rede.
-- [ ] Montagem com **b-roll real** (Pexels/Pixabay Video ou upload) + legendas
-      queimadas + logo/chip via **Remotion** (⚠️ checar licença comercial do Remotion).
+- [x] **D1** (2026-07-23) — Roteiro (`src/lib/ai/video-script.ts`, `generateVideoScript`): mesmo padrão multi-provider de carousel.ts (claude/gemini/pollinations, mock em $0). Contrato: hook (0-3s) + 2-4 beats com duração + CTA, validado contra a janela de duração da rede (Reels 7-15s, TikTok 15-34s). 14 testes.
+- [x] **D2** (2026-07-23) — Montagem (`src/lib/video-assembly.ts` + `src/lib/stock-videos.ts`): **decisão — sem Remotion** (usuário pediu só ferramentas grátis; licença comercial do Remotion era a pendência travada aqui). B-roll real via **Pexels Video** (mesma key de stock-photos.ts, testado contra a API real) + montagem via **ffmpeg** (já no projeto): `buildScriptTimeline` deriva hook/beats/cta em janelas de tempo, `assembleScriptVideo` normaliza+concatena 1 clipe por segmento e queima a legenda de cada um só na sua janela (`overlay` + `enable=between(t,start,end)`; legenda = PNG via SVG+resvg, não ffmpeg drawtext — evita depender de .ttf). Testado ponta a ponta com ffmpeg real (clipes sintéticos): mp4 válido, transições corretas, acentos PT-BR ok, conferido visualmente. Logo/chip de marca fica pra depois (escopo desta v1 é b-roll+legenda). 9 testes.
+- [ ] **Falta pra fechar D1+D2**: decidir onde persistir o roteiro/vídeo montado e quando disparar (job Inngest + campo novo ou reuso de `posts.video_url`?) — D1/D2 hoje são módulos isolados testados, ainda não ligados a nenhum pipeline/fila.
 - [ ] Publicação Reels (Graph API) + TikTok (**Content Posting API** — pedir acesso cedo).
 - **Aceite:** Reel 9:16 com b-roll real + legendas + marca, aprovável na mesma fila.
 
