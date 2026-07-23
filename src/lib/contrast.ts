@@ -77,12 +77,15 @@ export function overlayAlphaFor(
  * Overlay de legibilidade como GRADIENTE — nunca mais um retângulo de
  * opacidade fixa ("caixa" estática desconectada da foto). Nasce
  * TRANSPARENTE bem no topo da banda (onde encosta na foto ainda visível
- * — a "emenda" que ficava dura vira transição) e só fecha na cor do
- * tema (preto/branco) perto da base, onde o texto de fato precisa do
- * contraste. `bandY`/`bandH` é a região a cobrir (banda de identidade da
- * capa/fechamento); `alpha` é o pico calibrado por WCAG (overlayAlphaFor).
- * `gradientId` precisa ser único dentro do mesmo <svg> (evita colisão de
- * <defs> se dois overlays coexistirem no mesmo documento).
+ * — a "emenda" que ficava dura vira transição) e sobe pra opacidade
+ * plena numa faixa CURTA (a "bordinha" de conexão — no máx. 70px ou 20%
+ * da banda, o que for menor); dali em diante fica SÓLIDO na opacidade
+ * calibrada até a base — garante que o texto (que começa logo depois
+ * dessa faixa curta) sempre senta em cima da parte plena do gradiente,
+ * nunca de um meio-tom. `bandY`/`bandH` é a região a cobrir (banda de
+ * identidade da capa/fechamento); `alpha` é o pico calibrado por WCAG
+ * (overlayAlphaFor). `gradientId` precisa ser único dentro do mesmo
+ * <svg> (evita colisão de <defs> se dois overlays coexistirem).
  */
 export function buildOverlayGradientSvg(
   gradientId: string,
@@ -94,9 +97,10 @@ export function buildOverlayGradientSvg(
 ): string {
   if (alpha <= 0 || bandH <= 0) return "";
   const color = theme === "dark" ? "#000000" : "#ffffff";
+  const transitionFrac = Math.min(0.2, bandH > 0 ? 70 / bandH : 0.2);
   return `<defs><linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="${color}" stop-opacity="0"/>
-    <stop offset="0.5" stop-color="${color}" stop-opacity="${(alpha * 0.3).toFixed(3)}"/>
+    <stop offset="${transitionFrac.toFixed(3)}" stop-color="${color}" stop-opacity="${alpha}"/>
     <stop offset="1" stop-color="${color}" stop-opacity="${alpha}"/>
   </linearGradient></defs>
   <rect x="0" y="${bandY}" width="${width}" height="${bandH}" fill="url(#${gradientId})"/>`;
