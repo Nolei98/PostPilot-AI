@@ -342,7 +342,6 @@ export function buildCardSvg(
 
   const isHook = card.role === "hook";
   const isCta = card.role === "cta";
-  const headStartY = isHook ? 520 : 300;
 
   // Rótulo (@handle · palavras-chave) SEMPRE em uma linha só — nunca
   // quebra; se não couber, corta com reticências (nunca estoura o quadro).
@@ -353,6 +352,27 @@ export function buildCardSvg(
   // mesmo carrossel sempre produz a mesma alternância).
   const labelAtBottom = card.idx % 2 === 1;
   const labelY = labelAtBottom ? CARD_H - 70 : 130;
+
+  // Cards "value" (a maioria do miolo do carrossel): o bloco título+corpo
+  // acompanha o @ em vez de ficar sempre fixo no mesmo lugar — quando o
+  // rótulo sobe pro topo, o bloco desce pro terço inferior (e vice-versa).
+  // Sem isso o bloco ficava sempre colado em y=300, então metade das
+  // páginas tinha o rótulo bem perto do título (topo) e a outra metade
+  // sempre "no lado oposto" — nunca variava de verdade, só o rótulo
+  // bailava em volta de um texto parado. Hook/cta mantêm o centro fixo
+  // (composição deliberada, não sofre desse problema).
+  let headStartY = isHook ? 520 : 300;
+  if (!isHook && !isCta) {
+    const blockBottomMargin = CARD_H - 220; // folga acima do número da página
+    // Distância do início do bloco (headStartY) até a baseline da ÚLTIMA
+    // linha (corpo, se houver — senão a própria headline) — mesma conta
+    // usada mais abaixo pra posicionar o corpo a partir de headStartY.
+    const lastBaselineOffset = bodyLines.length
+      ? headLineH * headlineLines.length + Math.round(headSize * 0.6) + bodyLineH * (bodyLines.length - 1)
+      : headLineH * (headlineLines.length - 1);
+    const lowerHeadStartY = blockBottomMargin - lastBaselineOffset;
+    headStartY = labelAtBottom ? 300 : lowerHeadStartY;
+  }
 
   // Sem foto: fundo sólido. Com foto: SEM retângulo fixo — o overlay agora
   // é calibrado pela luminância real da foto (contrast.ts); só aparece
