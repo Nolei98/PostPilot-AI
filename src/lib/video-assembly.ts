@@ -15,9 +15,10 @@
 // pra depois (o vídeo manual já cobre isso; aqui prioriza legenda).
 // ============================================================
 import fs from "node:fs";
+import sharp from "sharp";
 import { wrapText } from "@/lib/carousel-render";
 import { rasterizeSvg } from "@/lib/svg-render";
-import { tmpPath, runFfmpeg } from "@/lib/video";
+import { tmpPath, runFfmpeg, extractPosterFrame } from "@/lib/video";
 import type { VideoScript } from "@/lib/ai/video-script";
 import { HOOK_MAX_SECONDS } from "@/lib/ai/video-script";
 
@@ -103,18 +104,72 @@ async function concatClips(clipPaths: string[]): Promise<string> {
   }
 }
 
-/** Legenda em PNG transparente (texto branco + faixa escura translúcida
- * no terço inferior pra legibilidade sobre qualquer b-roll — mesma
- * régua "nunca ilegível" do resto do pipeline, só que fixa em vez de
- * medida por luminância, já que aqui o fundo muda por segundo). */
-function buildCaptionSvg(text: string): string {
+/** Altura (em px) da faixa onde o texto senta — mesma conta usada pra
+ * saber de onde amostrar a cor e pra desenhar o gradiente. */
+function captionTextBandHeight(text: string): number {
+  const fontSize = 56;
+  const maxChars = 22;
+  const lines = wrapText(text.toUpperCase(), maxChars).slice(0, 3);
+  return 120 + lines.length * fontSize * 1.2;
+}
+
+/** Cor média (RGB) do terço inferior do frame — de onde o gradiente da
+ * legenda "puxa" a cor, em vez de ser um preto genérico sem relação com
+ * a imagem. Mesma ideia de measureImageLuminance (contrast.ts), mas
+ * preservando a cor (não só a luminância) pra tingir o scrim. */
+async function sampleBandColor(frame: Buffer, bandY: number, bandH: number): Promise<[number, number, number]> {
+  // margem de 2px: câmbio de subsampling do JPEG do poster frame às vezes
+  // deixa a altura pós-resize com 1px a menos que ASSEMBLY_H — encolhe a
+  // região um pouco em vez de arriscar "extract area" fora dos limites.
+  const height = Math.max(1, Math.min(ASSEMBLY_H - 2, Math.round(bandH)));
+  const top = Math.max(0, Math.min(ASSEMBLY_H - height - 2, Math.round(bandY)));
+  try {
+    // materializa o resize ANTES do extract — encadear os dois na mesma
+    // pipeline sem um toBuffer() no meio faz o sharp validar a área de
+    // corte contra as dimensões ORIGINAIS (pré-resize), não as finais.
+    const covered = await sharp(frame).resize(ASSEMBLY_W, ASSEMBLY_H, { fit: "cover" }).toBuffer();
+    const { data, info } = await sharp(covered)
+      .extract({ left: 0, top, width: ASSEMBLY_W, height })
+      .resize(24, 30) // reduz antes de amostrar — barato, suficiente pra média de cor
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const channels = info.channels;
+    let r = 0, g = 0, b = 0;
+    const n = data.length / channels;
+    for (let i = 0; i < data.length; i += channels) {
+      r += data[i]; g += data[i + 1]; b += data[i + 2];
+    }
+    return n ? [r / n, g / n, b / n] : [0, 0, 0];
+  } catch (err) {
+    // amostragem é cosmética (calibra o tom do gradiente) — se falhar por
+    // qualquer motivo, cai pro preto puro em vez de derrubar a montagem.
+    console.warn("[video-assembly] sampleBandColor falhou, usando preto:", (err as Error).message);
+    return [0, 0, 0];
+  }
+}
+
+/**
+ * Legenda em PNG transparente. O véu atrás do texto NÃO é uma caixa —
+ * é um gradiente contínuo (sem borda reta) que nasce transparente,
+ * passa pela cor MÉDIA do próprio b-roll daquele trecho (`bandColor`,
+ * amostrada do frame real) e só then escurece até o preto — "puxa" a
+ * cor da imagem em vez de ser um preto genérico carimbado por cima.
+ */
+function buildCaptionSvg(text: string, bandColor: [number, number, number]): string {
   const fontSize = 56;
   const maxChars = 22;
   const lines = wrapText(text.toUpperCase(), maxChars).slice(0, 3);
   const lineH = fontSize * 1.2;
-  const bandH = 120 + lines.length * lineH;
-  const bandY = ASSEMBLY_H - bandH;
+  const textBandH = captionTextBandHeight(text);
   const startY = ASSEMBLY_H - 90 - (lines.length - 1) * lineH;
+  const [r, g, b] = bandColor.map(Math.round);
+  const tint = `rgb(${r},${g},${b})`;
+
+  // gradiente cobre o quadro INTEIRO (sem rect com borda própria):
+  // limpo até ~58%, a cor da imagem emerge gradualmente, escurece pro
+  // preto só perto da base — nunca um degrau, sempre transição.
+  const fadeStart = 1 - (textBandH * 1.6) / ASSEMBLY_H;
 
   const tspans = lines
     .map((l, i) => `<tspan x="${ASSEMBLY_W / 2}" y="${startY + i * lineH}">${escapeXml(l)}</tspan>`)
@@ -123,11 +178,13 @@ function buildCaptionSvg(text: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${ASSEMBLY_W}" height="${ASSEMBLY_H}" viewBox="0 0 ${ASSEMBLY_W} ${ASSEMBLY_H}">
   <defs>
     <linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#000" stop-opacity="0"/>
-      <stop offset="1" stop-color="#000" stop-opacity="0.75"/>
+      <stop offset="0" stop-color="${tint}" stop-opacity="0"/>
+      <stop offset="${Math.max(0, fadeStart).toFixed(3)}" stop-color="${tint}" stop-opacity="0"/>
+      <stop offset="${Math.min(0.97, fadeStart + 0.16).toFixed(3)}" stop-color="${tint}" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.88"/>
     </linearGradient>
   </defs>
-  <rect x="0" y="${bandY}" width="${ASSEMBLY_W}" height="${bandH}" fill="url(#scrim)"/>
+  <rect x="0" y="0" width="${ASSEMBLY_W}" height="${ASSEMBLY_H}" fill="url(#scrim)"/>
   <text font-family="sans-serif" font-weight="800" font-size="${fontSize}" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.5">${tspans}</text>
 </svg>`;
 }
@@ -165,8 +222,15 @@ export async function assembleScriptVideo(
     }
     concatPath = await concatClips(normalizedPaths);
 
-    for (const seg of segments) {
-      const png = rasterizeSvg(buildCaptionSvg(seg.text));
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      // amostra a cor de um frame do PRÓPRIO clipe deste segmento — é
+      // essa cor que "puxa" o gradiente da legenda (não preto genérico).
+      const frame = await extractPosterFrame(fs.readFileSync(normalizedPaths[i]), 0.15);
+      const textBandH = captionTextBandHeight(seg.text);
+      const bandColor = await sampleBandColor(frame, ASSEMBLY_H - textBandH, textBandH);
+
+      const png = rasterizeSvg(buildCaptionSvg(seg.text, bandColor));
       const p = tmpPath("caption.png");
       fs.writeFileSync(p, png);
       captionPaths.push(p);

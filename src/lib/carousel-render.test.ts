@@ -158,19 +158,22 @@ describe("buildCoverSvg", () => {
     expect(svg).not.toContain('height="14"'); // sem a barra de destaque no topo
   });
 
-  it("com foto e overlay: retângulo tematizado cobre só a banda de identidade", () => {
+  it("com foto e overlay: gradiente tematizado cobre a banda de identidade (nunca um retângulo de opacidade fixa)", () => {
     const { svg, blurBandTop } = buildCoverSvg(cover, { ...brand, wordmark: "Overlens" }, true, {
       overlay: { theme: "dark", alpha: 0.35 },
     });
     expect(svg).toContain(`y="${blurBandTop}"`);
-    expect(svg).toContain('fill="#000" fill-opacity="0.35"');
+    expect(svg).toContain("linearGradient");
+    expect(svg).toContain('stop-opacity="0"'); // nasce transparente — conecta com a foto
+    expect(svg).toContain('stop-opacity="0.35"'); // pico calibrado, só perto da base
+    expect(svg).not.toMatch(/fill="#000" fill-opacity="0\.35"/); // não é mais um rect de opacidade fixa
   });
 
-  it("com foto e alpha=0 (contraste já ok): sem retângulo de overlay", () => {
+  it("com foto e alpha=0 (contraste já ok): sem gradiente de overlay", () => {
     const { svg } = buildCoverSvg(cover, { ...brand, wordmark: "Overlens" }, true, {
       overlay: { theme: "dark", alpha: 0 },
     });
-    expect(svg).not.toMatch(/fill="#000" fill-opacity="0\.[1-9]/);
+    expect(svg).not.toContain("linearGradient");
   });
 
   it("fechamento (showSwipeHint:false) não mostra 'DESLIZE PARA VER'", () => {

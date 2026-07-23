@@ -159,23 +159,37 @@ export function buildCarouselPreview(preset: LayoutPreset, brand: CardBrand): st
  * aproximação estática do Reels (motor de vídeo real ainda não existe).
  * Regra do kit: NUNCA cortar as laterais — encaixa pela LARGURA, completa
  * o topo por extensão de fundo (translada o conteúdo pro rodapé do
- * quadro maior, mesma lógica de "capa inteira visível"). Adiciona ícone
- * de play + badge REELS. */
+ * quadro maior, mesma lógica de "capa inteira visível").
+ *
+ * O espaço de cima é onde o VÍDEO enviado pelo usuário entra de verdade
+ * (não é "resto do design") — por isso tem tratamento visual PRÓPRIO
+ * (hachura diagonal + borda tracejada), não a cor sólida da marca: sem
+ * isso, ficava ambíguo se aquele espaço era decorativo ou reservado pro
+ * vídeo. Ícone de play + rótulo "SEU VÍDEO AQUI" reforçam. */
 const REELS_W = 1080;
 const REELS_H = 1920;
 function wrapAsReelsFrame(coverSvg: string, brand: CardBrand): string {
   const inner = coverSvg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
   const offsetY = REELS_H - CARD_H;
-  const bg = brand.colorBackground || "#0B0B12";
+  const accent = brand.colorAccent || "#7C5CFF";
   const playCx = REELS_W / 2;
-  const playCy = offsetY / 2;
+  const playCy = offsetY / 2 - 20;
   const playR = 54;
+  const margin = 18;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${REELS_W}" height="${REELS_H}" viewBox="0 0 ${REELS_W} ${REELS_H}">
-  <rect width="${REELS_W}" height="${REELS_H}" fill="${bg}"/>
+  <defs>
+    <pattern id="video-hatch" width="28" height="28" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <rect width="28" height="28" fill="#15151a"/>
+      <line x1="0" y1="0" x2="0" y2="28" stroke="#26262e" stroke-width="14"/>
+    </pattern>
+  </defs>
+  <rect width="${REELS_W}" height="${offsetY}" fill="url(#video-hatch)"/>
+  <rect x="${margin}" y="${margin}" width="${REELS_W - margin * 2}" height="${offsetY - margin * 2}" fill="none" stroke="${accent}" stroke-opacity="0.6" stroke-width="3" stroke-dasharray="14 10" rx="18"/>
   <g transform="translate(0,${offsetY})">${inner}</g>
-  <text x="24" y="52" font-family="IBM Plex Mono" font-weight="700" font-size="26" letter-spacing="2" fill="#fff">REELS</text>
-  <circle cx="${playCx}" cy="${playCy}" r="${playR}" fill="#000" fill-opacity="0.35"/>
+  <text x="${margin + 6}" y="52" font-family="IBM Plex Mono" font-weight="700" font-size="26" letter-spacing="2" fill="#fff">REELS</text>
+  <circle cx="${playCx}" cy="${playCy}" r="${playR}" fill="#000" fill-opacity="0.45"/>
   <path d="M ${playCx - 18} ${playCy - 26} L ${playCx - 18} ${playCy + 26} L ${playCx + 24} ${playCy} Z" fill="#fff"/>
+  <text x="${playCx}" y="${playCy + playR + 44}" font-family="IBM Plex Mono" font-weight="700" font-size="22" letter-spacing="3" fill="#fff" fill-opacity="0.85" text-anchor="middle">SEU VÍDEO AQUI</text>
 </svg>`;
 }
 

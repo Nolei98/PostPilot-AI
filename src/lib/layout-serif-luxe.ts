@@ -12,6 +12,7 @@
 // Mesmo contrato {svg, blurBandTop} de buildCoverSvg/buildCardSvg —
 // drop-in compatível no seletor de layout.
 // ============================================================
+import { buildOverlayGradientSvg } from "@/lib/contrast";
 import { CARD_W, CARD_H, actionIconsRail, CLOSING_CORNER_MARGIN, type CardBrand } from "@/lib/render-shared";
 
 const DISPLAY_FONT = "DM Serif Display";
@@ -157,7 +158,7 @@ export function buildSerifLuxeCoverSvg(
   const blurBandTop = Math.max(0, Math.round(headStartY - size * 0.9 - 40));
   const overlayRect =
     transparent && overlay && overlay.alpha > 0
-      ? `<rect x="0" y="${blurBandTop}" width="${CARD_W}" height="${CARD_H - blurBandTop}" fill="${overlay.theme === "dark" ? "#000" : "#fff"}" fill-opacity="${overlay.alpha}"/>`
+      ? buildOverlayGradientSvg("overlay-band", blurBandTop, CARD_H - blurBandTop, CARD_W, overlay.theme, overlay.alpha)
       : "";
 
   const bgRect = transparent ? "" : `<rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>`;

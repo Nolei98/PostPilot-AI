@@ -12,6 +12,7 @@
 // gigantes nem cor de destaque em bloco.
 //
 // Mesmo contrato {svg, blurBandTop} de buildCoverSvg/buildCardSvg —
+import { buildOverlayGradientSvg } from "@/lib/contrast";
 // drop-in compatível no seletor de layout.
 // ============================================================
 import { CARD_W, CARD_H, actionIconsRail, CLOSING_CORNER_MARGIN, type CardBrand } from "@/lib/render-shared";
@@ -154,7 +155,7 @@ export function buildSwissMonoCoverSvg(
   const blurBandTop = Math.max(0, Math.round(ruleY - 40));
   const overlayRect =
     transparent && overlay && overlay.alpha > 0
-      ? `<rect x="0" y="${blurBandTop}" width="${CARD_W}" height="${CARD_H - blurBandTop}" fill="${overlay.theme === "dark" ? "#000" : "#fff"}" fill-opacity="${overlay.alpha}"/>`
+      ? buildOverlayGradientSvg("overlay-band", blurBandTop, CARD_H - blurBandTop, CARD_W, overlay.theme, overlay.alpha)
       : "";
 
   const bgRect = transparent ? "" : `<rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>`;

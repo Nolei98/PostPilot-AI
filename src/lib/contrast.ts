@@ -74,6 +74,35 @@ export function overlayAlphaFor(
 }
 
 /**
+ * Overlay de legibilidade como GRADIENTE — nunca mais um retângulo de
+ * opacidade fixa ("caixa" estática desconectada da foto). Nasce
+ * TRANSPARENTE bem no topo da banda (onde encosta na foto ainda visível
+ * — a "emenda" que ficava dura vira transição) e só fecha na cor do
+ * tema (preto/branco) perto da base, onde o texto de fato precisa do
+ * contraste. `bandY`/`bandH` é a região a cobrir (banda de identidade da
+ * capa/fechamento); `alpha` é o pico calibrado por WCAG (overlayAlphaFor).
+ * `gradientId` precisa ser único dentro do mesmo <svg> (evita colisão de
+ * <defs> se dois overlays coexistirem no mesmo documento).
+ */
+export function buildOverlayGradientSvg(
+  gradientId: string,
+  bandY: number,
+  bandH: number,
+  width: number,
+  theme: Theme,
+  alpha: number
+): string {
+  if (alpha <= 0 || bandH <= 0) return "";
+  const color = theme === "dark" ? "#000000" : "#ffffff";
+  return `<defs><linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="${color}" stop-opacity="0"/>
+    <stop offset="0.5" stop-color="${color}" stop-opacity="${(alpha * 0.3).toFixed(3)}"/>
+    <stop offset="1" stop-color="${color}" stop-opacity="${alpha}"/>
+  </linearGradient></defs>
+  <rect x="0" y="${bandY}" width="${width}" height="${bandH}" fill="url(#${gradientId})"/>`;
+}
+
+/**
  * Luminância relativa média de uma imagem (0=preto, 1=branco). Amostra
  * pequena (48x60) — suficiente pra decidir tema, muito mais barato que
  * processar a foto inteira.

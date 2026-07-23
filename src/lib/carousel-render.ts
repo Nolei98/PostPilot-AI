@@ -8,6 +8,7 @@ import sharp from "sharp";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rasterizeSvg } from "@/lib/svg-render";
 import { buildProfileChipLayers } from "@/lib/profile-chip";
+import { buildOverlayGradientSvg } from "@/lib/contrast";
 import {
   pickTheme,
   textColorForTheme,
@@ -289,9 +290,10 @@ export function buildCoverSvg(
   // este overlay tematizado, calibrado pela luminância REAL da banda
   // (contrast.ts) — nunca mais um escurecimento fixo às cegas.
   const bgRect = transparent ? "" : `<rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>`;
+  const overlayBandY = Math.max(0, dividerY - 90);
   const overlayRect =
-    transparent && opts.overlay && opts.overlay.alpha > 0
-      ? `<rect x="0" y="${Math.max(0, dividerY - 90)}" width="${CARD_W}" height="${CARD_H - Math.max(0, dividerY - 90)}" fill="${opts.overlay.theme === "dark" ? "#000" : "#fff"}" fill-opacity="${opts.overlay.alpha}"/>`
+    transparent && opts.overlay
+      ? buildOverlayGradientSvg("overlay-noir", overlayBandY, CARD_H - overlayBandY, CARD_W, opts.overlay.theme, opts.overlay.alpha)
       : "";
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
