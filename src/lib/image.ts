@@ -62,9 +62,13 @@ function buildPageOneCoverSvg(
   // a página 1 com a CONTRA-CAPA (mesma condição, papel diferente) e
   // desenha os ícones de ação indevidamente.
   if (alt) return alt(headline, cardBrand, transparent, { ...opts, showActionIcons: false });
+  // align NÃO é forçado aqui de propósito — herda o default de buildCoverSvg
+  // ("bottom"), pra ficar EXATAMENTE igual à capa do carrossel (post único
+  // e vídeo/Reels usam este mesmo builder). Estava fixo em "center" antes,
+  // contradizendo o próprio comentário da função ("igual à capa do
+  // carrossel") — bug real, não decisão de design.
   return buildCoverSvg({ idx: 0, role: "hook", headline, body: "" }, cardBrand, transparent, {
     showSwipeHint: opts.showSwipeHint,
-    align: "center",
     overlay: opts.overlay,
     showActionIcons: false,
   });
