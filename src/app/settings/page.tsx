@@ -20,6 +20,7 @@ import {
 } from "@/app/actions";
 import { IdentityForm } from "@/components/IdentityForm";
 import { EditTemplateButton } from "@/components/EditTemplateButton";
+import { SectionTabs } from "@/components/ui/SectionTabs";
 import { BrandLabelForm } from "@/components/BrandLabelForm";
 import { AvatarFileInput } from "@/components/AvatarFileInput";
 import { BrandColorPicker } from "@/components/BrandColorPicker";
@@ -151,7 +152,7 @@ export default async function SettingsPage({
             </p>
             {quota.unlimited && (
               <p className="mt-1 text-caption text-warning">
-                Conta ilimitada: texto e imagem sempre via Pollinations.ai (grátis), independente do que estiver selecionado em Preferências.
+                Conta ilimitada: texto e imagem sempre via Pollinations.ai (grátis), independente do que estiver selecionado em Geração &amp; notificações.
               </p>
             )}
           </div>
@@ -164,404 +165,519 @@ export default async function SettingsPage({
         </Card>
       </section>
 
-      {/* ===== Perfil do Instagram (aparece no topo do post) ===== */}
+      {/* ===== Marca & Visual (abas: Perfil / Cores & logo / Layouts / Modelos avançados) ===== */}
       <section className="mb-8">
-        <h2 className="mb-3 text-title text-muted">Perfil do Instagram</h2>
-        <Card className="p-4">
-          <form action={saveIgProfile} className="space-y-4">
-            {/* Preview ao vivo do header do post */}
-            <div className="flex items-center gap-3 rounded-control bg-black p-3">
-              {brandKit?.ig_avatar_url ? (
-                <img
-                  src={brandKit.ig_avatar_url}
-                  alt="Foto de perfil"
-                  className="h-11 w-11 rounded-full object-cover ring-2 ring-line"
-                />
-              ) : (
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-tr from-warning via-error to-primary text-lg">
-                  🤖
-                </div>
-              )}
-              <div className="min-w-0 leading-tight">
-                <p className="flex items-center gap-1 truncate text-body font-semibold">
-                  {brandKit?.ig_display_name ?? "Seu Perfil de IA"}
-                  {brandKit?.ig_verified && (
-                    /* selo azul de verificado */
-                    <svg width="14" height="14" viewBox="0 0 24 24" aria-label="Verificado">
-                      <circle cx="12" cy="12" r="11" fill="#3897F0" />
-                      <path d="m7.5 12.5 3 3 6-6.5" stroke="#fff" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                </p>
-                <p className="truncate text-caption text-muted">
-                  @{brandKit?.ig_handle ?? "seuperfil.ia"}
-                </p>
-              </div>
-            </div>
+        <h2 className="mb-3 text-title text-muted">Marca &amp; Visual</h2>
+        <SectionTabs
+          panels={[
+            {
+              id: "perfil",
+              label: "Perfil",
+              content: (
+                <Card className="p-4">
+                  <form action={saveIgProfile} className="space-y-4">
+                    {/* Preview ao vivo do header do post */}
+                    <div className="flex items-center gap-3 rounded-control bg-black p-3">
+                      {brandKit?.ig_avatar_url ? (
+                        <img
+                          src={brandKit.ig_avatar_url}
+                          alt="Foto de perfil"
+                          className="h-11 w-11 rounded-full object-cover ring-2 ring-line"
+                        />
+                      ) : (
+                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-tr from-warning via-error to-primary text-lg">
+                          🤖
+                        </div>
+                      )}
+                      <div className="min-w-0 leading-tight">
+                        <p className="flex items-center gap-1 truncate text-body font-semibold">
+                          {brandKit?.ig_display_name ?? "Seu Perfil de IA"}
+                          {brandKit?.ig_verified && (
+                            /* selo azul de verificado */
+                            <svg width="14" height="14" viewBox="0 0 24 24" aria-label="Verificado">
+                              <circle cx="12" cy="12" r="11" fill="#3897F0" />
+                              <path d="m7.5 12.5 3 3 6-6.5" stroke="#fff" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </p>
+                        <p className="truncate text-caption text-muted">
+                          @{brandKit?.ig_handle ?? "seuperfil.ia"}
+                        </p>
+                      </div>
+                    </div>
 
-            <AvatarFileInput />
-            <div className="space-y-1.5">
-              <label htmlFor="ig_display_name" className="block text-caption text-muted">
-                Nome exibido
-              </label>
-              <input
-                id="ig_display_name"
-                name="ig_display_name"
-                defaultValue={brandKit?.ig_display_name ?? ""}
-                placeholder="Ex: João da IA"
-                className={fieldClasses}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="ig_handle" className="block text-caption text-muted">
-                @ do perfil
-              </label>
-              <input
-                id="ig_handle"
-                name="ig_handle"
-                defaultValue={brandKit?.ig_handle ?? ""}
-                placeholder="Ex: joaodaia (sem @)"
-                className={fieldClasses}
-              />
-            </div>
-            {/* Toggles: selo de verificado + chip na arte */}
-            <label className="flex cursor-pointer items-center gap-3 rounded-control bg-surface-2 px-3 py-2.5">
-              <input
-                type="checkbox"
-                name="ig_verified"
-                defaultChecked={brandKit?.ig_verified ?? false}
-                className="h-4 w-4 accent-[#3897F0]"
-              />
-              <span className="text-body">
-                Selo de verificado{" "}
-                <span className="text-caption text-subtle">
-                  (azul, ao lado do nome)
-                </span>
-              </span>
-            </label>
-            <label className="flex cursor-pointer items-center gap-3 rounded-control bg-surface-2 px-3 py-2.5">
-              <input
-                type="checkbox"
-                name="show_profile_chip"
-                defaultChecked={brandKit?.show_profile_chip ?? true}
-                className="h-4 w-4 accent-[#7C5CFF]"
-              />
-              <span className="text-body">
-                Mostrar chip de perfil na arte{" "}
-                <span className="text-caption text-subtle">
-                  (topo de cada slide)
-                </span>
-              </span>
-            </label>
-            <SubmitButton savingLabel="Salvando perfil...">
-              Salvar perfil
-            </SubmitButton>
-          </form>
-        </Card>
-      </section>
-
-      {/* ===== Contra-capa (identidade visual da 2ª página) ===== */}
-      <section className="mb-8">
-        <h2 className="mb-3 text-title text-muted">Contra-capa</h2>
-        <Card className="p-4">
-          <IdentityForm
-            action={saveVisualIdentity}
-            fieldClasses={fieldClasses}
-            initial={{
-              colorBackground: brandKit?.color_background ?? "#0B0B12",
-              colorAccent: brandKit?.color_accent ?? "#7C5CFF",
-              colorText: brandKit?.color_text ?? "#FFFFFF",
-              colorKeywordBox: brandKit?.color_keyword_box ?? "#7C5CFF",
-              keyword: brandKit?.tpl_keyword ?? "IA",
-              topText: brandKit?.tpl_top_text ?? "A NOVIDADE DE",
-              bottomText: brandKit?.tpl_bottom_text ?? "QUE MUDA TUDO",
-              ctaEnabled: brandKit?.tpl_cta_enabled ?? false,
-            }}
-            initialMode={
-              brandKit?.template_apply_mode === "on_approval"
-                ? "on_approval"
-                : "all"
-            }
-          />
-        </Card>
-      </section>
-
-      {/* ===== Template da marca (logo + fonte das artes) ===== */}
-      <section className="mb-8">
-        <h2 className="mb-3 text-title text-muted">Template da marca</h2>
-        <Card className="p-4">
-          <form action={saveBrandTemplate} className="space-y-4">
-            <div className="space-y-1.5">
-              <label htmlFor="brand_name" className="block text-caption text-muted">
-                Nome da marca
-              </label>
-              <input
-                id="brand_name"
-                name="brand_name"
-                defaultValue={brandKit?.brand_name ?? ""}
-                placeholder="Ex: Sua Marca"
-                className={fieldClasses}
-              />
-              <p className="text-micro text-subtle">
-                Aparece na barra lateral do app (em vez de &quot;Sua Marca&quot;).
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              {brandKit?.logo_url ? (
-                <img
-                  src={brandKit.logo_url}
-                  alt="Logo da marca"
-                  className="h-14 w-14 rounded-full object-cover ring-2 ring-line"
-                />
-              ) : (
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-2 text-micro text-subtle">
-                  sem logo
-                </div>
-              )}
-              <div className="flex-1">
-                <AvatarFileInput
-                  name="logo"
-                  label="Logo da marca (JPG/PNG, máx 2MB)"
-                />
-              </div>
-            </div>
-            <label className="flex cursor-pointer items-center gap-3 rounded-control bg-surface-2 px-3 py-2.5">
-              <input
-                type="checkbox"
-                name="show_brand_logo"
-                defaultChecked={brandKit?.show_brand_logo ?? true}
-                className="h-4 w-4 accent-[#7C5CFF]"
-              />
-              <span className="text-body">
-                Mostrar logo na arte{" "}
-                <span className="text-caption text-subtle">
-                  (selo discreto no canto do conteúdo e da contra-capa)
-                </span>
-              </span>
-            </label>
-            <BrandColorPicker initial={brandKit?.color_accent ?? "#E0219C"} />
-            <div className="space-y-1.5">
-              <label htmlFor="post_font_family" className="block text-caption text-muted">
-                Fonte das artes
-              </label>
-              <select
-                id="post_font_family"
-                name="post_font_family"
-                defaultValue={brandKit?.post_font_family ?? "inter"}
-                className={fieldClasses}
-              >
-                {POST_FONTS.map((f) => (
-                  <option key={f.key} value={f.key}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
-              <p className="text-micro text-subtle">
-                Usada no título, no chip de perfil e na contra-capa — salvar re-renderiza os posts na fila.
-              </p>
-            </div>
-            <SubmitButton savingLabel="Salvando template...">
-              Salvar template da marca
-            </SubmitButton>
-          </form>
-        </Card>
-      </section>
-
-      {/* ===== Layout das artes (Fase 3) ===== */}
-      <section className="mb-8">
-        <h2 className="mb-3 text-title text-muted">Layout das artes</h2>
-        <Card className="p-4">
-          <form action={saveLayoutPreset} className="space-y-3">
-            <div className="space-y-1.5">
-              <label htmlFor="layout_preset" className="block text-caption text-muted">
-                Estilo visual dos cards (capa, interior e fechamento)
-              </label>
-              <select
-                id="layout_preset"
-                name="layout_preset"
-                defaultValue={brandKit?.layout_preset ?? "editorial-noir"}
-                className={fieldClasses}
-              >
-                <option value="editorial-noir">Editorial Noir (padrão)</option>
-                <option value="brutalism">Brutalismo Editorial</option>
-                <option value="serif-luxe">Serif Luxe</option>
-                <option value="swiss-mono">Swiss Mono</option>
-                <option value="pop-creator">Pop Creator</option>
-              </select>
-              <p className="text-micro text-subtle">
-                Salvar re-renderiza na hora os carrosséis e fechamentos já na fila com o novo layout.
-              </p>
-            </div>
-            <SubmitButton savingLabel="Salvando layout...">
-              Salvar layout
-            </SubmitButton>
-          </form>
-        </Card>
-
-        {/* Previews (kit v2 §7.7): 5 layouts × 4 formatos, com a cor/fonte
-            reais da marca — decida olhando antes de trocar acima. */}
-        <div className="mt-4 space-y-4">
-          {PREVIEW_LAYOUTS.map((layout) => (
-            <Card
-              key={layout.key}
-              className={`p-4 ${
-                (brandKit?.layout_preset ?? "editorial-noir") === layout.key
-                  ? "ring-2 ring-primary"
-                  : ""
-              }`}
-            >
-              <p className="mb-3 text-body font-semibold">{layout.label}</p>
-              <div className="flex gap-4 overflow-x-auto pb-1">
-                {PREVIEW_FORMATS.map((fmt) => (
-                  <div key={fmt.key} className="shrink-0">
-                    <LayoutPreview
-                      layoutPreset={layout.key as LayoutPreset}
-                      format={fmt.key}
-                      brand={previewBrand}
-                    />
-                    <p className="mt-1.5 text-center text-micro text-subtle">{fmt.label}</p>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {/* ===== Template Studio (Sprint B+, B13/B15) ===== */}
-      <section className="mb-8">
-        <h2 className="mb-3 text-title text-muted">Modelos (Template Studio)</h2>
-        <p className="mb-3 text-caption text-muted">
-          Modelos novos, com composição livre de marca e texto. Escolher um
-          aqui vale só para as próximas gerações de carrossel — sem escolha,
-          continua no layout de cima.
-        </p>
-        <div className="space-y-4">
-          {WIRED_SURFACES.map(({ key: surface, label }) => {
-            const options = templateList.filter((t) => t.surface === surface);
-            const selectedId = brandKit?.template_selection?.[surface];
-            return (
-              <Card key={surface} className="p-4">
-                <p className="mb-3 text-body font-semibold">{label}</p>
-                {options.length === 0 ? (
-                  <p className="text-caption text-subtle">Nenhum modelo disponível ainda.</p>
-                ) : (
-                  <div className="flex gap-3 overflow-x-auto pb-1">
-                    {options.map((tpl) => (
-                      <div key={tpl.id} className="shrink-0">
-                        <form action={saveTemplateSelection}>
-                          <input type="hidden" name="surface" value={surface} />
-                          <input type="hidden" name="template_id" value={tpl.id} />
-                          <button
-                            type="submit"
-                            className={`block w-32 overflow-hidden rounded-control border-2 text-left transition-colors ${
-                              selectedId === tpl.id ? "border-primary" : "border-line hover:border-subtle"
-                            }`}
-                          >
-                            {tpl.thumbnail_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={tpl.thumbnail_url} alt={tpl.name} className="aspect-[4/5] w-full object-cover" />
-                            ) : (
-                              <div className="flex aspect-[4/5] w-full items-center justify-center bg-surface-2 text-micro text-subtle">
-                                sem preview
-                              </div>
-                            )}
-                            <p className="truncate px-2 py-1.5 text-micro text-content">
-                              {tpl.name}
-                              {selectedId === tpl.id && " ✓"}
-                            </p>
-                          </button>
-                        </form>
-                        <div className="mt-1">
-                          <EditTemplateButton templateId={tpl.id} isSystem={tpl.is_system} />
+                    <AvatarFileInput />
+                    <div className="space-y-1.5">
+                      <label htmlFor="ig_display_name" className="block text-caption text-muted">
+                        Nome exibido
+                      </label>
+                      <input
+                        id="ig_display_name"
+                        name="ig_display_name"
+                        defaultValue={brandKit?.ig_display_name ?? ""}
+                        placeholder="Ex: João da IA"
+                        className={fieldClasses}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="ig_handle" className="block text-caption text-muted">
+                        @ do perfil
+                      </label>
+                      <input
+                        id="ig_handle"
+                        name="ig_handle"
+                        defaultValue={brandKit?.ig_handle ?? ""}
+                        placeholder="Ex: joaodaia (sem @)"
+                        className={fieldClasses}
+                      />
+                    </div>
+                    {/* Toggles: selo de verificado + chip na arte */}
+                    <label className="flex cursor-pointer items-center gap-3 rounded-control bg-surface-2 px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        name="ig_verified"
+                        defaultChecked={brandKit?.ig_verified ?? false}
+                        className="h-4 w-4 accent-[#3897F0]"
+                      />
+                      <span className="text-body">
+                        Selo de verificado{" "}
+                        <span className="text-caption text-subtle">
+                          (azul, ao lado do nome)
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-3 rounded-control bg-surface-2 px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        name="show_profile_chip"
+                        defaultChecked={brandKit?.show_profile_chip ?? true}
+                        className="h-4 w-4 accent-[#7C5CFF]"
+                      />
+                      <span className="text-body">
+                        Mostrar chip de perfil na arte{" "}
+                        <span className="text-caption text-subtle">
+                          (topo de cada slide)
+                        </span>
+                      </span>
+                    </label>
+                    <SubmitButton savingLabel="Salvando perfil...">
+                      Salvar perfil
+                    </SubmitButton>
+                  </form>
+                </Card>
+              ),
+            },
+            {
+              id: "cores",
+              label: "Cores & logo",
+              content: (
+                <>
+                  <Card className="p-4">
+                    <p className="mb-3 text-body font-semibold">Marca</p>
+                    <form action={saveBrandTemplate} className="space-y-4">
+                      <div className="space-y-1.5">
+                        <label htmlFor="brand_name" className="block text-caption text-muted">
+                          Nome da marca
+                        </label>
+                        <input
+                          id="brand_name"
+                          name="brand_name"
+                          defaultValue={brandKit?.brand_name ?? ""}
+                          placeholder="Ex: Sua Marca"
+                          className={fieldClasses}
+                        />
+                        <p className="text-micro text-subtle">
+                          Aparece na barra lateral do app (em vez de &quot;Sua Marca&quot;).
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        {brandKit?.logo_url ? (
+                          <img
+                            src={brandKit.logo_url}
+                            alt="Logo da marca"
+                            className="h-14 w-14 rounded-full object-cover ring-2 ring-line"
+                          />
+                        ) : (
+                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-2 text-micro text-subtle">
+                            sem logo
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <AvatarFileInput
+                            name="logo"
+                            label="Logo da marca (JPG/PNG, máx 2MB)"
+                          />
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            );
-          })}
+                      <label className="flex cursor-pointer items-center gap-3 rounded-control bg-surface-2 px-3 py-2.5">
+                        <input
+                          type="checkbox"
+                          name="show_brand_logo"
+                          defaultChecked={brandKit?.show_brand_logo ?? true}
+                          className="h-4 w-4 accent-[#7C5CFF]"
+                        />
+                        <span className="text-body">
+                          Mostrar logo na arte{" "}
+                          <span className="text-caption text-subtle">
+                            (selo discreto no canto do conteúdo e da contra-capa)
+                          </span>
+                        </span>
+                      </label>
+                      <BrandColorPicker initial={brandKit?.color_accent ?? "#E0219C"} />
+                      <div className="space-y-1.5">
+                        <label htmlFor="post_font_family" className="block text-caption text-muted">
+                          Fonte das artes
+                        </label>
+                        <select
+                          id="post_font_family"
+                          name="post_font_family"
+                          defaultValue={brandKit?.post_font_family ?? "inter"}
+                          className={fieldClasses}
+                        >
+                          {POST_FONTS.map((f) => (
+                            <option key={f.key} value={f.key}>
+                              {f.label}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-micro text-subtle">
+                          Usada no título, no chip de perfil e na contra-capa — salvar re-renderiza os posts na fila.
+                        </p>
+                      </div>
+                      <SubmitButton savingLabel="Salvando template...">
+                        Salvar template da marca
+                      </SubmitButton>
+                    </form>
+                  </Card>
+
+                  <Card className="p-4">
+                    <p className="mb-3 text-body font-semibold">Contra-capa</p>
+                    <IdentityForm
+                      action={saveVisualIdentity}
+                      fieldClasses={fieldClasses}
+                      initial={{
+                        colorBackground: brandKit?.color_background ?? "#0B0B12",
+                        colorAccent: brandKit?.color_accent ?? "#7C5CFF",
+                        colorText: brandKit?.color_text ?? "#FFFFFF",
+                        colorKeywordBox: brandKit?.color_keyword_box ?? "#7C5CFF",
+                        keyword: brandKit?.tpl_keyword ?? "IA",
+                        topText: brandKit?.tpl_top_text ?? "A NOVIDADE DE",
+                        bottomText: brandKit?.tpl_bottom_text ?? "QUE MUDA TUDO",
+                        ctaEnabled: brandKit?.tpl_cta_enabled ?? false,
+                      }}
+                      initialMode={
+                        brandKit?.template_apply_mode === "on_approval"
+                          ? "on_approval"
+                          : "all"
+                      }
+                    />
+                  </Card>
+
+                  <Card className="p-4">
+                    <p className="mb-3 text-body font-semibold">Identidade de rótulo</p>
+                    <BrandLabelForm
+                      fieldClasses={fieldClasses}
+                      handle={brandKit?.ig_handle ?? "seuperfil.ia"}
+                      accent={brandKit?.color_accent ?? "#7C5CFF"}
+                      initial={{
+                        wordmark: brandKit?.wordmark ?? "",
+                        keywords: (brandKit?.keywords ?? []).join(", "),
+                        brandMark: brandKit?.brand_mark ?? "auto",
+                      }}
+                    />
+                  </Card>
+                </>
+              ),
+            },
+            {
+              id: "layouts",
+              label: "Layouts",
+              content: (
+                <>
+                  <Card className="p-4">
+                    <form action={saveLayoutPreset} className="space-y-3">
+                      <div className="space-y-1.5">
+                        <label htmlFor="layout_preset" className="block text-caption text-muted">
+                          Estilo visual dos cards (capa, interior e fechamento)
+                        </label>
+                        <select
+                          id="layout_preset"
+                          name="layout_preset"
+                          defaultValue={brandKit?.layout_preset ?? "editorial-noir"}
+                          className={fieldClasses}
+                        >
+                          <option value="editorial-noir">Editorial Noir (padrão)</option>
+                          <option value="brutalism">Brutalismo Editorial</option>
+                          <option value="serif-luxe">Serif Luxe</option>
+                          <option value="swiss-mono">Swiss Mono</option>
+                          <option value="pop-creator">Pop Creator</option>
+                        </select>
+                        <p className="text-micro text-subtle">
+                          Salvar re-renderiza na hora os carrosséis e fechamentos já na fila com o novo layout.
+                        </p>
+                      </div>
+                      <SubmitButton savingLabel="Salvando layout...">
+                        Salvar layout
+                      </SubmitButton>
+                    </form>
+                  </Card>
+
+                  <Card className="p-4">
+                    <form action={saveSinglePostStyle} className="space-y-3">
+                      <div className="space-y-1.5">
+                        <label htmlFor="single_post_style" className="block text-caption text-muted">
+                          Como a página 1 (foto + título) é composta
+                        </label>
+                        <select
+                          id="single_post_style"
+                          name="single_post_style"
+                          defaultValue={brandKit?.single_post_style ?? "cover"}
+                          className={fieldClasses}
+                        >
+                          <option value="cover">Estilo capa (com wordmark, igual ao carrossel)</option>
+                          <option value="centered">Fonte no meio (minimalista, sem marca)</option>
+                        </select>
+                        <p className="text-micro text-subtle">
+                          &quot;Fonte no meio&quot; usa a mesma tipografia do layout escolhido acima, só centralizada e sem wordmark — deixa a foto respirar. Salvar re-renderiza a página 1 dos posts únicos já na fila.
+                        </p>
+                      </div>
+                      <SubmitButton savingLabel="Salvando estilo...">
+                        Salvar estilo
+                      </SubmitButton>
+                    </form>
+                  </Card>
+
+                  {/* Previews (kit v2 §7.7): 5 layouts × 4 formatos, com a cor/fonte
+                      reais da marca — decida olhando antes de trocar acima. */}
+                  {PREVIEW_LAYOUTS.map((layout) => (
+                    <Card
+                      key={layout.key}
+                      className={`p-4 ${
+                        (brandKit?.layout_preset ?? "editorial-noir") === layout.key
+                          ? "ring-2 ring-primary"
+                          : ""
+                      }`}
+                    >
+                      <p className="mb-3 text-body font-semibold">{layout.label}</p>
+                      <div className="flex gap-4 overflow-x-auto pb-1">
+                        {PREVIEW_FORMATS.map((fmt) => (
+                          <div key={fmt.key} className="shrink-0">
+                            <LayoutPreview
+                              layoutPreset={layout.key as LayoutPreset}
+                              format={fmt.key}
+                              brand={previewBrand}
+                            />
+                            <p className="mt-1.5 text-center text-micro text-subtle">{fmt.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  ))}
+                </>
+              ),
+            },
+            {
+              id: "modelos",
+              label: "Modelos avançados",
+              content: (
+                <>
+                  <p className="text-caption text-muted">
+                    Modelos novos, com composição livre de marca e texto. Escolher um
+                    aqui vale só para as próximas gerações de carrossel — sem escolha,
+                    continua no layout da aba anterior.
+                  </p>
+                  {WIRED_SURFACES.map(({ key: surface, label }) => {
+                    const options = templateList.filter((t) => t.surface === surface);
+                    const selectedId = brandKit?.template_selection?.[surface];
+                    return (
+                      <Card key={surface} className="p-4">
+                        <p className="mb-3 text-body font-semibold">{label}</p>
+                        {options.length === 0 ? (
+                          <p className="text-caption text-subtle">Nenhum modelo disponível ainda.</p>
+                        ) : (
+                          <div className="flex gap-3 overflow-x-auto pb-1">
+                            {options.map((tpl) => (
+                              <div key={tpl.id} className="shrink-0">
+                                <form action={saveTemplateSelection}>
+                                  <input type="hidden" name="surface" value={surface} />
+                                  <input type="hidden" name="template_id" value={tpl.id} />
+                                  <button
+                                    type="submit"
+                                    className={`block w-32 overflow-hidden rounded-control border-2 text-left transition-colors ${
+                                      selectedId === tpl.id ? "border-primary" : "border-line hover:border-subtle"
+                                    }`}
+                                  >
+                                    {tpl.thumbnail_url ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img src={tpl.thumbnail_url} alt={tpl.name} className="aspect-[4/5] w-full object-cover" />
+                                    ) : (
+                                      <div className="flex aspect-[4/5] w-full items-center justify-center bg-surface-2 text-micro text-subtle">
+                                        sem preview
+                                      </div>
+                                    )}
+                                    <p className="truncate px-2 py-1.5 text-micro text-content">
+                                      {tpl.name}
+                                      {selectedId === tpl.id && " ✓"}
+                                    </p>
+                                  </button>
+                                </form>
+                                <div className="mt-1">
+                                  <EditTemplateButton templateId={tpl.id} isSystem={tpl.is_system} />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </Card>
+                    );
+                  })}
+                </>
+              ),
+            },
+          ]}
+        />
+      </section>
+
+      {/* ===== Geração & notificações (formato, nicho, idioma, providers, Telegram) ===== */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Geração &amp; notificações</h2>
+        <div className="space-y-4">
+          <Card className="p-4">
+            <form action={saveDefaultFormat} className="space-y-3">
+              <div className="space-y-1.5">
+                <label htmlFor="default_format" className="block text-caption text-muted">
+                  O que o piloto gera para cada notícia candidata
+                </label>
+                <select
+                  id="default_format"
+                  name="default_format"
+                  defaultValue={brandKit?.default_format ?? "single"}
+                  className={fieldClasses}
+                >
+                  <option value="single">Post único (imagem 4:5)</option>
+                  <option value="carousel">Carrossel (7–10 cards)</option>
+                </select>
+                <p className="text-micro text-subtle">
+                  Vale para as próximas gerações deste cliente. Carrossel usa as
+                  cores/fonte da marca em cada card.
+                </p>
+              </div>
+              <SubmitButton savingLabel="Salvando...">Salvar formato</SubmitButton>
+            </form>
+          </Card>
+
+          <Card className="p-4">
+            <form action={saveNiche} className="space-y-3">
+              <div className="space-y-1.5">
+                <label htmlFor="niche" className="block text-caption text-muted">
+                  Nicho — direciona o tom dos posts e o critério de triagem viral
+                </label>
+                <select
+                  id="niche"
+                  name="niche"
+                  defaultValue={brandKit?.niche ?? NICHES[0].key}
+                  className={fieldClasses}
+                >
+                  {NICHES.map((n) => (
+                    <option key={n.key} value={n.key}>
+                      {n.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <SubmitButton savingLabel="Salvando...">Salvar nicho</SubmitButton>
+            </form>
+          </Card>
+
+          <Card className="p-4">
+            <form action={saveTelegramChatId} className="space-y-3">
+              <div className="space-y-1.5">
+                <label htmlFor="post_language" className="block text-caption text-muted">
+                  Idioma dos posts gerados
+                </label>
+                <select
+                  id="post_language"
+                  name="post_language"
+                  defaultValue={brandKit?.post_language ?? "pt-BR"}
+                  className={fieldClasses}
+                >
+                  <option value="pt-BR">Português (Brasil)</option>
+                  <option value="en">Inglês</option>
+                  <option value="es">Espanhol</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="telegram_chat_id" className="block text-caption text-muted">
+                  Telegram (chat_id para notificações)
+                </label>
+                <input
+                  id="telegram_chat_id"
+                  name="telegram_chat_id"
+                  defaultValue={notifConfig?.telegram_chat_id ?? ""}
+                  placeholder="Seu chat_id do Telegram"
+                  className={fieldClasses}
+                />
+              </div>
+
+              {quota.unlimited && (
+                <p className="rounded-control bg-warning/10 px-3 py-2.5 text-caption text-warning">
+                  Sua conta é ilimitada — os providers abaixo são ignorados; texto e imagem saem sempre pelo Pollinations.ai (grátis).
+                </p>
+              )}
+              <div className="space-y-1.5">
+                <label htmlFor="text_provider" className="block text-caption text-muted">
+                  Provider de IA — texto (hook, legenda, hashtags)
+                </label>
+                <select
+                  id="text_provider"
+                  name="text_provider"
+                  defaultValue={brandKit?.text_provider ?? "gemini"}
+                  className={fieldClasses}
+                >
+                  <option value="gemini">Gemini (Google AI Studio)</option>
+                  <option value="claude">Claude (Anthropic)</option>
+                  <option value="pollinations">Pollinations.ai (grátis, sem key)</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="image_provider" className="block text-caption text-muted">
+                  Provider de imagem (arte do post)
+                </label>
+                <select
+                  id="image_provider"
+                  name="image_provider"
+                  defaultValue={brandKit?.image_provider ?? "stock"}
+                  className={fieldClasses}
+                >
+                  <option value="stock">Fotos reais (Pexels/Unsplash) — recomendado</option>
+                  <option value="gemini">Gemini (Google AI Studio)</option>
+                  <option value="fal">Fal.ai (Flux)</option>
+                  <option value="pollinations">Pollinations.ai (grátis, sem key)</option>
+                </select>
+              </div>
+              <p className="text-caption text-subtle">
+                &quot;Fotos reais&quot; busca uma foto de pessoa de verdade no
+                banco (sem os artefatos de IA em rosto/mãos) e aplica o
+                branding por cima; sem resultado, cai pra IA (ilustração sem
+                pessoas). Se o provider escolhido não tiver a chave
+                configurada no servidor, o app cai automaticamente pro outro
+                disponível (ou MOCK, sem custo).
+              </p>
+              <p className="text-caption text-subtle">
+                1. Crie um bot com o @BotFather e configure o token no servidor
+                (TELEGRAM_BOT_TOKEN). 2. Mande /start para o bot. 3. Pegue seu
+                chat_id em api.telegram.org/bot&lt;TOKEN&gt;/getUpdates e cole
+                aqui.
+              </p>
+              <SubmitButton>Salvar</SubmitButton>
+            </form>
+          </Card>
         </div>
       </section>
 
-      {/* ===== Estilo do post único (kit v2 §3) ===== */}
+      {/* ===== Publicação (Sprint C — Graph API) ===== */}
       <section className="mb-8">
-        <h2 className="mb-3 text-title text-muted">Estilo do post único</h2>
-        <Card className="p-4">
-          <form action={saveSinglePostStyle} className="space-y-3">
-            <div className="space-y-1.5">
-              <label htmlFor="single_post_style" className="block text-caption text-muted">
-                Como a página 1 (foto + título) é composta
-              </label>
-              <select
-                id="single_post_style"
-                name="single_post_style"
-                defaultValue={brandKit?.single_post_style ?? "cover"}
-                className={fieldClasses}
-              >
-                <option value="cover">Estilo capa (com wordmark, igual ao carrossel)</option>
-                <option value="centered">Fonte no meio (minimalista, sem marca)</option>
-              </select>
-              <p className="text-micro text-subtle">
-                &quot;Fonte no meio&quot; usa a mesma tipografia do layout escolhido acima, só centralizada e sem wordmark — deixa a foto respirar. Salvar re-renderiza a página 1 dos posts únicos já na fila.
-              </p>
-            </div>
-            <SubmitButton savingLabel="Salvando estilo...">
-              Salvar estilo
-            </SubmitButton>
-          </form>
-        </Card>
-      </section>
-
-      {/* ===== Identidade de rótulo (@0verlens / Sprint B+) ===== */}
-      <section className="mb-8">
-        <h2 className="mb-3 text-title text-muted">Identidade de rótulo</h2>
-        <Card className="p-4">
-          <BrandLabelForm
-            fieldClasses={fieldClasses}
-            handle={brandKit?.ig_handle ?? "seuperfil.ia"}
-            accent={brandKit?.color_accent ?? "#7C5CFF"}
-            initial={{
-              wordmark: brandKit?.wordmark ?? "",
-              keywords: (brandKit?.keywords ?? []).join(", "),
-              brandMark: brandKit?.brand_mark ?? "auto",
-            }}
-          />
-        </Card>
-      </section>
-
-      {/* ===== Formato dos posts ===== */}
-      <section className="mb-8">
-        <h2 className="mb-3 text-title text-muted">Formato dos posts</h2>
-        <Card className="p-4">
-          <form action={saveDefaultFormat} className="space-y-3">
-            <div className="space-y-1.5">
-              <label htmlFor="default_format" className="block text-caption text-muted">
-                O que o piloto gera para cada notícia candidata
-              </label>
-              <select
-                id="default_format"
-                name="default_format"
-                defaultValue={brandKit?.default_format ?? "single"}
-                className={fieldClasses}
-              >
-                <option value="single">Post único (imagem 4:5)</option>
-                <option value="carousel">Carrossel (7–10 cards)</option>
-              </select>
-              <p className="text-micro text-subtle">
-                Vale para as próximas gerações deste cliente. Carrossel usa as
-                cores/fonte da marca em cada card.
-              </p>
-            </div>
-            <SubmitButton savingLabel="Salvando...">Salvar formato</SubmitButton>
-          </form>
-        </Card>
-      </section>
-
-      {/* ===== Publicação automática (Sprint C — Graph API) ===== */}
-      <section className="mb-8">
-        <h2 className="mb-3 text-title text-muted">Publicação automática</h2>
+        <h2 className="mb-3 text-title text-muted">Publicação</h2>
         <Card className="p-4 space-y-3">
           {searchParams?.ig === "connected" && (
             <p className="rounded-control border border-success/40 bg-success/10 px-3 py-2 text-caption text-success">
@@ -611,7 +727,7 @@ export default async function SettingsPage({
       </section>
 
       {/* ===== Fontes RSS ===== */}
-      <section className="mb-8">
+      <section>
         <h2 className="mb-3 text-title text-muted">Fontes RSS</h2>
 
         <div className="mb-4 space-y-2">
@@ -684,121 +800,6 @@ export default async function SettingsPage({
             <SubmitButton savingLabel="Adicionando...">
               + Adicionar fonte
             </SubmitButton>
-          </form>
-        </Card>
-      </section>
-
-      {/* ===== Nicho do negócio ===== */}
-      <section className="mb-8">
-        <h2 className="mb-3 text-title text-muted">Nicho do negócio</h2>
-        <Card className="p-4">
-          <form action={saveNiche} className="space-y-3">
-            <div className="space-y-1.5">
-              <label htmlFor="niche" className="block text-caption text-muted">
-                Direciona o tom dos posts e o critério de triagem viral
-              </label>
-              <select
-                id="niche"
-                name="niche"
-                defaultValue={brandKit?.niche ?? NICHES[0].key}
-                className={fieldClasses}
-              >
-                {NICHES.map((n) => (
-                  <option key={n.key} value={n.key}>
-                    {n.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <SubmitButton savingLabel="Salvando...">Salvar nicho</SubmitButton>
-          </form>
-        </Card>
-      </section>
-
-      {/* ===== Preferências (idioma + Telegram) ===== */}
-      <section>
-        <h2 className="mb-3 text-title text-muted">Preferências</h2>
-        <Card className="p-4">
-          <form action={saveTelegramChatId} className="space-y-3">
-            <div className="space-y-1.5">
-              <label htmlFor="post_language" className="block text-caption text-muted">
-                Idioma dos posts gerados
-              </label>
-              <select
-                id="post_language"
-                name="post_language"
-                defaultValue={brandKit?.post_language ?? "pt-BR"}
-                className={fieldClasses}
-              >
-                <option value="pt-BR">Português (Brasil)</option>
-                <option value="en">Inglês</option>
-                <option value="es">Espanhol</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="telegram_chat_id" className="block text-caption text-muted">
-                Telegram (chat_id para notificações)
-              </label>
-              <input
-                id="telegram_chat_id"
-                name="telegram_chat_id"
-                defaultValue={notifConfig?.telegram_chat_id ?? ""}
-                placeholder="Seu chat_id do Telegram"
-                className={fieldClasses}
-              />
-            </div>
-
-            {quota.unlimited && (
-              <p className="rounded-control bg-warning/10 px-3 py-2.5 text-caption text-warning">
-                Sua conta é ilimitada — os providers abaixo são ignorados; texto e imagem saem sempre pelo Pollinations.ai (grátis).
-              </p>
-            )}
-            <div className="space-y-1.5">
-              <label htmlFor="text_provider" className="block text-caption text-muted">
-                Provider de IA — texto (hook, legenda, hashtags)
-              </label>
-              <select
-                id="text_provider"
-                name="text_provider"
-                defaultValue={brandKit?.text_provider ?? "gemini"}
-                className={fieldClasses}
-              >
-                <option value="gemini">Gemini (Google AI Studio)</option>
-                <option value="claude">Claude (Anthropic)</option>
-                <option value="pollinations">Pollinations.ai (grátis, sem key)</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="image_provider" className="block text-caption text-muted">
-                Provider de imagem (arte do post)
-              </label>
-              <select
-                id="image_provider"
-                name="image_provider"
-                defaultValue={brandKit?.image_provider ?? "stock"}
-                className={fieldClasses}
-              >
-                <option value="stock">Fotos reais (Pexels/Unsplash) — recomendado</option>
-                <option value="gemini">Gemini (Google AI Studio)</option>
-                <option value="fal">Fal.ai (Flux)</option>
-                <option value="pollinations">Pollinations.ai (grátis, sem key)</option>
-              </select>
-            </div>
-            <p className="text-caption text-subtle">
-              &quot;Fotos reais&quot; busca uma foto de pessoa de verdade no
-              banco (sem os artefatos de IA em rosto/mãos) e aplica o
-              branding por cima; sem resultado, cai pra IA (ilustração sem
-              pessoas). Se o provider escolhido não tiver a chave
-              configurada no servidor, o app cai automaticamente pro outro
-              disponível (ou MOCK, sem custo).
-            </p>
-            <p className="text-caption text-subtle">
-              1. Crie um bot com o @BotFather e configure o token no servidor
-              (TELEGRAM_BOT_TOKEN). 2. Mande /start para o bot. 3. Pegue seu
-              chat_id em api.telegram.org/bot&lt;TOKEN&gt;/getUpdates e cole
-              aqui.
-            </p>
-            <SubmitButton>Salvar</SubmitButton>
           </form>
         </Card>
       </section>
