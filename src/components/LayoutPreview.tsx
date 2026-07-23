@@ -8,6 +8,7 @@ import {
   buildCarouselPreview,
   buildVideoPreview,
   buildFeedVideoPreview,
+  buildInteriorVideoPreview,
   buildHybridPreview,
   scaleSvg,
   type PreviewFormat,
@@ -72,6 +73,13 @@ export function LayoutPreview({
     return (
       <div aria-label={`${layoutPreset} — vídeo (feed, 4:5)`} className="w-24 shrink-0">
         <Frame svg={buildFeedVideoPreview(layoutPreset, brand)} aspect="4:5" />
+      </div>
+    );
+  }
+  if (format === "video-interior") {
+    return (
+      <div aria-label={`${layoutPreset} — interior com vídeo`} className="w-24 shrink-0">
+        <Frame svg={buildInteriorVideoPreview(brand)} aspect="4:5" />
       </div>
     );
   }

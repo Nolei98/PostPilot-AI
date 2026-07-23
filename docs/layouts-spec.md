@@ -149,13 +149,23 @@ escolhidas em Ajustes (`brand_kits.single_post_style`), cada uma usando os
 - **Fonte no meio**: frase curta centralizada no meio do quadro, SEM
   wordmark/marca nenhuma — minimalista, deixa a foto respirar.
 
-## Vídeo (Reels 9:16) — adicionado 2026-07-21
+## Vídeo (Reels 9:16) — adicionado 2026-07-21, redesenhado 2026-07-23
 
 Existe um formato de vídeo (upload manual do usuário, sem geração por
-IA): o quadro final é **1080×1920 nativo** — a capa 4:5 (mesmo motor de
-layout acima) é encaixada pela LARGURA no rodapé do quadro, e o topo é
-preenchido com uma extensão desfocada do próprio vídeo/foto (nunca corta
-lateral). O texto usa o MESMO preset de layout escolhido em Ajustes.
+IA). Versão original (descartada): a capa 4:5 era encaixada pela
+LARGURA no rodapé do quadro 1080×1920, com o topo preenchido por uma
+extensão desfocada — não batia com o protótipo de referência
+(exemplo-modelos-com-video.png, caso 3 "REELS 9:16"). Versão atual: o
+vídeo cobre o quadro 1080×1920 **INTEIRO** (cover-fit, nunca esticado).
+O texto fica numa **ZONA SEGURA** — marca pequena no topo-esquerda
+(x=64, y=130) + título alinhado à ESQUERDA (nunca centralizado) numa
+faixa que reserva margem embaixo (220px, onde o Instagram desenha
+legenda/@) e à direita (170px, onde ficam os ícones de curtir/
+comentar/compartilhar) — nunca invade essas áreas. Legibilidade vem de
+um gradiente (mesmo motor de `contrast.ts`) medido na própria zona
+segura do frame de pôster, não da foto/vídeo inteiro. `buildReelsVideoOverlayPng`
+(image.ts) + `composeReelsVideo` (video.ts, agora um simples cover-fit
++ overlay, sem mais a lógica de encaixe/blur).
 
 ## Vídeo feed (4:5) — adicionado 2026-07-23, redesenhado 2x no mesmo dia (migration 036)
 
@@ -182,3 +192,26 @@ o vídeo em si). Publica no Instagram pelo mesmo container REELS do
 Graph API. Anexado no post pelo mesmo botão de upload da Fila, numa
 opção separada ("Anexar Feed (4:5)") — um post só guarda 1 vídeo por
 vez; trocar de formato reprocessa por cima do que já tinha.
+
+## Interior com vídeo (carrossel) — adicionado 2026-07-23 (migration 037)
+
+Terceiro caso de vídeo, igual ao protótipo de referência (caso
+"Interior"): vídeo dentro de um CARD do meio do carrossel, não no post
+inteiro. Ordem vertical (cada seção no seu lugar): TÍTULO no topo →
+moldura de vídeo (16:9, cantos arredondados, MESMA técnica de buraco
+transparente do vídeo feed) → CORPO abaixo → rótulo de marca (@handle)
+no rodapé. Fundo sólido preto, igual ao vídeo feed. `cardVideoLayoutParts`
++ `buildCardVideoOverlay` (image.ts) calculam a geometria; reusa
+`composeFeedVideo` (video.ts) sem nenhuma mudança — a função já era
+genérica o bastante (só recebe a moldura como retângulo). Upload por
+card no editor de cards do carrossel (`CarouselEditor.tsx`), um botão
+"Anexar vídeo ao card" por card — `carousel_cards.video_url` guarda o
+resultado (migration 037). Job: `attach-card-video.ts`.
+
+**Limitação conhecida (2026-07-23):** o preview principal do carrossel
+(`CarouselPreview.tsx`, usado na Fila/Prontos) ainda só mostra imagens
+— não troca pra `<video>` quando um card tem vídeo pronto. A publicação
+(Graph API) também ainda só manda `image_url` de cada card pro
+container do carrossel, não `video_url`. O upload/processamento/preview
+DENTRO do editor de cards já funciona; a integração na galeria
+principal e no publish é trabalho futuro.

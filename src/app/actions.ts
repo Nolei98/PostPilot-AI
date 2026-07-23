@@ -575,6 +575,71 @@ export async function uploadPostVideo(
 }
 
 /**
+ * Anexa um vídeo a um CARD do carrossel (migration 037) — mesmo padrão
+ * de uploadPostVideo: sobe o arquivo bruto pro Storage e dispara o
+ * processamento em BACKGROUND (Inngest); o ffmpeg compõe o card
+ * "interior com vídeo" (título + moldura 16:9 + corpo). RLS de
+ * carousel_cards já garante que o card pertence ao usuário (join com
+ * posts.user_id) — não precisa de checagem extra aqui.
+ */
+export async function uploadCarouselCardVideo(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+
+  const cardId = String(formData.get("card_id") ?? "");
+  const file = formData.get("video") as File | null;
+  if (!cardId || !file || file.size === 0) {
+    return { ok: false, error: "Selecione um vídeo." };
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    return { ok: false, error: "Vídeo muito grande (máx 50MB)." };
+  }
+
+  const { data: card } = await supabase
+    .from("carousel_cards")
+    .select("id, post_id, idx")
+    .eq("id", cardId)
+    .maybeSingle();
+  if (!card) return { ok: false, error: "Card não encontrado." };
+
+  try {
+    const buf = Buffer.from(await file.arrayBuffer());
+    const admin = createAdminClient();
+    const sourcePath = `${card.post_id}-card-${card.idx}-video-source.mp4`;
+    const { error: upErr } = await admin.storage.from("post-images").upload(sourcePath, buf, {
+      contentType: file.type || "video/mp4",
+      upsert: true,
+    });
+    if (upErr) throw new Error(upErr.message);
+
+    const { error } = await supabase
+      .from("carousel_cards")
+      .update({ video_status: "processing", video_error: null })
+      .eq("id", cardId);
+    if (error) return { ok: false, error: error.message };
+  } catch (err) {
+    console.error("[uploadCarouselCardVideo] falha ao subir vídeo:", err);
+    return {
+      ok: false,
+      error: "Não foi possível processar esse vídeo. Tente outro arquivo (.mp4/.mov).",
+    };
+  }
+
+  inngest
+    .send({ name: "card/attach-video.requested", data: { cardId, userId: user.id } })
+    .catch((err) => console.warn("[uploadCarouselCardVideo] não foi possível enfileirar o processamento:", err));
+
+  revalidatePath("/");
+  revalidatePath("/ready");
+  return { ok: true };
+}
+
+/**
  * Marca um post aprovado como publicado (Plano B: publicação manual).
  * Reusa o status 'published' — na Fase 2 a Graph API usa o mesmo.
  */

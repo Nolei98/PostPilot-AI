@@ -256,10 +256,113 @@ export const resyncLayoutPreset = inngest.createFunction(
       });
     }
 
+    // --- Posts de vídeo FEED (4:5, migration 036) já prontos ---
+    const feedVideoPosts = await step.run("fetch-feed-video-posts", async () => {
+      const { data } = await supabase
+        .from("posts")
+        .select("id, hook")
+        .eq("client_id", clientId)
+        .eq("status", "pending_approval")
+        .eq("format", "video_feed")
+        .eq("video_status", "ready");
+      return data ?? [];
+    });
+
+    for (const post of feedVideoPosts) {
+      await step.run(`feed-video-${post.id}`, async () => {
+        try {
+          const { data: srcFile, error: dlErr } = await supabase.storage
+            .from("post-images")
+            .download(`${post.id}-video-source.mp4`);
+          if (dlErr || !srcFile) throw new Error("vídeo fonte não encontrado no Storage");
+          const videoBuffer = Buffer.from(await srcFile.arrayBuffer());
+
+          const { composeFeedVideo, extractPosterFrame } = await import("@/lib/video");
+          const { buildFeedVideoOverlay } = await import("@/lib/image");
+
+          const poster = await extractPosterFrame(videoBuffer, 0.5);
+          const { overlayPng, frame } = buildFeedVideoOverlay(post.hook ?? "", prefs.cardBrand);
+          const finalVideo = await composeFeedVideo(videoBuffer, overlayPng, frame);
+
+          const videoPath = `${post.id}-video.mp4`;
+          const posterPath = `${post.id}-video-poster.jpg`;
+          await supabase.storage.from("post-images").upload(videoPath, finalVideo, { contentType: "video/mp4", upsert: true });
+          await supabase.storage.from("post-images").upload(posterPath, poster, { contentType: "image/jpeg", upsert: true });
+          const { data: videoUrlData } = supabase.storage.from("post-images").getPublicUrl(videoPath);
+          const { data: posterUrlData } = supabase.storage.from("post-images").getPublicUrl(posterPath);
+
+          await supabase
+            .from("posts")
+            .update({
+              video_url: `${videoUrlData.publicUrl}?v=${Date.now()}`,
+              video_poster_url: `${posterUrlData.publicUrl}?v=${Date.now()}`,
+              video_error: null,
+            })
+            .eq("id", post.id);
+          return { updated: true };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(`[resync-layout-preset] falha no vídeo feed do post ${post.id}:`, err);
+          await supabase.from("posts").update({ video_error: message }).eq("id", post.id);
+          return { updated: false };
+        }
+      });
+    }
+
+    // --- Cards de carrossel com vídeo (interior, migration 037) já prontos ---
+    const videoCards = await step.run("fetch-video-cards", async () => {
+      const { data } = await supabase
+        .from("carousel_cards")
+        .select("id, post_id, idx, headline, body, posts!inner(client_id, status)")
+        .eq("posts.client_id", clientId)
+        .eq("posts.status", "pending_approval")
+        .eq("video_status", "ready");
+      return data ?? [];
+    });
+
+    for (const card of videoCards) {
+      await step.run(`card-video-${card.id}`, async () => {
+        try {
+          const sourcePath = `${card.post_id}-card-${card.idx}-video-source.mp4`;
+          const { data: srcFile, error: dlErr } = await supabase.storage
+            .from("post-images")
+            .download(sourcePath);
+          if (dlErr || !srcFile) throw new Error("vídeo fonte não encontrado no Storage");
+          const videoBuffer = Buffer.from(await srcFile.arrayBuffer());
+
+          const { composeFeedVideo } = await import("@/lib/video");
+          const { buildCardVideoOverlay } = await import("@/lib/image");
+
+          const { overlayPng, frame } = buildCardVideoOverlay(
+            { headline: card.headline, body: card.body },
+            prefs.cardBrand
+          );
+          const finalVideo = await composeFeedVideo(videoBuffer, overlayPng, frame);
+
+          const videoPath = `${card.post_id}-card-${card.idx}-video.mp4`;
+          await supabase.storage.from("post-images").upload(videoPath, finalVideo, { contentType: "video/mp4", upsert: true });
+          const { data: videoUrlData } = supabase.storage.from("post-images").getPublicUrl(videoPath);
+
+          await supabase
+            .from("carousel_cards")
+            .update({ video_url: `${videoUrlData.publicUrl}?v=${Date.now()}`, video_error: null })
+            .eq("id", card.id);
+          return { updated: true };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(`[resync-layout-preset] falha no vídeo do card ${card.id}:`, err);
+          await supabase.from("carousel_cards").update({ video_error: message }).eq("id", card.id);
+          return { updated: false };
+        }
+      });
+    }
+
     return {
       carouselCount: carouselPosts.length,
       singleCount: singlePosts.length,
       videoCount: videoPosts.length,
+      feedVideoCount: feedVideoPosts.length,
+      videoCardCount: videoCards.length,
     };
   }
 );

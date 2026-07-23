@@ -8,11 +8,12 @@
 // background (Inngest), nunca síncrono num Server Action: o encode
 // pode levar dezenas de segundos.
 //
-// Técnica validada manualmente antes de codar (ver conversa): a MESMA
-// regra da foto — encaixar o vídeo pela LARGURA (nunca cortar as
-// laterais) e completar o topo/base com uma extensão desfocada do
-// próprio vídeo — funciona idêntica via filtro ffmpeg (scale+crop+blur
-// + overlay), só trocando sharp por ffmpeg.
+// Redesenhado 2026-07-23 pro estilo "zona segura" (exemplo-modelos-com-
+// video.png, caso 3): o vídeo cobre o quadro 1080×1920 INTEIRO
+// (cover-fit) — não mais "encaixa pela largura + extensão desfocada".
+// O texto (marca + título alinhado à esquerda) fica numa zona segura
+// calculada em image.ts (buildReelsVideoOverlayPng), longe de onde o
+// Instagram desenha sua própria UI (legenda embaixo, ícones à direita).
 // ============================================================
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -25,9 +26,6 @@ const execFileAsync = promisify(execFile);
 
 export const REELS_W = 1080;
 export const REELS_H = 1920;
-/** Onde o quadro 4:5 (capa) fica ancorado dentro do 9:16 — mesma
- * constante de composeReelsFrame em image.ts (imagem estática). */
-export const REELS_TOP_EXTENSION = REELS_H - 1350;
 
 /** Quadro do vídeo "feed" (4:5, migration 036) — MESMA proporção do post
  * único/carrossel, sem letterbox: o vídeo cobre o quadro inteiro (cover-fit,
@@ -74,11 +72,11 @@ export async function extractPosterFrame(videoBuffer: Buffer, atSeconds = 0.5): 
 }
 
 /**
- * Compõe o quadro Reels 9:16 final: encaixa o vídeo enviado pela
- * LARGURA (1080px, sem cortar lateral), completa o topo/base com uma
- * extensão desfocada do próprio vídeo, e sobrepõe o overlay de texto
- * (PNG transparente, já com wordmark/título/contraste calculados a
- * partir do frame de pôster — ver buildReelsOverlayPng em image.ts).
+ * Compõe o quadro Reels 9:16 final: o vídeo enviado cobre o quadro
+ * INTEIRO (cover-fit, corta o excesso — nunca esticado), e sobrepõe o
+ * overlay de texto (PNG transparente 1080×1920, já com marca/título/
+ * contraste calculados a partir do frame de pôster e posicionados na
+ * zona segura — ver buildReelsVideoOverlayPng em image.ts).
  * Retorna o .mp4 final (h264, mesmo áudio do original se houver).
  */
 export async function composeReelsVideo(videoBuffer: Buffer, overlayPng: Buffer): Promise<Buffer> {
@@ -90,10 +88,8 @@ export async function composeReelsVideo(videoBuffer: Buffer, overlayPng: Buffer)
     fs.writeFileSync(overlayPath, overlayPng);
 
     const filter = [
-      `[0:v]scale=${REELS_W}:-2,setsar=1,split=2[fit1][fit2]`,
-      `[fit2]scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=increase,crop=${REELS_W}:${REELS_H},gblur=sigma=30[bgblur]`,
-      `[bgblur][fit1]overlay=(W-w)/2:(H-h)/2[base]`,
-      `[base][1:v]overlay=0:${REELS_TOP_EXTENSION}[outv]`,
+      `[0:v]scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=increase,crop=${REELS_W}:${REELS_H},setsar=1[bg]`,
+      `[bg][1:v]overlay=0:0[outv]`,
     ].join(";");
 
     await runFfmpeg([

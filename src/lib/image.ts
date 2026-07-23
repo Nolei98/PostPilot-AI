@@ -22,7 +22,7 @@ import { FONT_FAMILY } from "@/lib/font-data";
 import { rasterizeSvg } from "@/lib/svg-render";
 import { searchStockPhoto, fetchStockPhotoBuffer } from "@/lib/stock-photos";
 import { buildProfileChipLayers } from "@/lib/profile-chip";
-import { buildCoverSvg, composePhotoBg, coverHeadlineSize, stripEmoji, wrapText, type CardBrand } from "@/lib/carousel-render";
+import { buildCoverSvg, composePhotoBg, coverHeadlineSize, stripEmoji, wrapText, brandLabelText, type CardBrand } from "@/lib/carousel-render";
 import { buildBrutalismCoverSvg } from "@/lib/layout-brutalism";
 import { buildSerifLuxeCoverSvg } from "@/lib/layout-serif-luxe";
 import { buildSwissMonoCoverSvg } from "@/lib/layout-swiss-mono";
@@ -81,6 +81,7 @@ import {
   relativeLuminanceOfHex,
   measureImageLuminance,
   overlayAlphaFor,
+  buildOverlayGradientSvg,
 } from "@/lib/contrast";
 
 /** Template de marca default (posts antigos / config ausente) */
@@ -628,87 +629,81 @@ async function composeCoverStyleContent(baseImage: Buffer, hook: string, cardBra
 }
 
 // ------------------------------------------------------------
-// REELS 9:16 (Fase 4, kit v2 §3 — "regra crítica de vídeo 9:16").
+// REELS 9:16 (Fase 4, kit v2 §3 → redesenhado 2026-07-23 pra bater com
+// o protótipo de referência, exemplo-modelos-com-video.png caso 3).
 //
-// Fatia 1: só o QUADRO (imagem estática 1080×1920), sem vídeo de
-// verdade ainda — prova o layout/design antes de mexer com upload de
-// vídeo + ffmpeg (projeto à parte, maior e mais arriscado).
-//
-// Regra inegociável do kit: o quadro é NATIVAMENTE 9:16, nunca deriva
-// cortando as laterais. Encaixa a capa 4:5 inteira (1080×1350, mesma
-// composição/motor de contraste da capa/página 1) pela LARGURA e
-// completa o topo com uma extensão desfocada da própria foto — nunca
-// corta o conteúdo. Margem lateral (padding dos layouts, ≥64px = ~6%
-// da largura) já é bem maior que o mínimo exigido (5px/~3%).
+// O vídeo cobre o quadro 1080×1920 NATIVO INTEIRO (cover-fit) — não
+// mais "encaixa a capa 4:5 pela largura + extensão desfocada no topo".
+// O texto (marca pequena no topo-esquerda + título alinhado à
+// esquerda) fica dentro de uma ZONA SEGURA que deixa espaço pros
+// elementos nativos do Instagram (legenda/@ embaixo, ícones de
+// curtir/comentar/compartilhar à direita) — nunca centralizado.
 // ------------------------------------------------------------
 const REELS_W = 1080;
 const REELS_H = 1920;
-const REELS_TOP_EXTENSION = REELS_H - HEIGHT; // 570px
+/** Margem esquerda (mesma ideia de "padding" dos layouts) e direita —
+ * a direita é bem maior pra não invadir a coluna de ícones do IG. */
+const REELS_SAFE_MARGIN_X = 64;
+const REELS_SAFE_MARGIN_RIGHT = 170;
+/** Distância da base do quadro até a baseline da última linha — deixa
+ * espaço pra legenda/@ que o próprio Instagram desenha por cima. */
+const REELS_SAFE_BOTTOM = 220;
+const REELS_WORDMARK_Y = 130;
 
 /**
- * Renderiza o QUADRO 9:16 do Reels (imagem estática): mesma composição
- * de capa (wordmark + headline, motor de contraste real) encaixada pela
- * LARGURA na base do quadro; o topo é preenchido por uma extensão
- * desfocada da própria foto (nunca corta a foto nem o texto lateral).
- */
-async function composeReelsFrame(photo: Buffer, headline: string, cardBrand: CardBrand): Promise<Buffer> {
-  // Mesma composição 1080×1350 da capa/página 1 (contraste real, wordmark).
-  const coverJpeg = await composeCoverStyleContent(photo, headline, cardBrand);
-
-  // Extensão do topo: crop desfocado do topo da MESMA foto — completa o
-  // quadro sem inventar conteúdo nem cortar a foto original.
-  const topFill = await sharp(photo)
-    .resize(REELS_W, HEIGHT, { fit: "cover", position: "attention" })
-    .extract({ left: 0, top: 0, width: REELS_W, height: REELS_TOP_EXTENSION })
-    .blur(24)
-    .toBuffer();
-
-  const canvas = await sharp({
-    create: {
-      width: REELS_W,
-      height: REELS_H,
-      channels: 3,
-      background: cardBrand.colorBackground || "#0B0B12",
-    },
-  })
-    .png()
-    .toBuffer();
-
-  return sharp(canvas)
-    .composite([
-      { input: topFill, top: 0, left: 0 },
-      { input: coverJpeg, top: REELS_TOP_EXTENSION, left: 0 },
-    ])
-    .jpeg({ quality: 90 })
-    .toBuffer();
-}
-
-/**
- * Constrói só o OVERLAY de texto (PNG transparente 1080×1350 — wordmark
- * + headline no preset de layout, sem fundo) pro Reels de VÍDEO de
- * verdade (fatia 2) — o ffmpeg faz a composição final sobre o vídeo
- * (video.ts), não o sharp. Regra do kit: a luminância/contraste vem do
- * FRAME DE PÔSTER (posterFrame), não do vídeo inteiro — mesmo motor de
- * contraste automático das fotos, só a fonte da medição muda.
+ * Constrói só o OVERLAY de texto (PNG transparente 1080×1920 — marca
+ * pequena no topo-esquerda + título alinhado à esquerda na zona segura
+ * inferior) pro Reels de VÍDEO — o ffmpeg faz a composição final sobre
+ * o vídeo (video.ts), não o sharp. Regra do kit: a luminância/contraste
+ * vem do FRAME DE PÔSTER (posterFrame) — mede exatamente a região da
+ * zona segura (onde o texto realmente vai), não a foto/vídeo inteiro.
  */
 export async function buildReelsVideoOverlayPng(
   headline: string,
   cardBrand: CardBrand,
   posterFrame: Buffer
 ): Promise<Buffer> {
-  const probe = buildPageOneCoverSvg(headline, { ...cardBrand, colorText: "#FFFFFF" }, true, { showSwipeHint: false });
-  const band = await sharp(posterFrame)
-    .resize(WIDTH, HEIGHT, { fit: "cover", position: "attention" })
-    .extract({ left: 0, top: probe.blurBandTop, width: WIDTH, height: HEIGHT - probe.blurBandTop })
+  const family = cardBrand.fontFamily || "Inter";
+  const wm = (cardBrand.wordmark || cardBrand.brandName || "").toUpperCase();
+
+  const headlineText = stripEmoji(headline ?? "");
+  const { size, lineH, maxChars } = coverHeadlineSize(headlineText);
+  const safeWidth = REELS_W - REELS_SAFE_MARGIN_X - REELS_SAFE_MARGIN_RIGHT;
+  // A zona segura é mais estreita que a capa 4:5 inteira — reduz o nº
+  // de caracteres por linha na mesma proporção pra não estourar a
+  // largura reservada (mesma fonte, só quebra mais cedo).
+  const safeMaxChars = Math.max(8, Math.round(maxChars * (safeWidth / (WIDTH - 180))));
+  const lines = wrapText(headlineText, safeMaxChars).slice(0, 5);
+
+  const lastBaselineY = REELS_H - REELS_SAFE_BOTTOM;
+  const headStartY = lastBaselineY - (lines.length - 1) * lineH;
+  const zoneTop = Math.max(0, headStartY - size - 40);
+
+  // Mede a luminância REAL da zona segura (canto inferior esquerdo, já
+  // cover-fit igual ao vídeo final) — não a foto/vídeo inteiro.
+  const covered = await sharp(posterFrame).resize(REELS_W, REELS_H, { fit: "cover", position: "attention" }).toBuffer();
+  const zoneCrop = await sharp(covered)
+    .extract({ left: REELS_SAFE_MARGIN_X, top: zoneTop, width: safeWidth, height: REELS_H - zoneTop })
     .toBuffer();
-  const luminance = await measureImageLuminance(band);
+  const luminance = await measureImageLuminance(zoneCrop);
   const theme = pickTheme(luminance);
   const textColor = textColorForTheme(theme);
   const alpha = overlayAlphaFor(theme, textColor, luminance);
-  const { svg } = buildPageOneCoverSvg(headline, { ...cardBrand, colorText: textColor }, true, {
-    showSwipeHint: false,
-    overlay: { theme, alpha },
-  });
+
+  // Gradiente de legibilidade (mesmo motor de contrast.ts) cobrindo só
+  // a zona segura inferior — nasce transparente, some no vídeo normal.
+  const scrim = buildOverlayGradientSvg("reels-safezone", zoneTop, REELS_H - zoneTop, REELS_W, theme, alpha);
+
+  const wordmarkSvg = wm
+    ? `<text x="${REELS_SAFE_MARGIN_X}" y="${REELS_WORDMARK_Y}" font-family="${family}" font-weight="600" font-size="24" letter-spacing="4" fill="${textColor}" fill-opacity="0.85">${escapeXmlLocal(wm)}</text>`
+    : "";
+  const headlineSvg = `<text font-family="${family}" font-weight="800" font-size="${size}" fill="${textColor}" text-anchor="start" letter-spacing="-1">${tspansLocal(lines, REELS_SAFE_MARGIN_X, headStartY, lineH)}</text>`;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${REELS_W}" height="${REELS_H}" viewBox="0 0 ${REELS_W} ${REELS_H}">
+  ${scrim}
+  ${wordmarkSvg}
+  ${headlineSvg}
+</svg>`;
   return rasterizeSvg(svg);
 }
 
@@ -813,33 +808,92 @@ export function buildFeedVideoOverlay(
   return { overlayPng: rasterizeSvg(svg), frame };
 }
 
+const CARD_VIDEO_PAD = 96; // mesma margem lateral do card interior comum (carousel-render.ts)
+const CARD_VIDEO_FRAME_H = Math.round((WIDTH - CARD_VIDEO_PAD * 2) * (9 / 16)); // 16:9, "tamanho YouTube"
+const CARD_VIDEO_FRAME_RADIUS = 28;
+const CARD_VIDEO_GAP_HEAD_TO_FRAME = 40;
+const CARD_VIDEO_GAP_FRAME_TO_BODY = 44;
+const CARD_VIDEO_BODY_SIZE = 40;
+const CARD_VIDEO_BODY_LINE_H = 54;
+
+/**
+ * Peças reaproveitáveis do card INTERIOR com vídeo — TÍTULO no topo →
+ * moldura de vídeo (16:9) → CORPO abaixo → rótulo de marca no rodapé
+ * (exemplo-modelos-com-video.png, caso "Interior"). Mesma separação
+ * bg/frame/pedaços de feedVideoLayoutParts — o render real usa um
+ * buraco transparente; o preview de Ajustes usa hachura + play.
+ */
+export function cardVideoLayoutParts(
+  card: { headline: string | null; body: string | null },
+  cardBrand: CardBrand
+): { bg: string; frame: FeedVideoFrame; headlineSvg: string; bodySvg: string; labelSvg: string } {
+  const family = cardBrand.fontFamily || "Inter";
+  const bg = cardBrand.colorBackground || "#0A0A0A";
+  const text = cardBrand.colorText || "#FFFFFF";
+  const pad = CARD_VIDEO_PAD;
+
+  const headlineText = stripEmoji(card.headline ?? "");
+  const { size: headSize, lineH: headLineH, maxChars } = coverHeadlineSize(headlineText);
+  const headlineLines = wrapText(headlineText, maxChars).slice(0, 3);
+  const bodyLines = card.body ? wrapText(stripEmoji(card.body), 34).slice(0, 3) : [];
+
+  const headStartY = 160;
+  const frame: FeedVideoFrame = {
+    x: pad,
+    y: headStartY + (headlineLines.length - 1) * headLineH + Math.round(headSize * 0.6) + CARD_VIDEO_GAP_HEAD_TO_FRAME,
+    w: WIDTH - pad * 2,
+    h: CARD_VIDEO_FRAME_H,
+    radius: CARD_VIDEO_FRAME_RADIUS,
+  };
+  const bodyStartY = frame.y + frame.h + CARD_VIDEO_GAP_FRAME_TO_BODY;
+
+  const headlineSvg = `<text font-family="${family}" font-weight="700" font-size="${headSize}" fill="${text}" text-anchor="start">${tspansLocal(headlineLines, pad, headStartY, headLineH)}</text>`;
+  const bodySvg = bodyLines.length
+    ? `<text font-family="${family}" font-weight="400" font-size="${CARD_VIDEO_BODY_SIZE}" fill="${text}" fill-opacity="0.82" text-anchor="start">${tspansLocal(bodyLines, pad, bodyStartY, CARD_VIDEO_BODY_LINE_H)}</text>`
+    : "";
+  const rawLabel = brandLabelText(cardBrand);
+  const label = rawLabel && rawLabel.length > 50 ? rawLabel.slice(0, 49).trimEnd() + "…" : rawLabel;
+  const labelSvg = label
+    ? `<text x="${pad}" y="${HEIGHT - 70}" font-family="${family}" font-weight="600" font-size="24" letter-spacing="3" fill="${text}" fill-opacity="0.85">${escapeXmlLocal(label)}</text>`
+    : "";
+
+  return { bg, frame, headlineSvg, bodySvg, labelSvg };
+}
+
+/**
+ * Overlay do card INTERIOR com vídeo (carrossel, migration 037) — ver
+ * cardVideoLayoutParts pra geometria. Fundo com um buraco arredondado
+ * transparente exatamente na moldura — o ffmpeg (composeFeedVideo,
+ * video.ts) encaixa o vídeo atrás desse buraco.
+ */
+export function buildCardVideoOverlay(
+  card: { headline: string | null; body: string | null },
+  cardBrand: CardBrand
+): { overlayPng: Buffer; frame: FeedVideoFrame } {
+  const { bg, frame, headlineSvg, bodySvg, labelSvg } = cardVideoLayoutParts(card, cardBrand);
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
+  <defs>
+    <mask id="card-video-hole">
+      <rect width="100%" height="100%" fill="#fff"/>
+      <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="${WIDTH}" height="${HEIGHT}" fill="${bg}" mask="url(#card-video-hole)"/>
+  ${headlineSvg}
+  ${bodySvg}
+  ${labelSvg}
+</svg>`;
+
+  return { overlayPng: rasterizeSvg(svg), frame };
+}
+
 function escapeXmlLocal(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function tspansLocal(lines: string[], x: number, startY: number, lineH: number): string {
   return lines.map((l, i) => `<tspan x="${x}" y="${startY + i * lineH}">${escapeXmlLocal(l)}</tspan>`).join("");
-}
-
-/** Exposto apenas para QA visual (debug route) — Fatia 1 do Reels
- * (quadro estático 9:16), sem vídeo de verdade ainda. */
-export async function __testReelsFrame(
-  hook: string,
-  layoutPreset: NonNullable<CardBrand["layoutPreset"]>,
-  photo: Buffer
-): Promise<Buffer> {
-  const cardBrand: CardBrand = {
-    colorBackground: "#0B0B12",
-    colorAccent: "#E11D2A",
-    colorText: "#FFFFFF",
-    fontFamily: FONT_FAMILY,
-    brandName: "Debug",
-    wordmark: "POSTPILOT®",
-    handle: "debug.ia",
-    keywords: ["DESIGN", "IA"],
-    layoutPreset,
-  };
-  return composeReelsFrame(photo, hook, cardBrand);
 }
 
 export async function renderAndUploadTemplateArt(

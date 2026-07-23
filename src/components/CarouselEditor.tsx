@@ -7,9 +7,9 @@
 // pros cards cuja superfície tem um modelo do Template Studio escolhido
 // (senão não têm efeito nenhum no motor antigo).
 // ============================================================
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { updateCarouselCard } from "@/app/actions";
+import { updateCarouselCard, uploadCarouselCardVideo } from "@/app/actions";
 import { Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import type { CardLayoutOverride, Surface } from "@/lib/types";
@@ -21,6 +21,10 @@ export interface EditableCard {
   headline: string | null;
   body: string | null;
   layout?: CardLayoutOverride | null;
+  // Vídeo anexado ao card (migration 037) — card "interior com vídeo".
+  video_url?: string | null;
+  video_status?: "none" | "processing" | "ready" | "error";
+  video_error?: string | null;
 }
 
 /** cover_image = card 0; carousel_last = último; os demais = carousel_page. */
@@ -70,11 +74,41 @@ function CardRow({
     card.layout?.textColor ?? "auto"
   );
   const [pending, start] = useTransition();
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [uploadingVideo, startVideoUpload] = useTransition();
+  const router = useRouter();
   const dirty =
     headline !== (card.headline ?? "") ||
     body !== (card.body ?? "") ||
     showLabel !== (card.layout?.showLabel ?? true) ||
     textColor !== (card.layout?.textColor ?? "auto");
+
+  // Polling automático enquanto o vídeo do card processa em background
+  // (mesmo padrão de PostCard.tsx) — sem isso o card ficava preso em
+  // "processando" até o usuário dar refresh manual na página.
+  useEffect(() => {
+    if (card.video_status !== "processing") return;
+    const id = setInterval(() => router.refresh(), 4000);
+    return () => clearInterval(id);
+  }, [card.video_status, router]);
+
+  function handleVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setVideoError(null);
+    startVideoUpload(async () => {
+      try {
+        const fd = new FormData();
+        fd.set("card_id", card.id);
+        fd.set("video", file);
+        const result = await uploadCarouselCardVideo(fd);
+        if (!result.ok) setVideoError(result.error ?? "Falha ao subir vídeo.");
+      } catch {
+        setVideoError("Falha ao subir vídeo. Tente um arquivo menor.");
+      }
+    });
+  }
 
   return (
     <div className="space-y-2 rounded-control border border-line p-3">
@@ -124,6 +158,52 @@ function CardRow({
           </div>
         </div>
       )}
+      {/* Vídeo do card (migration 037) — "interior com vídeo": título +
+          moldura 16:9 + corpo, mesmo pipeline do vídeo do post único. */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-micro text-subtle">🎬 Vídeo do card</span>
+          {card.video_status === "processing" && (
+            <span className="text-micro text-warning">Processando…</span>
+          )}
+        </div>
+        {card.video_status === "ready" && card.video_url && (
+          /* eslint-disable-next-line jsx-a11y/media-has-caption */
+          <video
+            src={card.video_url}
+            controls
+            className="aspect-[4/5] w-full rounded-control bg-black"
+          />
+        )}
+        <label
+          className={`flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content ${
+            card.video_status === "processing" ? "opacity-50" : ""
+          }`}
+        >
+          <span>
+            {uploadingVideo
+              ? "Enviando…"
+              : card.video_status === "processing"
+                ? "Vídeo em processamento…"
+                : card.video_status === "ready"
+                  ? "Trocar vídeo (reprocessa)"
+                  : "Anexar vídeo ao card (.mp4/.mov)"}
+          </span>
+          <input
+            type="file"
+            accept="video/mp4,video/quicktime"
+            className="hidden"
+            disabled={uploadingVideo || card.video_status === "processing"}
+            onChange={handleVideoUpload}
+          />
+        </label>
+        {videoError && <p className="text-micro text-error">{videoError}</p>}
+        {card.video_status === "error" && !videoError && (
+          <p className="text-micro text-error">
+            Falha ao processar o vídeo{card.video_error ? `: ${card.video_error}` : "."} Tente de novo.
+          </p>
+        )}
+      </div>
       <Button
         className="w-full"
         loading={pending}

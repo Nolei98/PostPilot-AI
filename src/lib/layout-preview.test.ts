@@ -7,6 +7,7 @@ import {
   buildCarouselPreview,
   buildVideoPreview,
   buildFeedVideoPreview,
+  buildInteriorVideoPreview,
   buildHybridPreview,
   scaleSvg,
   REELS_W,
@@ -55,17 +56,26 @@ describe.each(PREVIEW_LAYOUTS)("layout-preview — $label", ({ key }) => {
     expect(svg).toContain("<path"); // ícone de play
   });
 
-  it("vídeo feed: quadro 4:5 exato, vídeo só na caixa de cima (banda de identidade embaixo intacta)", () => {
+  it("vídeo feed: quadro 4:5 exato, vídeo numa moldura 16:9 própria (banda de identidade intacta)", () => {
     const svg = buildFeedVideoPreview(key, brand);
     expect(svg).toContain('width="1080" height="1350"');
     expect(svg).toContain("<path"); // ícone de play
-    expect(svg).toContain("video-feed-hatch"); // caixa de vídeo (mockup)
+    expect(svg).toContain("video-feed-hatch"); // moldura de vídeo (mockup)
   });
 
   it("híbrido: vídeo (9:16) + interior (4:5) estático", () => {
     const { video, interior } = buildHybridPreview(key, brand);
     expect(video).toContain(`width="${REELS_W}" height="${REELS_H}"`);
     expect(interior).toContain('width="1080" height="1350"');
+  });
+});
+
+describe("buildInteriorVideoPreview", () => {
+  it("quadro 4:5, moldura de vídeo no meio (título em cima, corpo embaixo)", () => {
+    const svg = buildInteriorVideoPreview(brand);
+    expect(svg).toContain('width="1080" height="1350"');
+    expect(svg).toContain("<path"); // ícone de play
+    expect(svg).toContain("video-card-hatch"); // moldura de vídeo (mockup)
   });
 });
 

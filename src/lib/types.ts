@@ -247,6 +247,12 @@ export interface CarouselCardRow {
   body: string | null;
   image_url: string | null;
   layout: CardLayoutOverride | null;
+  // Vídeo anexado ao card (migration 037) — mesmo pipeline do vídeo do
+  // post único, tratamento "interior com vídeo" (título + moldura 16:9 + corpo).
+  video_url: string | null;
+  video_poster_url: string | null;
+  video_status: "none" | "processing" | "ready" | "error";
+  video_error: string | null;
   created_at: string;
 }
 
