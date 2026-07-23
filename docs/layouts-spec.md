@@ -157,18 +157,25 @@ layout acima) é encaixada pela LARGURA no rodapé do quadro, e o topo é
 preenchido com uma extensão desfocada do próprio vídeo/foto (nunca corta
 lateral). O texto usa o MESMO preset de layout escolhido em Ajustes.
 
-## Vídeo feed (4:5) — adicionado 2026-07-23 (migration 036)
+## Vídeo feed (4:5) — adicionado 2026-07-23, redesenhado no mesmo dia (migration 036)
 
 Segundo formato de vídeo, `format: "video_feed"` — MESMO upload manual
-do usuário, mas SEM o quadro 9:16 do Reels: o vídeo é cover-fit direto
-no quadro 1080×1350 (4:5, igual ao post único/carrossel), sem extensão
-desfocada nem faixa reservada — o vídeo cobre o quadro inteiro. O
-overlay de texto (wordmark + título, mesmo motor de contraste real
-medido pelo frame de pôster) é o MESMO PNG 1080×1350 que já existia pro
-Reels (`buildReelsVideoOverlayPng`, image.ts) — só a composição em
-`video.ts` muda (`composeFeedVideo`, sem letterbox, em vez de
-`composeReelsVideo`). Publica no Instagram pelo mesmo container REELS
-do Graph API (só a proporção do vídeo muda, não o tipo de mídia).
-Anexado no post pelo mesmo botão de upload da Fila, numa opção separada
-("Anexar Feed (4:5)") — um post só guarda 1 vídeo por vez; trocar de
-formato reprocessa por cima do que já tinha.
+do usuário, mas SEM o quadro 9:16 do Reels. Diferente da 1ª versão
+(vídeo cobrindo o quadro 1080×1350 inteiro), o vídeo fica só numa
+**caixa de cima** (altura = `blurBandTop`, a mesma variável que já
+delimita onde a banda de identidade da capa começa — dinâmica por
+headline, igual ao Reels/capa) — cover-fit dentro dessa caixa, sem
+esticar/cortar fora dela. O RESTANTE do quadro (banda de identidade,
+rodapé) vira uma **cor SÓLIDA amostrada do próprio vídeo** (média RGB
+do frame de pôster, `buildFeedVideoOverlay` em image.ts) — não um véu
+translúcido sobre vídeo, porque ali não tem vídeo nenhum atrás pra
+"velar"; é cor pura escolhida pra combinar com a paleta do vídeo.
+Wordmark + título (mesmo motor de layout dos 5 presets) desenham em
+cima dessa cor sólida, com a cor de texto escolhida por contraste real
+(claro/escuro) contra ela. `composeFeedVideo` (video.ts) monta isso via
+`pad` do ffmpeg: vídeo na caixa de cima, preenchimento sólido no resto.
+Publica no Instagram pelo mesmo container REELS do Graph API (só a
+proporção do vídeo muda, não o tipo de mídia). Anexado no post pelo
+mesmo botão de upload da Fila, numa opção separada ("Anexar Feed
+(4:5)") — um post só guarda 1 vídeo por vez; trocar de formato
+reprocessa por cima do que já tinha.

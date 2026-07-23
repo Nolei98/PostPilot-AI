@@ -9,7 +9,8 @@
 //   Descartar→ card desliza p/ esquerda (vermelho) e some
 //   Editar   → modal com legenda + hashtags
 // ============================================================
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
+import { useRouter } from "next/navigation";
 /* eslint-disable @next/next/no-img-element */
 import {
   applyTemplateToPost,
@@ -59,6 +60,7 @@ export function PostCard({
 }) {
   const HANDLE = profile.handle;
   const toast = useToast();
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [cardsOpen, setCardsOpen] = useState(false);
   const [hook, setHook] = useState(post.hook);
@@ -82,6 +84,17 @@ export function PostCard({
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   });
+
+  // Polling automático enquanto o vídeo processa em background (Inngest
+  // + ffmpeg pode levar dezenas de segundos) — sem isso o card ficava
+  // preso em "processando" até o usuário dar refresh manual na página.
+  // router.refresh() busca o post de novo no servidor; quando o job
+  // termina, video_status muda e o efeito abaixo para sozinho.
+  useEffect(() => {
+    if (post.video_status !== "processing") return;
+    const id = setInterval(() => router.refresh(), 4000);
+    return () => clearInterval(id);
+  }, [post.video_status, router]);
 
   function handleToggleTemplate(checked: boolean) {
     if (checked) {

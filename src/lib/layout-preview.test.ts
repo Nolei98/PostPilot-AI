@@ -55,11 +55,11 @@ describe.each(PREVIEW_LAYOUTS)("layout-preview — $label", ({ key }) => {
     expect(svg).toContain("<path"); // ícone de play
   });
 
-  it("vídeo feed: quadro 4:5 exato (sem letterbox), com play mas sem faixa reservada", () => {
+  it("vídeo feed: quadro 4:5 exato, vídeo só na caixa de cima (banda de identidade embaixo intacta)", () => {
     const svg = buildFeedVideoPreview(key, brand);
     expect(svg).toContain('width="1080" height="1350"');
     expect(svg).toContain("<path"); // ícone de play
-    expect(svg).not.toContain("video-hatch"); // não é o Reels — sem faixa reservada
+    expect(svg).toContain("video-feed-hatch"); // caixa de vídeo (mockup)
   });
 
   it("híbrido: vídeo (9:16) + interior (4:5) estático", () => {

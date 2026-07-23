@@ -53,8 +53,15 @@ interface CoverOpts {
 }
 
 /** Adapta a assinatura de cada builder (Editorial Noir difere dos 4
- * layouts alternativos) pra uma interface única usada só aqui. */
-function previewCoverSvg(preset: LayoutPreset, headline: string, brand: CardBrand, opts: CoverOpts): string {
+ * layouts alternativos) pra uma interface única usada só aqui — svg +
+ * blurBandTop (onde a banda de identidade começa; usado pelo mockup de
+ * vídeo feed, que precisa saber até onde vai a "caixa de vídeo"). */
+function previewCoverRender(
+  preset: LayoutPreset,
+  headline: string,
+  brand: CardBrand,
+  opts: CoverOpts
+): { svg: string; blurBandTop: number } {
   const showSwipeHint = opts.showSwipeHint ?? true;
   if (preset === "editorial-noir") {
     return buildCoverSvg(
@@ -67,7 +74,7 @@ function previewCoverSvg(preset: LayoutPreset, headline: string, brand: CardBran
         align: showSwipeHint ? "bottom" : "center",
         showActionIcons: opts.showActionIcons ?? false,
       }
-    ).svg;
+    );
   }
   const builders = {
     brutalism: buildBrutalismCoverSvg,
@@ -83,7 +90,11 @@ function previewCoverSvg(preset: LayoutPreset, headline: string, brand: CardBran
     // alternativos usam pra desenhar a trilha de ícones — mesma
     // convenção do render real (ver renderTemplateSlide em image.ts).
     overlay: opts.showActionIcons ? { theme: "dark", alpha: 0 } : undefined,
-  }).svg;
+  });
+}
+
+function previewCoverSvg(preset: LayoutPreset, headline: string, brand: CardBrand, opts: CoverOpts): string {
+  return previewCoverRender(preset, headline, brand, opts).svg;
 }
 
 function previewCardSvg(
@@ -200,27 +211,47 @@ export function buildVideoPreview(preset: LayoutPreset, brand: CardBrand): strin
   return wrapAsReelsFrame(cover, brand);
 }
 
-/** Vídeo FEED (4:5, migration 036) — MESMO quadro da capa, sem letterbox:
- * o vídeo do usuário cobre o quadro inteiro (diferente do Reels, que
- * reserva uma faixa própria pro vídeo no topo do quadro 9:16) — aqui só
- * um play button no centro sinaliza "isto é vídeo", por cima da MESMA
- * composição de capa (wordmark + título) que já roda de verdade. */
-function wrapAsFeedVideoFrame(coverSvg: string): string {
+/** Vídeo FEED (4:5, migration 036) — o vídeo NÃO cobre o quadro inteiro:
+ * fica só na caixa de cima (até `blurBandTop`, onde a banda de
+ * identidade da capa começa) — o resto do quadro (banda de identidade,
+ * já desenhada pela própria capa com fundo sólido) fica como está,
+ * exatamente igual à composição real (ver composeFeedVideo em video.ts:
+ * vídeo na caixa + cor sólida amostrada no rodapé). Aqui a caixa vira
+ * hachura + play, já que não há vídeo real pra mostrar no mockup. */
+function wrapAsFeedVideoFrame(coverSvg: string, brand: CardBrand, boxHeight: number): string {
+  const accent = brand.colorAccent || "#7C5CFF";
   const playCx = CARD_W / 2;
-  const playCy = CARD_H * 0.42; // acima do bloco de texto (ancorado embaixo)
-  const playR = 60;
-  return appendOverlay(
-    coverSvg,
-    `<circle cx="${playCx}" cy="${playCy}" r="${playR}" fill="#000" fill-opacity="0.4"/>
-     <path d="M ${playCx - 20} ${playCy - 28} L ${playCx - 20} ${playCy + 28} L ${playCx + 26} ${playCy} Z" fill="#fff"/>
-     <text x="24" y="52" font-family="IBM Plex Mono" font-weight="700" font-size="24" letter-spacing="2" fill="#fff">VÍDEO</text>`
-  );
+  const playCy = boxHeight / 2;
+  const playR = 54;
+  const margin = 18;
+  // A hachura + borda tracejada ficam ANTES do resto do SVG (logo após
+  // <defs> impossível de saber a posição exata sem parsear — mais simples
+  // injetar um <defs> próprio + desenhar por cima logo no início do body,
+  // via replace da tag de abertura, garantindo que fique ATRÁS do texto
+  // da capa (que só existe na banda abaixo de boxHeight, então não colide).
+  // Injetado no FIM (antes de </svg>) — mesmo assim fica visualmente por
+  // cima só da região 0..boxHeight, que nunca colide com o texto da capa
+  // (sempre desenhado a partir de blurBandTop === boxHeight pra baixo).
+  const patchId = "video-feed-hatch";
+  const boxLayer = `<defs><pattern id="${patchId}" width="28" height="28" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <rect width="28" height="28" fill="#15151a"/>
+      <line x1="0" y1="0" x2="0" y2="28" stroke="#26262e" stroke-width="14"/>
+    </pattern></defs>
+    <rect x="0" y="0" width="${CARD_W}" height="${boxHeight}" fill="url(#${patchId})"/>
+    <rect x="${margin}" y="${margin}" width="${CARD_W - margin * 2}" height="${boxHeight - margin * 2}" fill="none" stroke="${accent}" stroke-opacity="0.6" stroke-width="3" stroke-dasharray="14 10" rx="18"/>
+    <circle cx="${playCx}" cy="${playCy}" r="${playR}" fill="#000" fill-opacity="0.45"/>
+    <path d="M ${playCx - 18} ${playCy - 26} L ${playCx - 18} ${playCy + 26} L ${playCx + 24} ${playCy} Z" fill="#fff"/>
+    <text x="24" y="52" font-family="IBM Plex Mono" font-weight="700" font-size="24" letter-spacing="2" fill="#fff">VÍDEO</text>`;
+  return appendOverlay(coverSvg, boxLayer);
 }
 
-/** Vídeo feed — 1 frame 4:5 com play, sem faixa reservada (o vídeo cobre o quadro inteiro). */
+/** Vídeo feed — 1 frame 4:5, vídeo só na caixa de cima (sem letterbox no
+ * resto — a banda de identidade embaixo já é sólida por padrão). */
 export function buildFeedVideoPreview(preset: LayoutPreset, brand: CardBrand): string {
-  const cover = previewCoverSvg(preset, "O título do seu próximo vídeo", brand, { showSwipeHint: true });
-  return wrapAsFeedVideoFrame(cover);
+  const { svg, blurBandTop } = previewCoverRender(preset, "O título do seu próximo vídeo", brand, {
+    showSwipeHint: true,
+  });
+  return wrapAsFeedVideoFrame(svg, brand, blurBandTop);
 }
 
 /** Modelo com vídeo — capa em vídeo (9:16, play) + 1 interior estático (4:5). */

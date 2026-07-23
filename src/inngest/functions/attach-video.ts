@@ -59,17 +59,21 @@ export const attachVideo = inngest.createFunction(
         const videoBuffer = Buffer.from(await srcFile.arrayBuffer());
 
         const { extractPosterFrame, composeReelsVideo, composeFeedVideo } = await import("@/lib/video");
-        const { buildReelsVideoOverlayPng } = await import("@/lib/image");
+        const { buildReelsVideoOverlayPng, buildFeedVideoOverlay } = await import("@/lib/image");
 
         // Regra do kit: luminância medida pelo FRAME DE PÔSTER, não o vídeo inteiro.
         const poster = await extractPosterFrame(videoBuffer, 0.5);
-        // Overlay já sai em 1080x1350 (mesmo quadro do post único) —
-        // serve tanto pro Reels (encaixado dentro do 9:16) quanto pro
-        // feed (usado direto, sem letterbox).
-        const overlay = await buildReelsVideoOverlayPng(post.hook ?? "", cardBrand, poster);
-        const finalVideo = isFeed
-          ? await composeFeedVideo(videoBuffer, overlay)
-          : await composeReelsVideo(videoBuffer, overlay);
+        let finalVideo: Buffer;
+        if (isFeed) {
+          // Feed 4:5: vídeo só na caixa de cima, rodapé em cor sólida
+          // amostrada do próprio vídeo (ver buildFeedVideoOverlay).
+          const { overlayPng, blurBandTop, bgColorHex } = await buildFeedVideoOverlay(post.hook ?? "", cardBrand, poster);
+          finalVideo = await composeFeedVideo(videoBuffer, overlayPng, blurBandTop, bgColorHex);
+        } else {
+          // Reels 9:16: overlay já em 1080x1350, encaixado no rodapé do quadro maior.
+          const overlay = await buildReelsVideoOverlayPng(post.hook ?? "", cardBrand, poster);
+          finalVideo = await composeReelsVideo(videoBuffer, overlay);
+        }
 
         const videoPath = `${postId}-video.mp4`;
         const posterPath = `${postId}-video-poster.jpg`;

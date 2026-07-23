@@ -82,6 +82,7 @@ import {
   measureImageLuminance,
   overlayAlphaFor,
 } from "@/lib/contrast";
+import { relLuminance } from "@/lib/legibility";
 
 /** Template de marca default (posts antigos / config ausente) */
 const DEFAULT_BRAND: BrandTemplate = { logoUrl: null, showLogo: true, fontFamily: FONT_FAMILY };
@@ -710,6 +711,56 @@ export async function buildReelsVideoOverlayPng(
     overlay: { theme, alpha },
   });
   return rasterizeSvg(svg);
+}
+
+/** Média RGB de uma imagem inteira (0-255 por canal) — usada pra achar
+ * a cor de fundo que "combina" com o vídeo do feed (§ vídeo feed 4:5).
+ * Amostra pequena (24x30), barato, suficiente pra uma média de cor. */
+async function averageColorHex(photo: Buffer): Promise<string> {
+  const { data, info } = await sharp(photo)
+    .resize(24, 30)
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const channels = info.channels;
+  let r = 0, g = 0, b = 0;
+  const n = data.length / channels;
+  for (let i = 0; i < data.length; i += channels) {
+    r += data[i]; g += data[i + 1]; b += data[i + 2];
+  }
+  const [rr, gg, bb] = n ? [r / n, g / n, b / n].map(Math.round) : [11, 11, 18];
+  return "#" + [rr, gg, bb].map((v) => v.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Overlay do vídeo FEED (4:5, migration 036) — diferente do Reels: o
+ * vídeo não cobre o quadro inteiro, só a caixa de cima (altura
+ * `blurBandTop`); a banda de identidade (rodapé) vira uma cor SÓLIDA
+ * amostrada do próprio vídeo (não um véu translúcido sobre o vídeo —
+ * aqui não tem vídeo nenhum atrás pra "velar", é cor pura escolhida pra
+ * combinar). Por isso o SVG sai SEM fundo e SEM overlay (transparent,
+ * sem opts.overlay) — o ffmpeg (composeFeedVideo, video.ts) quem pinta
+ * a cor sólida por baixo via `pad`, preenchendo exatamente a área onde
+ * o vídeo não chega.
+ */
+export async function buildFeedVideoOverlay(
+  headline: string,
+  cardBrand: CardBrand,
+  posterFrame: Buffer
+): Promise<{ overlayPng: Buffer; blurBandTop: number; bgColorHex: string }> {
+  const bgColorHex = await averageColorHex(posterFrame);
+  const luminance = relLuminance(
+    bgColorHex
+      .replace("#", "")
+      .match(/.{2}/g)!
+      .map((h) => parseInt(h, 16)) as [number, number, number]
+  );
+  const theme = pickTheme(luminance);
+  const textColor = textColorForTheme(theme);
+  const { svg, blurBandTop } = buildPageOneCoverSvg(headline, { ...cardBrand, colorText: textColor }, true, {
+    showSwipeHint: false,
+  });
+  return { overlayPng: rasterizeSvg(svg), blurBandTop, bgColorHex };
 }
 
 /** Exposto apenas para QA visual (debug route) — Fatia 1 do Reels
