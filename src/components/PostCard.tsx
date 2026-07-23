@@ -119,22 +119,25 @@ export function PostCard({
     });
   }
 
-  function handleVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setVideoError(null);
-    startVideoUpload(async () => {
-      try {
-        const fd = new FormData();
-        fd.set("post_id", post.id);
-        fd.set("video", file);
-        const result = await uploadPostVideo(fd);
-        if (!result.ok) setVideoError(result.error ?? "Falha ao subir vídeo.");
-      } catch {
-        setVideoError("Falha ao subir vídeo. Tente um arquivo menor.");
-      }
-    });
+  function handleVideoUpload(shape: "reels" | "feed") {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      setVideoError(null);
+      startVideoUpload(async () => {
+        try {
+          const fd = new FormData();
+          fd.set("post_id", post.id);
+          fd.set("video", file);
+          fd.set("shape", shape);
+          const result = await uploadPostVideo(fd);
+          if (!result.ok) setVideoError(result.error ?? "Falha ao subir vídeo.");
+        } catch {
+          setVideoError("Falha ao subir vídeo. Tente um arquivo menor.");
+        }
+      });
+    };
   }
 
   // ---- Identidade visual (por post) ----
@@ -328,10 +331,12 @@ export function PostCard({
           </label>
           {uploadError && <p className="text-micro text-error">{uploadError}</p>}
 
-          {/* Vídeo anexado (Fase 4, kit v2 §3) — upload manual, composto
-              em background (Inngest + ffmpeg) no quadro Reels 9:16. */}
+          {/* Vídeo anexado (Fase 4, kit v2 §3; feed 4:5 = migration 036) —
+              upload manual, composto em background (Inngest + ffmpeg).
+              Um post só guarda 1 vídeo por vez — anexar no outro formato
+              troca (reprocessa) o que já tinha. */}
           <div className="flex items-center justify-between gap-2 pt-1">
-            <span className="text-micro text-subtle">🎬 Reels (vídeo)</span>
+            <span className="text-micro text-subtle">🎬 Vídeo</span>
             {post.video_status === "processing" && (
               <span className="text-micro text-warning">Processando…</span>
             )}
@@ -346,16 +351,38 @@ export function PostCard({
                 ? "Enviando…"
                 : post.video_status === "processing"
                   ? "Vídeo em processamento…"
-                  : post.video_status === "ready"
-                    ? "Trocar vídeo (reprocessa)"
-                    : "Anexar vídeo (.mp4/.mov)"}
+                  : post.format === "video" && post.video_status === "ready"
+                    ? "Reels (9:16) ✓ — trocar vídeo"
+                    : "Anexar Reels (9:16)"}
             </span>
             <input
               type="file"
               accept="video/mp4,video/quicktime"
               className="hidden"
               disabled={uploadingVideo || post.video_status === "processing"}
-              onChange={handleVideoUpload}
+              onChange={handleVideoUpload("reels")}
+            />
+          </label>
+          <label
+            className={`flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content ${
+              post.video_status === "processing" ? "opacity-50" : ""
+            }`}
+          >
+            <span>
+              {uploadingVideo
+                ? "Enviando…"
+                : post.video_status === "processing"
+                  ? "Vídeo em processamento…"
+                  : post.format === "video_feed" && post.video_status === "ready"
+                    ? "Feed (4:5) ✓ — trocar vídeo"
+                    : "Anexar Feed (4:5, sem letterbox)"}
+            </span>
+            <input
+              type="file"
+              accept="video/mp4,video/quicktime"
+              className="hidden"
+              disabled={uploadingVideo || post.video_status === "processing"}
+              onChange={handleVideoUpload("feed")}
             />
           </label>
           {videoError && <p className="text-micro text-error">{videoError}</p>}
@@ -371,15 +398,15 @@ export function PostCard({
         <div className="bg-black">
           {/* Header (foto/nome/@) removido: já aparece no chip da imagem — evita redundância */}
 
-          {/* Vídeo pronto (Reels 9:16) vira a mídia principal do post —
-              senão, mesma preview de sempre (single: pág 1 + contra-capa;
-              carrossel: todos os cards, em ordem). */}
+          {/* Vídeo pronto (Reels 9:16 ou feed 4:5) vira a mídia principal do
+              post — senão, mesma preview de sempre (single: pág 1 +
+              contra-capa; carrossel: todos os cards, em ordem). */}
           {post.video_status === "ready" && post.video_url ? (
             <video
               src={post.video_url}
               poster={post.video_poster_url ?? undefined}
               controls
-              className="aspect-[9/16] w-full bg-black"
+              className={`w-full bg-black ${post.format === "video_feed" ? "aspect-[4/5]" : "aspect-[9/16]"}`}
             />
           ) : (
             <CarouselPreview

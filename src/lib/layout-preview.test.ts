@@ -6,6 +6,7 @@ import {
   buildClosingPreview,
   buildCarouselPreview,
   buildVideoPreview,
+  buildFeedVideoPreview,
   buildHybridPreview,
   scaleSvg,
   REELS_W,
@@ -52,6 +53,13 @@ describe.each(PREVIEW_LAYOUTS)("layout-preview — $label", ({ key }) => {
     expect(svg).toContain(`width="${REELS_W}" height="${REELS_H}"`);
     expect(svg).toContain("REELS");
     expect(svg).toContain("<path"); // ícone de play
+  });
+
+  it("vídeo feed: quadro 4:5 exato (sem letterbox), com play mas sem faixa reservada", () => {
+    const svg = buildFeedVideoPreview(key, brand);
+    expect(svg).toContain('width="1080" height="1350"');
+    expect(svg).toContain("<path"); // ícone de play
+    expect(svg).not.toContain("video-hatch"); // não é o Reels — sem faixa reservada
   });
 
   it("híbrido: vídeo (9:16) + interior (4:5) estático", () => {

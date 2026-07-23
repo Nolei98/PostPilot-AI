@@ -22,7 +22,7 @@ import {
 interface DuePost {
   id: string;
   client_id: string;
-  format: "single" | "carousel" | "video";
+  format: "single" | "carousel" | "video" | "video_feed";
   caption: string;
   hashtags: string;
   image_url: string | null;
@@ -110,7 +110,10 @@ export const publishScheduledPosts = inngest.createFunction(
       try {
         let mediaId: string;
 
-        if (post.format === "video") {
+        if (post.format === "video" || post.format === "video_feed") {
+          // Graph API só publica vídeo via container REELS — mesmo o
+          // formato "feed" (4:5, sem letterbox) publica como Reels; o
+          // Instagram aceita variações de aspect ratio no container.
           if (!post.video_url) throw new Error("Post de vídeo sem video_url");
           const container = await step.run(`create-container-${post.id}`, () =>
             createMediaContainer(igUserId, accessToken, { videoUrl: post.video_url!, caption, mediaType: "REELS" })

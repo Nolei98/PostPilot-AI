@@ -29,7 +29,8 @@ export function ReadyPostCard({
     (u): u is string => !!u
   );
   const isCarousel = pages.length > 1;
-  const isVideo = post.format === "video" && !!post.video_url;
+  const isVideo = (post.format === "video" || post.format === "video_feed") && !!post.video_url;
+  const isFeedVideo = post.format === "video_feed";
   const isScheduled = post.status === "scheduled";
 
   const [copied, setCopied] = useState(false);
@@ -172,7 +173,7 @@ export function ReadyPostCard({
             src={post.video_url ?? undefined}
             poster={post.video_poster_url ?? undefined}
             controls
-            className="h-28 w-[63px] shrink-0 rounded-control bg-black"
+            className={`h-28 shrink-0 rounded-control bg-black ${isFeedVideo ? "w-[89.6px]" : "w-[63px]"}`}
           />
         ) : (
           <CarouselPreview
@@ -200,7 +201,7 @@ export function ReadyPostCard({
           </p>
           {isVideo && (
             <span className="mt-1 inline-block text-micro text-subtle">
-              🎬 Reels (vídeo)
+              {isFeedVideo ? "🎬 Vídeo (feed, 4:5)" : "🎬 Reels (vídeo)"}
             </span>
           )}
           {!isVideo && isCarousel && (

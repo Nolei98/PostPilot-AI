@@ -28,12 +28,13 @@ export const PREVIEW_LAYOUTS: { key: LayoutPreset; label: string }[] = [
   { key: "pop-creator", label: "Pop Creator" },
 ];
 
-export type PreviewFormat = "cover" | "carousel" | "video" | "hybrid";
+export type PreviewFormat = "cover" | "carousel" | "video" | "hybrid" | "video-feed";
 
 export const PREVIEW_FORMATS: { key: PreviewFormat; label: string }[] = [
   { key: "cover", label: "Capa normal" },
   { key: "carousel", label: "Carrossel" },
   { key: "video", label: "Vídeo (Reels)" },
+  { key: "video-feed", label: "Vídeo (feed, 4:5)" },
   { key: "hybrid", label: "Modelo com vídeo" },
 ];
 
@@ -197,6 +198,29 @@ function wrapAsReelsFrame(coverSvg: string, brand: CardBrand): string {
 export function buildVideoPreview(preset: LayoutPreset, brand: CardBrand): string {
   const cover = previewCoverSvg(preset, "O título do seu próximo Reels", brand, { showSwipeHint: true });
   return wrapAsReelsFrame(cover, brand);
+}
+
+/** Vídeo FEED (4:5, migration 036) — MESMO quadro da capa, sem letterbox:
+ * o vídeo do usuário cobre o quadro inteiro (diferente do Reels, que
+ * reserva uma faixa própria pro vídeo no topo do quadro 9:16) — aqui só
+ * um play button no centro sinaliza "isto é vídeo", por cima da MESMA
+ * composição de capa (wordmark + título) que já roda de verdade. */
+function wrapAsFeedVideoFrame(coverSvg: string): string {
+  const playCx = CARD_W / 2;
+  const playCy = CARD_H * 0.42; // acima do bloco de texto (ancorado embaixo)
+  const playR = 60;
+  return appendOverlay(
+    coverSvg,
+    `<circle cx="${playCx}" cy="${playCy}" r="${playR}" fill="#000" fill-opacity="0.4"/>
+     <path d="M ${playCx - 20} ${playCy - 28} L ${playCx - 20} ${playCy + 28} L ${playCx + 26} ${playCy} Z" fill="#fff"/>
+     <text x="24" y="52" font-family="IBM Plex Mono" font-weight="700" font-size="24" letter-spacing="2" fill="#fff">VÍDEO</text>`
+  );
+}
+
+/** Vídeo feed — 1 frame 4:5 com play, sem faixa reservada (o vídeo cobre o quadro inteiro). */
+export function buildFeedVideoPreview(preset: LayoutPreset, brand: CardBrand): string {
+  const cover = previewCoverSvg(preset, "O título do seu próximo vídeo", brand, { showSwipeHint: true });
+  return wrapAsFeedVideoFrame(cover);
 }
 
 /** Modelo com vídeo — capa em vídeo (9:16, play) + 1 interior estático (4:5). */

@@ -221,7 +221,11 @@ export interface NewsItem {
   created_at: string;
 }
 
-export type PostFormat = "single" | "carousel" | "video";
+// "video" = Reels 9:16 (upload manual, quadro 4:5 encaixado + extensão
+// desfocada); "video_feed" = mesmo upload manual, mas composto DIRETO no
+// quadro 4:5 (1080x1350, igual ao post único/carrossel) — sem letterbox,
+// o vídeo cobre o quadro inteiro (migration 036).
+export type PostFormat = "single" | "carousel" | "video" | "video_feed";
 
 /** Override manual por card do Template Studio (Sprint B+, TAREFA B9) —
  * só tem efeito quando a superfície do card usa um modelo (template_

@@ -155,7 +155,20 @@ Existe um formato de vídeo (upload manual do usuário, sem geração por
 IA): o quadro final é **1080×1920 nativo** — a capa 4:5 (mesmo motor de
 layout acima) é encaixada pela LARGURA no rodapé do quadro, e o topo é
 preenchido com uma extensão desfocada do próprio vídeo/foto (nunca corta
-lateral). O texto usa o MESMO preset de layout escolhido em Ajustes. Isso
-ainda não tem preview/mockup pra IA de design pensar variações — é só
-overlay de marca sobre vídeo real, sem tipografia nova além dos 5 presets
-já documentados acima.
+lateral). O texto usa o MESMO preset de layout escolhido em Ajustes.
+
+## Vídeo feed (4:5) — adicionado 2026-07-23 (migration 036)
+
+Segundo formato de vídeo, `format: "video_feed"` — MESMO upload manual
+do usuário, mas SEM o quadro 9:16 do Reels: o vídeo é cover-fit direto
+no quadro 1080×1350 (4:5, igual ao post único/carrossel), sem extensão
+desfocada nem faixa reservada — o vídeo cobre o quadro inteiro. O
+overlay de texto (wordmark + título, mesmo motor de contraste real
+medido pelo frame de pôster) é o MESMO PNG 1080×1350 que já existia pro
+Reels (`buildReelsVideoOverlayPng`, image.ts) — só a composição em
+`video.ts` muda (`composeFeedVideo`, sem letterbox, em vez de
+`composeReelsVideo`). Publica no Instagram pelo mesmo container REELS
+do Graph API (só a proporção do vídeo muda, não o tipo de mídia).
+Anexado no post pelo mesmo botão de upload da Fila, numa opção separada
+("Anexar Feed (4:5)") — um post só guarda 1 vídeo por vez; trocar de
+formato reprocessa por cima do que já tinha.

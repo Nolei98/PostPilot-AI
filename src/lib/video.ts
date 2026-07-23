@@ -29,6 +29,13 @@ export const REELS_H = 1920;
  * constante de composeReelsFrame em image.ts (imagem estática). */
 export const REELS_TOP_EXTENSION = REELS_H - 1350;
 
+/** Quadro do vídeo "feed" (4:5, migration 036) — MESMA proporção do post
+ * único/carrossel, sem letterbox: o vídeo cobre o quadro inteiro (cover-fit,
+ * corta o excesso), diferente do Reels que encaixa pela largura e completa
+ * com extensão desfocada. */
+export const FEED_VIDEO_W = 1080;
+export const FEED_VIDEO_H = 1350;
+
 /** Caminho temporário único (pid+timestamp evita colisão entre execuções
  * concorrentes) — reusado pela montagem automática (video-assembly.ts). */
 export function tmpPath(name: string): string {
@@ -87,6 +94,49 @@ export async function composeReelsVideo(videoBuffer: Buffer, overlayPng: Buffer)
       `[fit2]scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=increase,crop=${REELS_W}:${REELS_H},gblur=sigma=30[bgblur]`,
       `[bgblur][fit1]overlay=(W-w)/2:(H-h)/2[base]`,
       `[base][1:v]overlay=0:${REELS_TOP_EXTENSION}[outv]`,
+    ].join(";");
+
+    await runFfmpeg([
+      "-y",
+      "-i", inPath,
+      "-i", overlayPath,
+      "-filter_complex", filter,
+      "-map", "[outv]",
+      "-map", "0:a?",
+      "-c:v", "libx264",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      "-movflags", "+faststart",
+      outPath,
+    ]);
+
+    return fs.readFileSync(outPath);
+  } finally {
+    fs.rmSync(inPath, { force: true });
+    fs.rmSync(overlayPath, { force: true });
+    fs.rmSync(outPath, { force: true });
+  }
+}
+
+/**
+ * Compõe o quadro FEED 4:5 final (migration 036): cover-fit direto do
+ * vídeo enviado pro quadro 1080×1350 (corta o excesso lateral/vertical,
+ * sem extensão desfocada — o vídeo já cobre o quadro inteiro) + overlay
+ * de texto por cima (mesmo PNG 1080×1350 usado no Reels — ver
+ * buildReelsVideoOverlayPng em image.ts, que já produz nesse tamanho).
+ * Retorna o .mp4 final (h264, mesmo áudio do original se houver).
+ */
+export async function composeFeedVideo(videoBuffer: Buffer, overlayPng: Buffer): Promise<Buffer> {
+  const inPath = tmpPath("in.mp4");
+  const overlayPath = tmpPath("overlay.png");
+  const outPath = tmpPath("out.mp4");
+  try {
+    fs.writeFileSync(inPath, videoBuffer);
+    fs.writeFileSync(overlayPath, overlayPng);
+
+    const filter = [
+      `[0:v]scale=${FEED_VIDEO_W}:${FEED_VIDEO_H}:force_original_aspect_ratio=increase,crop=${FEED_VIDEO_W}:${FEED_VIDEO_H},setsar=1[bg]`,
+      `[bg][1:v]overlay=0:0[outv]`,
     ].join(";");
 
     await runFfmpeg([

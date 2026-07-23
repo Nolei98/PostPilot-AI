@@ -1,9 +1,11 @@
 // ============================================================
-// Job: compõe o quadro Reels 9:16 sobre o vídeo que o usuário anexou a
-// um post pendente (Fase 4, kit v2 §3). Disparado por uploadPostVideo
+// Job: compõe o quadro (Reels 9:16 OU feed 4:5, migration 036) sobre o
+// vídeo que o usuário anexou a um post pendente (Fase 4, kit v2 §3;
+// feed 4:5 adicionado depois). Disparado por uploadPostVideo
 // (actions.ts) — o upload em si é síncrono (só sobe o arquivo bruto),
 // o processamento pesado (ffmpeg) roda aqui, em background, porque pode
-// levar dezenas de segundos.
+// levar dezenas de segundos. `event.data.shape` ("reels"|"feed",
+// default "reels") decide qual quadro é montado.
 //
 // Um único step faz o trabalho pesado e NUNCA deixa exceção escapar —
 // captura o erro e retorna {ok:false, error} em vez de lançar, pra o
@@ -19,7 +21,8 @@ export const attachVideo = inngest.createFunction(
   { id: "attach-video", retries: 1, concurrency: { limit: 2 } },
   { event: "post/attach-video.requested" },
   async ({ event, step }) => {
-    const { postId } = event.data as { postId: string };
+    const { postId, shape } = event.data as { postId: string; shape?: "reels" | "feed" };
+    const isFeed = shape === "feed";
     const supabase = createAdminClient();
 
     const result = await step.run("process-video", async () => {
@@ -55,13 +58,18 @@ export const attachVideo = inngest.createFunction(
         if (dlErr || !srcFile) throw new Error("Vídeo fonte não encontrado no Storage");
         const videoBuffer = Buffer.from(await srcFile.arrayBuffer());
 
-        const { extractPosterFrame, composeReelsVideo } = await import("@/lib/video");
+        const { extractPosterFrame, composeReelsVideo, composeFeedVideo } = await import("@/lib/video");
         const { buildReelsVideoOverlayPng } = await import("@/lib/image");
 
         // Regra do kit: luminância medida pelo FRAME DE PÔSTER, não o vídeo inteiro.
         const poster = await extractPosterFrame(videoBuffer, 0.5);
+        // Overlay já sai em 1080x1350 (mesmo quadro do post único) —
+        // serve tanto pro Reels (encaixado dentro do 9:16) quanto pro
+        // feed (usado direto, sem letterbox).
         const overlay = await buildReelsVideoOverlayPng(post.hook ?? "", cardBrand, poster);
-        const finalVideo = await composeReelsVideo(videoBuffer, overlay);
+        const finalVideo = isFeed
+          ? await composeFeedVideo(videoBuffer, overlay)
+          : await composeReelsVideo(videoBuffer, overlay);
 
         const videoPath = `${postId}-video.mp4`;
         const posterPath = `${postId}-video-poster.jpg`;
@@ -97,7 +105,7 @@ export const attachVideo = inngest.createFunction(
             video_poster_url: result.posterUrl,
             video_status: "ready",
             video_error: null,
-            format: "video",
+            format: isFeed ? "video_feed" : "video",
           })
           .eq("id", postId);
       } else {

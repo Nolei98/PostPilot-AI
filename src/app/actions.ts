@@ -506,8 +506,9 @@ export async function uploadPostImage(
 /**
  * Anexa um vídeo a um post pendente (Fase 4, kit v2 §3) — sobe o
  * arquivo bruto pro Storage e dispara o processamento em BACKGROUND
- * (Inngest): o ffmpeg compõe o quadro Reels 9:16 por cima, o que pode
- * levar dezenas de segundos — não dá pra fazer síncrono como a foto.
+ * (Inngest): o ffmpeg compõe o quadro por cima (Reels 9:16 ou feed 4:5,
+ * migration 036 — `shape` no FormData), o que pode levar dezenas de
+ * segundos — não dá pra fazer síncrono como a foto.
  * `video_status` vira 'processing' na hora; a fila mostra isso e
  * atualiza quando o job terminar (revalidatePath cobre o próximo load).
  */
@@ -522,6 +523,9 @@ export async function uploadPostVideo(
 
   const postId = String(formData.get("post_id") ?? "");
   const file = formData.get("video") as File | null;
+  // "reels" (9:16, default) ou "feed" (4:5, migration 036) — decide o
+  // quadro de composição em attach-video.ts.
+  const shape = formData.get("shape") === "feed" ? "feed" : "reels";
   if (!postId || !file || file.size === 0) {
     return { ok: false, error: "Selecione um vídeo." };
   }
@@ -562,7 +566,7 @@ export async function uploadPostVideo(
   }
 
   inngest
-    .send({ name: "post/attach-video.requested", data: { postId, userId: user.id } })
+    .send({ name: "post/attach-video.requested", data: { postId, userId: user.id, shape } })
     .catch((err) => console.warn("[uploadPostVideo] não foi possível enfileirar o processamento:", err));
 
   revalidatePath("/");
