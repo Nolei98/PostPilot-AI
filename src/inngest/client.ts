@@ -31,10 +31,11 @@ type Events = {
   };
   // Usuário anexou um vídeo a um post pendente (Fase 4, kit v2 §3) →
   // compõe o quadro em background (ffmpeg). shape decide Reels (9:16,
-  // vídeo cobre o quadro inteiro) ou feed (4:5, vídeo numa moldura
-  // 16:9 — migration 036); default "reels" se omitido.
+  // vídeo cobre o quadro inteiro), feed (4:5, moldura 16:9 sobre fundo
+  // sólido — migration 036) ou feed-blur (4:5, moldura 16:9 sobre o
+  // MESMO vídeo borrado como fundo, 2026-07-23); default "reels".
   "post/attach-video.requested": {
-    data: { postId: string; userId: string; shape?: "reels" | "feed" };
+    data: { postId: string; userId: string; shape?: "reels" | "feed" | "feed-blur" };
   };
   // Usuário anexou um vídeo a um CARD de carrossel (migration 037) →
   // compõe o quadro "interior com vídeo" (título + moldura 16:9 + corpo)

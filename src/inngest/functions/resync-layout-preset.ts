@@ -227,11 +227,14 @@ export const resyncLayoutPreset = inngest.createFunction(
           const poster = await extractPosterFrame(videoBuffer, 0.5);
           const overlay = await buildReelsVideoOverlayPng(post.hook ?? "", prefs.cardBrand, poster);
           const finalVideo = await composeReelsVideo(videoBuffer, overlay);
+          // Pôster salvo precisa ser do vídeo FINAL (com overlay), não
+          // do bruto usado só pra medir contraste — mesmo fix de attach-video.ts.
+          const finalPoster = await extractPosterFrame(finalVideo, 0.5);
 
           const videoPath = `${post.id}-video.mp4`;
           const posterPath = `${post.id}-video-poster.jpg`;
           await supabase.storage.from("post-images").upload(videoPath, finalVideo, { contentType: "video/mp4", upsert: true });
-          await supabase.storage.from("post-images").upload(posterPath, poster, { contentType: "image/jpeg", upsert: true });
+          await supabase.storage.from("post-images").upload(posterPath, finalPoster, { contentType: "image/jpeg", upsert: true });
           const { data: videoUrlData } = supabase.storage.from("post-images").getPublicUrl(videoPath);
           const { data: posterUrlData } = supabase.storage.from("post-images").getPublicUrl(posterPath);
 
@@ -280,14 +283,14 @@ export const resyncLayoutPreset = inngest.createFunction(
           const { composeFeedVideo, extractPosterFrame } = await import("@/lib/video");
           const { buildFeedVideoOverlay } = await import("@/lib/image");
 
-          const poster = await extractPosterFrame(videoBuffer, 0.5);
           const { overlayPng, frame } = buildFeedVideoOverlay(post.hook ?? "", prefs.cardBrand);
           const finalVideo = await composeFeedVideo(videoBuffer, overlayPng, frame);
+          const finalPoster = await extractPosterFrame(finalVideo, 0.5);
 
           const videoPath = `${post.id}-video.mp4`;
           const posterPath = `${post.id}-video-poster.jpg`;
           await supabase.storage.from("post-images").upload(videoPath, finalVideo, { contentType: "video/mp4", upsert: true });
-          await supabase.storage.from("post-images").upload(posterPath, poster, { contentType: "image/jpeg", upsert: true });
+          await supabase.storage.from("post-images").upload(posterPath, finalPoster, { contentType: "image/jpeg", upsert: true });
           const { data: videoUrlData } = supabase.storage.from("post-images").getPublicUrl(videoPath);
           const { data: posterUrlData } = supabase.storage.from("post-images").getPublicUrl(posterPath);
 

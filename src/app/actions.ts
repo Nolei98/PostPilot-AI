@@ -523,9 +523,11 @@ export async function uploadPostVideo(
 
   const postId = String(formData.get("post_id") ?? "");
   const file = formData.get("video") as File | null;
-  // "reels" (9:16, default) ou "feed" (4:5, migration 036) — decide o
-  // quadro de composição em attach-video.ts.
-  const shape = formData.get("shape") === "feed" ? "feed" : "reels";
+  // "reels" (9:16, default), "feed" (4:5, fundo sólido — migration 036)
+  // ou "feed-blur" (4:5, fundo = o próprio vídeo borrado, 2026-07-23) —
+  // decide o quadro de composição em attach-video.ts.
+  const shapeRaw = formData.get("shape");
+  const shape = shapeRaw === "feed" ? "feed" : shapeRaw === "feed-blur" ? "feed-blur" : "reels";
   if (!postId || !file || file.size === 0) {
     return { ok: false, error: "Selecione um vídeo." };
   }

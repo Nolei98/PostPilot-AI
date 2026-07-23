@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardActions } from "@/components/ui/Card";
 import { Drawer } from "@/components/ui/Drawer";
 import { Modal } from "@/components/ui/Modal";
+import { LoadingOrb } from "@/components/ui/LoadingOrb";
 import { Input, Textarea } from "@/components/ui/Input";
 import { CarouselPreview } from "@/components/CarouselPreview";
 import { CarouselDownload } from "@/components/CarouselDownload";
@@ -132,7 +133,7 @@ export function PostCard({
     });
   }
 
-  function handleVideoUpload(shape: "reels" | "feed") {
+  function handleVideoUpload(shape: "reels" | "feed" | "feed-blur") {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       e.target.value = "";
@@ -398,6 +399,29 @@ export function PostCard({
               onChange={handleVideoUpload("feed")}
             />
           </label>
+          {/* Feed com fundo borrado (2026-07-23, em teste) — mesmo
+              upload, o vídeo vira o próprio fundo (borrado) atrás da
+              moldura nítida, em vez de cor sólida. */}
+          <label
+            className={`flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content ${
+              post.video_status === "processing" ? "opacity-50" : ""
+            }`}
+          >
+            <span>
+              {uploadingVideo
+                ? "Enviando…"
+                : post.video_status === "processing"
+                  ? "Vídeo em processamento…"
+                  : "Anexar Feed (fundo borrado)"}
+            </span>
+            <input
+              type="file"
+              accept="video/mp4,video/quicktime"
+              className="hidden"
+              disabled={uploadingVideo || post.video_status === "processing"}
+              onChange={handleVideoUpload("feed-blur")}
+            />
+          </label>
           {videoError && <p className="text-micro text-error">{videoError}</p>}
           {post.video_status === "error" && !videoError && (
             <p className="text-micro text-error">
@@ -413,7 +437,11 @@ export function PostCard({
 
           {/* Vídeo pronto (Reels 9:16 ou feed 4:5) vira a mídia principal do
               post — senão, mesma preview de sempre (single: pág 1 +
-              contra-capa; carrossel: todos os cards, em ordem). */}
+              contra-capa; carrossel: todos os cards, em ordem). Enquanto
+              upload/processamento (imagem OU vídeo) está rolando, o orbe
+              da marca gira por cima pra deixar claro que tem algo em
+              andamento (sem isso só o botão dizia "processando", a
+              prévia ficava parada/enganosa). */}
           {post.video_status === "ready" && post.video_url ? (
             <video
               src={post.video_url}
@@ -422,11 +450,14 @@ export function PostCard({
               className={`w-full bg-black ${post.format === "video_feed" ? "aspect-[4/5]" : "aspect-[9/16]"}`}
             />
           ) : (
-            <CarouselPreview
-              images={previewImages}
-              alt={post.hook}
-              className="aspect-[4/5] w-full"
-            />
+            <div className="relative">
+              <CarouselPreview
+                images={previewImages}
+                alt={post.hook}
+                className="aspect-[4/5] w-full"
+              />
+              {(uploading || uploadingVideo || post.video_status === "processing") && <LoadingOrb />}
+            </div>
           )}
 
           <div className="flex gap-4 px-3 py-2.5">

@@ -85,6 +85,11 @@ export interface PopCreatorCoverOptions {
   showSwipeHint?: boolean;
   body?: string | null;
   overlay?: { theme: "light" | "dark"; alpha: number };
+  /** Placa por trás do @handle do topo-DIREITO — o eyebrow esquerdo já
+   * tem sua própria pílula de acento (protegida por natureza); só o
+   * texto solto da direita fica exposto direto na foto. alpha=0 não
+   * desenha nada (checagem de contraste local feita pelo chamador). */
+  topOverlay?: { theme: "light" | "dark"; alpha: number };
   eyebrow?: string;
   eyebrowRight?: string | null;
   /** Força mostrar/esconder a trilha de ícones, sobrepondo a heurística
@@ -137,8 +142,18 @@ export function buildPopCreatorCoverSvg(
   const pillW = approxTextWidth(eyebrow, 22) + 44;
   const pillH = 44;
   const pillY = 56;
+  // Placa por trás do @handle direito — só aparece quando o contraste
+  // LOCAL (medido pelo chamador nessa região específica) não é suficiente.
+  const rightW = approxTextWidth(eyebrowRight, 22) + 28;
+  const topOverlay = opts.topOverlay;
+  const rightPlate =
+    transparent && topOverlay && topOverlay.alpha > 0
+      ? `<rect x="${CARD_W - pad - rightW}" y="${pillY}" width="${rightW}" height="${pillH}" rx="${pillH / 2}" fill="${topOverlay.theme === "dark" ? "#000" : "#fff"}" fill-opacity="${topOverlay.alpha}"/>`
+      : "";
+
   const eyebrowPill = `<rect x="${pad}" y="${pillY}" width="${pillW}" height="${pillH}" rx="${pillH / 2}" fill="${accent}"/>
   <text x="${pad + pillW / 2}" y="${pillY + pillH / 2 + 7}" font-family="${MONO_FONT}" font-weight="700" font-size="20" letter-spacing="1" fill="#0A0A0A" text-anchor="middle">${escapeXml(eyebrow)}</text>
+  ${rightPlate}
   <text x="${CARD_W - pad}" y="${pillY + pillH / 2 + 7}" font-family="${MONO_FONT}" font-weight="400" font-size="22" letter-spacing="1" fill="${text}" fill-opacity="0.85" text-anchor="end">${escapeXml(eyebrowRight)}</text>`;
 
   // Blob decorativo — círculo suave atrás do bloco de texto, saindo da borda.

@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { updateCarouselCard, uploadCarouselCardVideo } from "@/app/actions";
 import { Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { LoadingOrb } from "@/components/ui/LoadingOrb";
 import type { CardLayoutOverride, Surface } from "@/lib/types";
 
 export interface EditableCard {
@@ -23,6 +24,7 @@ export interface EditableCard {
   layout?: CardLayoutOverride | null;
   // Vídeo anexado ao card (migration 037) — card "interior com vídeo".
   video_url?: string | null;
+  video_poster_url?: string | null;
   video_status?: "none" | "processing" | "ready" | "error";
   video_error?: string | null;
 }
@@ -171,9 +173,15 @@ function CardRow({
           /* eslint-disable-next-line jsx-a11y/media-has-caption */
           <video
             src={card.video_url}
+            poster={card.video_poster_url ?? undefined}
             controls
             className="aspect-[4/5] w-full rounded-control bg-black"
           />
+        )}
+        {(uploadingVideo || card.video_status === "processing") && (
+          <div className="relative aspect-[4/5] w-full overflow-hidden rounded-control bg-surface-2">
+            <LoadingOrb />
+          </div>
         )}
         <label
           className={`flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content ${

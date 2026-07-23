@@ -83,6 +83,9 @@ export interface SerifLuxeCoverOptions {
   showSwipeHint?: boolean;
   body?: string | null;
   overlay?: { theme: "light" | "dark"; alpha: number };
+  /** Placa por trás da meta-linha do TOPO — fora da banda de identidade
+   * (rodapé), checagem de contraste local própria; alpha=0 não desenha nada. */
+  topOverlay?: { theme: "light" | "dark"; alpha: number };
   eyebrow?: string;
   eyebrowRight?: string | null;
   /** Força mostrar/esconder a trilha de ícones, sobrepondo a heurística
@@ -163,9 +166,16 @@ export function buildSerifLuxeCoverSvg(
 
   const bgRect = transparent ? "" : `<rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>`;
 
+  const topOverlay = opts.topOverlay;
+  const topPlate =
+    transparent && topOverlay && topOverlay.alpha > 0
+      ? buildOverlayGradientSvg("top-band", 0, 120, CARD_W, topOverlay.theme, topOverlay.alpha, "top")
+      : "";
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
   ${bgRect}
   ${overlayRect}
+  ${topPlate}
   ${topRow}
   ${headlineSvg}
   ${rule}

@@ -164,3 +164,63 @@ export async function composeFeedVideo(
     fs.rmSync(outPath, { force: true });
   }
 }
+
+/**
+ * Variante "fundo do próprio vídeo, borrado" do quadro FEED 4:5
+ * (modelo alternativo, 2026-07-23): em vez de cor sólida, o fundo
+ * INTEIRO é o MESMO vídeo, cover-fit + bem borrado (gblur) — e por
+ * cima, na moldura (16:9), o MESMO vídeo de novo, nítido, com cantos
+ * arredondados (via `maskPng` — um vídeo não aceita SVG `mask`, então
+ * o corte de canto usa `alphamerge` com uma máscara PNG luminância→
+ * alfa, ver roundedRectMaskPng em image.ts). Texto (overlayPng) por
+ * cima de tudo — aqui SEM fundo/buraco, só o texto (ver
+ * buildFeedVideoOverlayBlurBg, image.ts).
+ */
+export async function composeFeedVideoBlurBg(
+  videoBuffer: Buffer,
+  overlayPng: Buffer,
+  maskPng: Buffer,
+  frame: { x: number; y: number; w: number; h: number }
+): Promise<Buffer> {
+  const inPath = tmpPath("in.mp4");
+  const overlayPath = tmpPath("overlay.png");
+  const maskPath = tmpPath("mask.png");
+  const outPath = tmpPath("out.mp4");
+  try {
+    fs.writeFileSync(inPath, videoBuffer);
+    fs.writeFileSync(overlayPath, overlayPng);
+    fs.writeFileSync(maskPath, maskPng);
+
+    const { x, y, w, h } = frame;
+    const filter = [
+      `[0:v]split=2[full][fit]`,
+      `[full]scale=${FEED_VIDEO_W}:${FEED_VIDEO_H}:force_original_aspect_ratio=increase,crop=${FEED_VIDEO_W}:${FEED_VIDEO_H},gblur=sigma=30,setsar=1[bgblur]`,
+      `[fit]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1[fg]`,
+      `[fg][2:v]alphamerge[fgmasked]`,
+      `[bgblur][fgmasked]overlay=${x}:${y}[base]`,
+      `[base][1:v]overlay=0:0[outv]`,
+    ].join(";");
+
+    await runFfmpeg([
+      "-y",
+      "-i", inPath,
+      "-i", overlayPath,
+      "-i", maskPath,
+      "-filter_complex", filter,
+      "-map", "[outv]",
+      "-map", "0:a?",
+      "-c:v", "libx264",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      "-movflags", "+faststart",
+      outPath,
+    ]);
+
+    return fs.readFileSync(outPath);
+  } finally {
+    fs.rmSync(inPath, { force: true });
+    fs.rmSync(overlayPath, { force: true });
+    fs.rmSync(maskPath, { force: true });
+    fs.rmSync(outPath, { force: true });
+  }
+}

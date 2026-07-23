@@ -480,17 +480,32 @@ async function renderAltLayoutCard(
     };
     if (bgImage) {
       const probe = buildCover(card.headline ?? "", { ...brand, colorText: "#FFFFFF" }, true, opts);
-      const band = await sharp(bgImage)
+      const covered = await sharp(bgImage)
         .resize(CARD_W, CARD_H, { fit: "cover", position: "attention" })
+        .toBuffer();
+      const band = await sharp(covered)
         .extract({ left: 0, top: probe.blurBandTop, width: CARD_W, height: CARD_H - probe.blurBandTop })
         .toBuffer();
       const luminance = await measureImageLuminance(band);
       const theme = pickTheme(luminance);
       const textColor = textColorForTheme(theme);
       const alpha = overlayAlphaFor(theme, textColor, luminance);
+      // Meta-linha do TOPO (eyebrow + @handle) fica FORA da banda de
+      // identidade (rodapé) — sem essa checagem própria, herdava o
+      // tema/cor do rodapé cegamente e podia sumir contra a foto (bug
+      // real visto ao vivo: rótulo quase invisível no topo de um post).
+      // Mesma cor de texto (textColor já escolhida), só a OPACIDADE da
+      // placa muda com a luminância LOCAL do topo — 0 quando já dá pra
+      // ler sem ajuda.
+      const topBand = await sharp(covered)
+        .extract({ left: 0, top: 0, width: CARD_W, height: 140 })
+        .toBuffer();
+      const topLuminance = await measureImageLuminance(topBand);
+      const topAlpha = overlayAlphaFor(theme, textColor, topLuminance);
       const { svg, blurBandTop } = buildCover(card.headline ?? "", { ...brand, colorText: textColor }, true, {
         ...opts,
         overlay: { theme, alpha },
+        topOverlay: { theme, alpha: topAlpha },
       });
       return composePhotoBg(bgImage, svg, blurBandTop);
     }

@@ -73,6 +73,10 @@ export const attachCardVideo = inngest.createFunction(
         );
         const finalVideo = await composeFeedVideo(videoBuffer, overlayPng, frame);
 
+        // Pôster precisa ser um frame do vídeo FINAL (já com moldura +
+        // texto), não do vídeo cru — mesmo bug/fix de attach-video.ts.
+        const finalPoster = await extractPosterFrame(finalVideo, 0.5);
+
         const videoPath = `${card.post_id}-card-${card.idx}-video.mp4`;
         const posterPath = `${card.post_id}-card-${card.idx}-video-poster.jpg`;
         const { error: videoUpErr } = await supabase.storage
@@ -81,7 +85,7 @@ export const attachCardVideo = inngest.createFunction(
         if (videoUpErr) throw new Error(`Erro no upload do vídeo: ${videoUpErr.message}`);
         const { error: posterUpErr } = await supabase.storage
           .from("post-images")
-          .upload(posterPath, poster, { contentType: "image/jpeg", upsert: true });
+          .upload(posterPath, finalPoster, { contentType: "image/jpeg", upsert: true });
         if (posterUpErr) throw new Error(`Erro no upload do pôster: ${posterUpErr.message}`);
 
         const { data: videoUrlData } = supabase.storage.from("post-images").getPublicUrl(videoPath);

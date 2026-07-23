@@ -84,6 +84,10 @@ export interface BrutalismCoverOptions {
   showSwipeHint?: boolean;
   body?: string | null;
   overlay?: { theme: "light" | "dark"; alpha: number };
+  /** Placa por trás da meta-linha do TOPO (eyebrow + @handle) — região
+   * fora da banda de identidade (rodapé), então precisa da própria
+   * checagem de contraste local; alpha=0 (padrão) não desenha nada. */
+  topOverlay?: { theme: "light" | "dark"; alpha: number };
   /** Rótulo curto no topo-esquerdo (capa: "Nº01 — ENSAIO"; fechamento: "Nº01"). */
   eyebrow?: string;
   /** Palavra no topo-direito quando NÃO é a capa (fechamento usa "OBRIGADO" etc). */
@@ -169,9 +173,20 @@ export function buildBrutalismCoverSvg(
 
   const bgRect = transparent ? "" : `<rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>`;
 
+  // Placa do topo (meta-linha) — gradiente sólido na BORDA do topo
+  // (onde a meta-linha está grudada), some indo pra baixo — só aparece
+  // quando o contraste LOCAL (medido pelo chamador em y=0..130) não é
+  // suficiente.
+  const topOverlay = opts.topOverlay;
+  const topPlate =
+    transparent && topOverlay && topOverlay.alpha > 0
+      ? buildOverlayGradientSvg("top-band", 0, 130, CARD_W, topOverlay.theme, topOverlay.alpha, "top")
+      : "";
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
   ${bgRect}
   ${overlayRect}
+  ${topPlate}
   ${topRow}
   ${rule}
   ${headlineSvg}

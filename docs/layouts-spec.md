@@ -149,23 +149,45 @@ escolhidas em Ajustes (`brand_kits.single_post_style`), cada uma usando os
 - **Fonte no meio**: frase curta centralizada no meio do quadro, SEM
   wordmark/marca nenhuma — minimalista, deixa a foto respirar.
 
-## Vídeo (Reels 9:16) — adicionado 2026-07-21, redesenhado 2026-07-23
+## Vídeo (Reels 9:16) — adicionado 2026-07-21, redesenhado 2026-07-23 e 2026-07-24
 
 Existe um formato de vídeo (upload manual do usuário, sem geração por
 IA). Versão original (descartada): a capa 4:5 era encaixada pela
 LARGURA no rodapé do quadro 1080×1920, com o topo preenchido por uma
 extensão desfocada — não batia com o protótipo de referência
-(exemplo-modelos-com-video.png, caso 3 "REELS 9:16"). Versão atual: o
-vídeo cobre o quadro 1080×1920 **INTEIRO** (cover-fit, nunca esticado).
-O texto fica numa **ZONA SEGURA** — marca pequena no topo-esquerda
-(x=64, y=130) + título alinhado à ESQUERDA (nunca centralizado) numa
-faixa que reserva margem embaixo (220px, onde o Instagram desenha
+(exemplo-modelos-com-video.png, caso 3 "REELS 9:16"). O vídeo cobre o
+quadro 1080×1920 **INTEIRO** (cover-fit, nunca esticado). O texto fica
+numa **ZONA SEGURA** — título alinhado à ESQUERDA (nunca centralizado)
+numa faixa que reserva margem embaixo (220px, onde o Instagram desenha
 legenda/@) e à direita (170px, onde ficam os ícones de curtir/
-comentar/compartilhar) — nunca invade essas áreas. Legibilidade vem de
-um gradiente (mesmo motor de `contrast.ts`) medido na própria zona
-segura do frame de pôster, não da foto/vídeo inteiro. `buildReelsVideoOverlayPng`
-(image.ts) + `composeReelsVideo` (video.ts, agora um simples cover-fit
-+ overlay, sem mais a lógica de encaixe/blur).
+comentar/compartilhar) — nunca invade essas áreas.
+
+2026-07-24: o divisor (———WORDMARK®———) saiu do canto topo-esquerdo
+isolado (tratamento próprio, plaquinha separada) e voltou pra JUNTO do
+título — exatamente como nos outros modelos de vídeo (feed 4:5,
+interior do carrossel): divisor logo acima da 1ª linha do título,
+dentro da MESMA zona segura/gradiente, sem precisar de placa/medição
+separada pra marca (antes precisava, porque ela ficava fora da faixa
+protegida). Legibilidade vem de um gradiente (mesmo motor de
+`contrast.ts`) medido na própria zona segura do frame de pôster, não da
+foto/vídeo inteiro. `buildReelsVideoOverlayPng` (image.ts) +
+`composeReelsVideo` (video.ts, um simples cover-fit + overlay).
+
+### Direção do gradiente das placas (regra geral, 2026-07-24)
+
+`buildOverlayGradientSvg` (contrast.ts) ganhou um parâmetro `edge:
+"top" | "bottom"` — TODA placa de legibilidade que protege um rótulo
+isolado (fora da banda de identidade principal) é sólida na BORDA do
+quadro onde está "grudada" e vira transparente indo pro centro:
+- `edge: "bottom"` (default — bandas ancoradas no rodapé: capa,
+  fechamento, vídeo feed, zona segura do Reels): sólido na base do
+  quadro, funde subindo.
+- `edge: "top"` (meta-linha/eyebrow no TOPO dos 4 layouts
+  alternativos): sólido bem no topo do quadro, funde descendo.
+
+Nunca um retângulo de opacidade fixa desconectado — e a placa só
+aparece quando o contraste LOCAL medido pelo chamador não é suficiente
+(alpha=0 não desenha nada, mesma condição de sempre).
 
 ## Vídeo feed (4:5) — adicionado 2026-07-23, redesenhado 2x no mesmo dia (migration 036)
 
