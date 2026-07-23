@@ -237,7 +237,12 @@ export function buildCoverSvg(
       cursor = bodyStartY - 66;
     }
     const headStartY = cursor - (lines.length - 1) * lineH;
-    cursor = headStartY - 90;
+    // Gap ESCALA com o tamanho da fonte do título: um valor fixo (90)
+    // ficava colado em títulos grandes (size~104) — a altura das letras
+    // "come" parte do espaço já que a posição é pela BASELINE, não pelo
+    // topo do glifo. size*0.6 mantém a folga visual (não a distância de
+    // baseline) parecida entre título curto/grande.
+    cursor = headStartY - Math.round(90 + size * 0.6);
     const dividerY = cursor;
     return { dividerY, headStartY, bodyStartY, swipeY };
   };
