@@ -1,10 +1,11 @@
 "use client";
 
 // ============================================================
-// Seletor rápido da "cor da marca" — Template da marca (Ajustes).
-// Aplica de uma vez no realce (barra/"COMENTE:") e na caixa da
-// palavra-chave da contra-capa. Pra ajuste fino cor-a-cor, use a
-// seção Contra-capa (mais abaixo).
+// Seletor da "cor da marca" (color_accent) — ÚNICO lugar que edita essa
+// cor (antes também dava pra mudar em Contra-capa, o que fazia um form
+// sobrescrever o outro sem querer). Aplica no realce das artes; a caixa
+// da palavra-chave da contra-capa agora é independente (aba Cores &
+// logo → Contra-capa).
 // ============================================================
 import { useState } from "react";
 
@@ -40,7 +41,8 @@ export function BrandColorPicker({ initial }: { initial: string }) {
       </div>
       <input type="hidden" name="brand_color" value={color} />
       <p className="text-micro text-subtle">
-        Aplica no realce e na caixa da palavra-chave da contra-capa.
+        Aplica no realce das artes (barra, CTA, destaques). A cor da caixa
+        da palavra-chave da contra-capa se ajusta separadamente ali embaixo.
       </p>
     </div>
   );

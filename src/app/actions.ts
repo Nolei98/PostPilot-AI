@@ -855,9 +855,13 @@ export async function saveVisualIdentity(formData: FormData) {
     .eq("client_id", clientId)
     .maybeSingle();
 
+  // colorAccent NÃO vem do formData deste form de propósito — é editado
+  // só em "Cor da marca" (saveBrandTemplate/BrandColorPicker), pra não ter
+  // 2 controles da mesma coluna se sobrescrevendo. Aqui só lê o valor
+  // atual (oldConfig) pra manter o resync/preview corretos.
   const newIdentity: VisualIdentity = {
     colorBackground: hex("color_background", "#0B0B12"),
-    colorAccent: hex("color_accent", "#7C5CFF"),
+    colorAccent: oldConfig?.color_accent ?? "#7C5CFF",
     colorText: hex("color_text", "#FFFFFF"),
     colorKeywordBox: hex("color_keyword_box", "#7C5CFF"),
     keyword: text("tpl_keyword", "IA"),
@@ -870,7 +874,6 @@ export async function saveVisualIdentity(formData: FormData) {
     .from("brand_kits")
     .update({
       color_background: newIdentity.colorBackground,
-      color_accent: newIdentity.colorAccent,
       color_text: newIdentity.colorText,
       color_keyword_box: newIdentity.colorKeywordBox,
       tpl_keyword: newIdentity.keyword,
@@ -979,7 +982,7 @@ export async function saveBrandTemplate(formData: FormData) {
       show_brand_logo: showBrandLogo,
       ...(brandName && { brand_name: brandName }),
       ...(logoUrl && { logo_url: logoUrl }),
-      ...(brandColor && { color_accent: brandColor, color_keyword_box: brandColor }),
+      ...(brandColor && { color_accent: brandColor }),
     })
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
@@ -1013,7 +1016,7 @@ export async function saveBrandTemplate(formData: FormData) {
         bottomText: oldConfig.tpl_bottom_text,
         ctaEnabled: oldConfig.tpl_cta_enabled ?? false,
       };
-      const newIdentity: VisualIdentity = { ...oldIdentity, colorAccent: brandColor, colorKeywordBox: brandColor };
+      const newIdentity: VisualIdentity = { ...oldIdentity, colorAccent: brandColor };
       await resyncIdentityOnUnmodifiedPendingPosts(user.id, clientId, oldIdentity, newIdentity, profile, false, brand);
     }
   }

@@ -29,7 +29,12 @@ export function IdentityForm({ initial, initialMode, action, fieldClasses }: Pro
   const toggleCta = (e: React.ChangeEvent<HTMLInputElement>) =>
     setV((prev) => ({ ...prev, ctaEnabled: e.target.checked }));
 
-  type ColorKey = "colorBackground" | "colorAccent" | "colorText" | "colorKeywordBox";
+  // "Realce" (colorAccent) NÃO tem input aqui de propósito — é a MESMA
+  // cor da "Cor da marca" em Cores & logo (BrandColorPicker); ter os
+  // dois editáveis deixava fácil salvar um e sobrescrever o outro sem
+  // querer. v.colorAccent só alimenta o preview abaixo (lido do valor
+  // salvo mais recente, não é enviado no submit deste form).
+  type ColorKey = "colorBackground" | "colorText" | "colorKeywordBox";
   const colorInput = (name: ColorKey, label: string) => (
     <label className="flex items-center justify-between gap-2 rounded-control bg-surface-2 px-3 py-2">
       <span className="text-caption text-muted">{label}</span>
@@ -38,7 +43,6 @@ export function IdentityForm({ initial, initialMode, action, fieldClasses }: Pro
         <input
           type="color"
           name={name === "colorBackground" ? "color_background"
-            : name === "colorAccent" ? "color_accent"
             : name === "colorText" ? "color_text"
             : "color_keyword_box"}
           value={v[name]}
@@ -138,10 +142,13 @@ export function IdentityForm({ initial, initialMode, action, fieldClasses }: Pro
       {/* ===== Cores ===== */}
       <div className="grid grid-cols-2 gap-2">
         {colorInput("colorBackground", "Fundo")}
-        {colorInput("colorAccent", "Realce")}
         {colorInput("colorText", "Texto")}
         {colorInput("colorKeywordBox", "Caixa")}
       </div>
+      <p className="text-micro text-subtle">
+        A cor de realce vem de &quot;Cor da marca&quot; (aba Cores &amp; logo) —
+        um lugar só, pra não ter dois controles da mesma cor.
+      </p>
 
       {/* ===== Modo de aplicação ===== */}
       <div className="space-y-2 rounded-control bg-surface-2 p-3">
