@@ -66,7 +66,6 @@ export const attachCardVideo = inngest.createFunction(
         const { extractPosterFrame, composeFeedVideo } = await import("@/lib/video");
         const { buildCardVideoOverlay } = await import("@/lib/image");
 
-        const poster = await extractPosterFrame(videoBuffer, 0.5);
         const { overlayPng, frame } = buildCardVideoOverlay(
           { headline: card.headline, body: card.body },
           cardBrand
