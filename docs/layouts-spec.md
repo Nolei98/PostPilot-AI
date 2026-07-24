@@ -230,10 +230,19 @@ card no editor de cards do carrossel (`CarouselEditor.tsx`), um botão
 "Anexar vídeo ao card" por card — `carousel_cards.video_url` guarda o
 resultado (migration 037). Job: `attach-card-video.ts`.
 
-**Limitação conhecida (2026-07-23):** o preview principal do carrossel
-(`CarouselPreview.tsx`, usado na Fila/Prontos) ainda só mostra imagens
-— não troca pra `<video>` quando um card tem vídeo pronto. A publicação
-(Graph API) também ainda só manda `image_url` de cada card pro
-container do carrossel, não `video_url`. O upload/processamento/preview
-DENTRO do editor de cards já funciona; a integração na galeria
-principal e no publish é trabalho futuro.
+**Corrigido (2026-07-24):** o preview principal do carrossel
+(`CarouselPreview.tsx`, usado na Fila) agora troca pra `<video>` no
+slide certo quando aquele card tem vídeo pronto (`video_status:
+"ready"`) — antes o upload/processamento funcionava certinho no
+backend, mas a galeria principal continuava mostrando só a imagem
+estática (bug real: parecia que o vídeo "não carregava", quando na
+verdade só não aparecia na prévia). `PostCard.tsx` monta `videos`/
+`posters` alinhados por índice com `images`; `types.ts`
+(`PostWithNews.carousel_cards`) e a query da Fila (`fila/page.tsx`)
+precisaram incluir as colunas de vídeo no select.
+
+**Limitação conhecida (2026-07-24):** a publicação (Graph API) ainda só
+manda `image_url` de cada card pro container do carrossel, não
+`video_url` — isso é trabalho futuro. `ReadyPostCard.tsx` (aba
+Prontos) também ainda não foi atualizado com o mesmo fix de preview
+(só usa `image_url`/`closing_image_url`, nem lê `carousel_cards`).

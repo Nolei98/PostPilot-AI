@@ -218,17 +218,25 @@ export function PostCard({
   // Carrossel (format='carousel'): a galeria são os cards renderizados,
   // em ordem. Post single: página de conteúdo + contra-capa (se houver).
   const isCarousel = post.format === "carousel";
-  const cardImages = (post.carousel_cards ?? [])
-    .slice()
-    .sort((a, b) => a.idx - b.idx)
-    .map((c) => c.image_url)
-    .filter((u): u is string => !!u);
+  const sortedCards = (post.carousel_cards ?? []).slice().sort((a, b) => a.idx - b.idx);
+  const cardsWithImage = sortedCards.filter((c) => !!c.image_url);
+  // videos/posters ficam na MESMA ordem/tamanho de previewImages — cada
+  // posição corresponde ao mesmo card, null quando esse card não tem
+  // vídeo pronto (CarouselPreview mostra a imagem nesse caso).
   const previewImages =
-    isCarousel && cardImages.length > 0
-      ? cardImages
+    isCarousel && cardsWithImage.length > 0
+      ? cardsWithImage.map((c) => c.image_url as string)
       : [post.image_url, post.closing_image_url].filter(
           (u): u is string => !!u
         );
+  const previewVideos =
+    isCarousel && cardsWithImage.length > 0
+      ? cardsWithImage.map((c) => (c.video_status === "ready" ? c.video_url : null))
+      : undefined;
+  const previewPosters =
+    isCarousel && cardsWithImage.length > 0
+      ? cardsWithImage.map((c) => c.video_poster_url)
+      : undefined;
 
   /** Toca a animação de saída e só então executa a action */
   function exitAndRun(direction: Exclude<ExitDirection, null>, action: () => Promise<void>) {
@@ -453,6 +461,8 @@ export function PostCard({
             <div className="relative">
               <CarouselPreview
                 images={previewImages}
+                videos={previewVideos}
+                posters={previewPosters}
                 alt={post.hook}
                 className="aspect-[4/5] w-full"
               />

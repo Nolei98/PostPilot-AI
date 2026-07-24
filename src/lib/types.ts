@@ -346,6 +346,16 @@ export interface PostWithNews extends Post {
   // Presente só em posts format='carousel' (embed do PostgREST).
   carousel_cards?: Pick<
     CarouselCardRow,
-    "id" | "idx" | "role" | "headline" | "body" | "image_url" | "layout"
+    | "id"
+    | "idx"
+    | "role"
+    | "headline"
+    | "body"
+    | "image_url"
+    | "layout"
+    | "video_url"
+    | "video_poster_url"
+    | "video_status"
+    | "video_error"
   >[];
 }

@@ -12,13 +12,23 @@ export function CarouselPreview({
   images,
   alt,
   className = "",
+  videos,
+  posters,
 }: {
   images: string[];
   alt: string;
   className?: string;
+  /** Vídeo por slide (mesma ordem/tamanho de `images`) — quando o card
+   * tem um vídeo pronto (migration 037), mostra ele em vez da imagem
+   * estática. `null`/ausente nessa posição = slide continua imagem.
+   * Sem isso o vídeo processava certinho no backend mas a prévia
+   * principal nunca trocava pra ele (bug real reportado). */
+  videos?: (string | null)[];
+  posters?: (string | null)[];
 }) {
   const [index, setIndex] = useState(0);
   const hasMultiple = images.length > 1;
+  const currentVideo = videos?.[index];
 
   function prev(e: React.MouseEvent) {
     e.stopPropagation();
@@ -35,11 +45,21 @@ export function CarouselPreview({
 
   return (
     <div className={`relative overflow-hidden bg-surface-2 ${className}`}>
-      <img
-        src={images[index]}
-        alt={`${alt} (página ${index + 1} de ${images.length})`}
-        className="h-full w-full object-cover"
-      />
+      {currentVideo ? (
+        /* eslint-disable-next-line jsx-a11y/media-has-caption */
+        <video
+          src={currentVideo}
+          poster={posters?.[index] ?? undefined}
+          controls
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <img
+          src={images[index]}
+          alt={`${alt} (página ${index + 1} de ${images.length})`}
+          className="h-full w-full object-cover"
+        />
+      )}
 
       {hasMultiple && (
         <>
