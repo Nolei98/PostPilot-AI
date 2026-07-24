@@ -9,7 +9,7 @@
 // ============================================================
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { updateCarouselCard, uploadCarouselCardVideo } from "@/app/actions";
+import { updateCarouselCard, uploadCarouselCardVideo, uploadCarouselCardImage } from "@/app/actions";
 import { Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { LoadingOrb } from "@/components/ui/LoadingOrb";
@@ -53,6 +53,7 @@ export function CarouselEditor({
           key={c.id}
           card={c}
           hasTemplate={!!templateSelection[surfaceOf(c.idx, lastIdx)]}
+          isInterior={c.idx !== 0 && c.idx !== lastIdx}
           onSaved={() => router.refresh()}
         />
       ))}
@@ -63,10 +64,14 @@ export function CarouselEditor({
 function CardRow({
   card,
   hasTemplate,
+  isInterior,
   onSaved,
 }: {
   card: EditableCard;
   hasTemplate: boolean;
+  /** Só cards interiores (nem capa nem fechamento) aceitam a posição de
+   * imagem topo/base — capa/fechamento têm banda de identidade própria. */
+  isInterior: boolean;
   onSaved: () => void;
 }) {
   const [headline, setHeadline] = useState(card.headline ?? "");
@@ -75,15 +80,40 @@ function CardRow({
   const [textColor, setTextColor] = useState<"auto" | "light" | "dark">(
     card.layout?.textColor ?? "auto"
   );
+  const [imagePosition, setImagePosition] = useState<"top" | "bottom" | "">(
+    card.layout?.imagePosition ?? ""
+  );
   const [pending, start] = useTransition();
   const [videoError, setVideoError] = useState<string | null>(null);
   const [uploadingVideo, startVideoUpload] = useTransition();
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [uploadingImage, startImageUpload] = useTransition();
   const router = useRouter();
   const dirty =
     headline !== (card.headline ?? "") ||
     body !== (card.body ?? "") ||
     showLabel !== (card.layout?.showLabel ?? true) ||
-    textColor !== (card.layout?.textColor ?? "auto");
+    textColor !== (card.layout?.textColor ?? "auto") ||
+    imagePosition !== (card.layout?.imagePosition ?? "");
+
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImageError(null);
+    startImageUpload(async () => {
+      try {
+        const fd = new FormData();
+        fd.set("card_id", card.id);
+        fd.set("image", file);
+        const result = await uploadCarouselCardImage(fd);
+        if (!result.ok) setImageError(result.error ?? "Falha ao subir imagem.");
+        else onSaved();
+      } catch {
+        setImageError("Falha ao subir imagem. Tente um arquivo menor.");
+      }
+    });
+  }
 
   // Polling automático enquanto o vídeo do card processa em background
   // (mesmo padrão de PostCard.tsx) — sem isso o card ficava preso em
@@ -129,6 +159,46 @@ function CardRow({
         value={body}
         onChange={(e) => setBody(e.target.value)}
       />
+      {/* Imagem de fundo do card — capa, interior e fechamento. */}
+      <div className="space-y-1.5">
+        <label
+          className={`flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content ${
+            uploadingImage ? "opacity-50" : ""
+          }`}
+        >
+          <span>{uploadingImage ? "Enviando…" : "Trocar imagem de fundo"}</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png"
+            className="hidden"
+            disabled={uploadingImage}
+            onChange={handleImageUpload}
+          />
+        </label>
+        {uploadingImage && (
+          <div className="relative aspect-[4/5] w-full overflow-hidden rounded-control bg-surface-2">
+            <LoadingOrb />
+          </div>
+        )}
+        {imageError && <p className="text-micro text-error">{imageError}</p>}
+        {isInterior && (
+          <div className="flex items-center gap-2">
+            <label htmlFor={`imgpos-${card.id}`} className="text-caption text-muted">
+              Posição da imagem
+            </label>
+            <select
+              id={`imgpos-${card.id}`}
+              value={imagePosition}
+              onChange={(e) => setImagePosition(e.target.value as "top" | "bottom" | "")}
+              className="rounded-control border border-line bg-surface-1 px-2 py-1 text-caption text-content"
+            >
+              <option value="">Padrão (foto no card inteiro)</option>
+              <option value="top">Imagem no topo, texto embaixo</option>
+              <option value="bottom">Imagem embaixo, texto em cima</option>
+            </select>
+          </div>
+        )}
+      </div>
       {hasTemplate && (
         <div className="space-y-2 rounded-control bg-surface-2 p-2.5">
           <p className="text-micro text-subtle">
@@ -218,7 +288,13 @@ function CardRow({
         disabled={!dirty || pending}
         onClick={() =>
           start(async () => {
-            await updateCarouselCard(card.id, { headline, body, showLabel, textColor });
+            await updateCarouselCard(card.id, {
+              headline,
+              body,
+              showLabel,
+              textColor,
+              imagePosition: imagePosition || null,
+            });
             onSaved();
           })
         }

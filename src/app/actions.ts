@@ -1287,6 +1287,7 @@ export async function updateCarouselCard(
     body: string;
     showLabel?: boolean;
     textColor?: "auto" | "light" | "dark";
+    imagePosition?: "top" | "bottom" | null;
   }
 ) {
   const supabase = createClient();
@@ -1356,6 +1357,7 @@ export async function updateCarouselCard(
     ...previousLayout,
     ...(fields.showLabel !== undefined ? { showLabel: fields.showLabel } : {}),
     ...(fields.textColor !== undefined ? { textColor: fields.textColor } : {}),
+    ...(fields.imagePosition !== undefined ? { imagePosition: fields.imagePosition } : {}),
   };
 
   // Template Studio (B15): se o cliente escolheu um modelo pra essa
@@ -1405,7 +1407,8 @@ export async function updateCarouselCard(
         verified: bk?.ig_verified ?? false,
         showProfileChip: bk?.show_profile_chip ?? true,
       },
-      totalCards ?? 1
+      totalCards ?? 1,
+      layout.imagePosition ?? null
     );
   }
 
@@ -1416,6 +1419,126 @@ export async function updateCarouselCard(
   if (error) throw new Error(error.message);
   revalidatePath("/");
   revalidatePath("/ready");
+}
+
+/**
+ * Troca a foto de fundo de um card do carrossel (capa, interior ou
+ * fechamento) — mesmo padrão de uploadPostImage, mas por card. Sobe a
+ * foto bruta pro Storage (vira o novo `bg_url`, reusado em edições de
+ * texto futuras) e re-renderiza esse card na hora (sharp é rápido,
+ * não precisa de job em background como vídeo/ffmpeg).
+ */
+export async function uploadCarouselCardImage(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+
+  const cardId = String(formData.get("card_id") ?? "");
+  const file = formData.get("image") as File | null;
+  if (!cardId || !file || file.size === 0) {
+    return { ok: false, error: "Selecione uma imagem." };
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    return { ok: false, error: "Imagem muito grande (máx 20MB)." };
+  }
+
+  const { data: card } = await supabase
+    .from("carousel_cards")
+    .select("id, post_id, idx, role, headline, body, layout")
+    .eq("id", cardId)
+    .maybeSingle();
+  if (!card) return { ok: false, error: "Card não encontrado." };
+
+  try {
+    const { count: totalCards } = await supabase
+      .from("carousel_cards")
+      .select("id", { count: "exact", head: true })
+      .eq("post_id", card.post_id);
+    const lastIdx = (totalCards ?? 1) - 1;
+    const pageKind: "cover" | "interior" | "closing" =
+      card.idx === 0 ? "cover" : card.idx === lastIdx ? "closing" : "interior";
+
+    const { data: post } = await supabase
+      .from("posts")
+      .select("client_id")
+      .eq("id", card.post_id)
+      .single();
+    const { data: bk } = await supabase
+      .from("brand_kits")
+      .select("*")
+      .eq("client_id", post?.client_id ?? "")
+      .maybeSingle();
+
+    const { resolvePostFontFamily } = await import("@/lib/font-data");
+    const cardBrand: CardBrand = {
+      colorBackground: bk?.color_background ?? "#0B0B12",
+      colorAccent: bk?.color_accent ?? "#7C5CFF",
+      colorText: bk?.color_text ?? "#FFFFFF",
+      fontFamily: resolvePostFontFamily(bk?.post_font_family),
+      brandName: bk?.brand_name ?? null,
+      wordmark: bk?.wordmark ?? null,
+      handle: bk?.ig_handle ?? null,
+      keywords: bk?.keywords ?? null,
+      brandMark: bk?.brand_mark ?? "auto",
+      layoutPreset: bk?.layout_preset ?? "editorial-noir",
+    };
+    const profile: IgProfile = {
+      handle: bk?.ig_handle ?? "seuperfil.ia",
+      displayName: bk?.ig_display_name ?? "Seu Perfil",
+      avatarUrl: bk?.ig_avatar_url ?? null,
+      verified: bk?.ig_verified ?? false,
+      showProfileChip: bk?.show_profile_chip ?? true,
+    };
+
+    const buf = Buffer.from(await file.arrayBuffer());
+    const admin = createAdminClient();
+    const bgPath = `${card.post_id}-card-${card.idx}-bg-source.jpg`;
+    const { error: bgUpErr } = await admin.storage.from("post-images").upload(bgPath, buf, {
+      contentType: file.type || "image/jpeg",
+      upsert: true,
+    });
+    if (bgUpErr) throw new Error(bgUpErr.message);
+    const { data: bgPub } = admin.storage.from("post-images").getPublicUrl(bgPath);
+    const bgUrl = `${bgPub.publicUrl}?v=${Date.now()}`;
+
+    const layout = (card.layout as CardLayoutOverride | null) ?? {};
+    const { renderAndUploadCard } = await import("@/lib/carousel-render");
+    const imageUrl = await renderAndUploadCard(
+      card.post_id,
+      {
+        idx: card.idx,
+        role: card.role as "hook" | "value" | "cta",
+        headline: card.headline ?? "",
+        body: card.body ?? "",
+      },
+      cardBrand,
+      pageKind,
+      buf,
+      profile,
+      totalCards ?? 1,
+      layout.imagePosition ?? null
+    );
+
+    const { error } = await supabase
+      .from("carousel_cards")
+      .update({ image_url: imageUrl, bg_url: bgUrl })
+      .eq("id", cardId);
+    if (error) return { ok: false, error: error.message };
+  } catch (err) {
+    console.error("[uploadCarouselCardImage] falha ao processar imagem:", err);
+    return {
+      ok: false,
+      error: "Não foi possível processar essa imagem. Tente um JPG/PNG.",
+    };
+  }
+
+  revalidatePath("/");
+  revalidatePath("/ready");
+  return { ok: true };
 }
 
 /**

@@ -235,6 +235,9 @@ export interface CardLayoutOverride {
   showLabel?: boolean;
   /** força a cor do texto, ignorando a escolha automática por contraste. */
   textColor?: "auto" | "light" | "dark";
+  /** card INTERIOR: foto ocupa metade do quadro (topo ou base), texto na
+   * outra metade — em vez do full-bleed padrão. null/ausente = padrão. */
+  imagePosition?: "top" | "bottom" | null;
 }
 
 /** Card de um post do tipo carrossel (ver carousel_cards) */
@@ -246,6 +249,9 @@ export interface CarouselCardRow {
   headline: string | null;
   body: string | null;
   image_url: string | null;
+  /** Foto de fundo bruta do card (migration 029) — refetchada em
+   * re-renders (edição de texto, resync) pra não perder a foto. */
+  bg_url: string | null;
   layout: CardLayoutOverride | null;
   // Vídeo anexado ao card (migration 037) — mesmo pipeline do vídeo do
   // post único, tratamento "interior com vídeo" (título + moldura 16:9 + corpo).

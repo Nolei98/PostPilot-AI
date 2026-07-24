@@ -529,11 +529,16 @@ export function PostCard({
         </div>
         )}
 
-        {/* ===== Ações — 1 clique, sem manual ===== */}
+        {/* ===== Ações — 1 clique, sem manual =====
+            Só ícone + title (tooltip nativo no hover) — o texto ao lado
+            de cada botão poluía o card; o ícone já é reconhecível e o
+            tooltip cobre quem precisar confirmar. */}
         <CardActions>
           <Button
             variant="primary"
             className="flex-1"
+            title="Aprovar"
+            aria-label="Aprovar"
             disabled={isPending || exit !== null}
             onClick={() =>
               exitAndRun("right", async () => {
@@ -542,32 +547,33 @@ export function PostCard({
               })
             }
           >
-            ✓ Aprovar
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
           </Button>
           <Button
             variant="secondary"
             className="flex-1"
+            title={hasInstagramConnected ? "Agendar" : "Conecte o Instagram em Ajustes para agendar"}
+            aria-label="Agendar"
             disabled={isPending || exit !== null || !hasInstagramConnected}
-            title={
-              hasInstagramConnected
-                ? undefined
-                : "Conecte o Instagram em Ajustes para agendar"
-            }
             onClick={() => setScheduling(true)}
           >
-            🗓 Agendar
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2.5" /><path d="M3 9.5h18M8 3v3M16 3v3" /></svg>
           </Button>
           <Button
             variant="warning"
             className="flex-1"
+            title="Editar"
+            aria-label="Editar"
             disabled={isPending || exit !== null}
             onClick={() => setEditing(true)}
           >
-            ✎ Editar
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>
           </Button>
           <Button
             variant="danger"
             className="flex-grow-0 w-[50px] shrink-0"
+            title="Descartar"
+            aria-label="Descartar"
             disabled={isPending || exit !== null}
             onClick={() =>
               exitAndRun("left", async () => {
@@ -576,7 +582,7 @@ export function PostCard({
               })
             }
           >
-            ✕
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </Button>
         </CardActions>
       </Card>
