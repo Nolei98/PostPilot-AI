@@ -22,6 +22,95 @@ export type CoverPageKind = "cover" | "closing" | "interior";
  * layout-*.ts próprios. */
 export type LayoutPreset = "editorial-noir" | "brutalism" | "serif-luxe" | "swiss-mono" | "pop-creator";
 
+/**
+ * Tipografia de destaque de cada preset — a MESMA que layout-*.ts usa no
+ * título dos cards. Existe aqui porque os overlays de VÍDEO (Reels, feed
+ * e card interior, em image.ts) não passam pelos builders de card: eles
+ * desenham o próprio SVG e, até 2026-07-27, usavam sempre a fonte
+ * genérica da marca. Resultado: trocar o layout em Ajustes mudava o
+ * carrossel e não mudava o vídeo — o post antigo era re-renderizado
+ * (arquivo novo, ?v= novo) mas saía com a tipografia errada.
+ *
+ * O peso vem junto porque não é uniforme: DM Serif Display, Anton e
+ * Varela Round só têm o peso 400 embutido (pedir 800 faz o resvg
+ * engrossar artificialmente e borrar a serifa), enquanto Inter usa 800.
+ */
+const PRESET_DISPLAY_FONT: Record<LayoutPreset, { family: string; weight: number } | null> = {
+  // Editorial Noir usa a fonte escolhida em Ajustes (é o layout "da marca").
+  "editorial-noir": null,
+  brutalism: { family: "Anton", weight: 400 },
+  "serif-luxe": { family: "DM Serif Display", weight: 400 },
+  "swiss-mono": { family: "Inter", weight: 800 },
+  "pop-creator": { family: "Varela Round", weight: 400 },
+};
+
+/**
+ * Fonte de destaque a usar num overlay, dado o preset de layout e a
+ * fonte da marca. `fallback` vale pro Editorial Noir (e pra preset
+ * ausente/desconhecido), que segue a escolha de Ajustes.
+ */
+export function displayFontFor(
+  preset: LayoutPreset | undefined,
+  fallback: string
+): { family: string; weight: number } {
+  const chosen = preset ? PRESET_DISPLAY_FONT[preset] : null;
+  return chosen ?? { family: fallback || "Inter", weight: 800 };
+}
+
+/** Fonte mono usada por todos os presets alternativos nos rótulos. */
+export const MONO_FONT = "IBM Plex Mono";
+
+/**
+ * Como cada preset assina a marca — a peça que dá identidade visual
+ * imediata ao card:
+ *  - "rule": wordmark centralizado entre dois filetes (Editorial Noir,
+ *    Serif Luxe);
+ *  - "block": bloco sólido na cor de destaque com o texto vazado
+ *    (Brutalism);
+ *  - "bar": barra vertical de destaque à esquerda do texto (Swiss Mono);
+ *  - "pill": cápsula arredondada preenchida com a cor de destaque
+ *    (Pop Creator).
+ */
+export type BrandRowKind = "rule" | "block" | "bar" | "pill";
+
+export interface VideoIdentity {
+  /** Tipografia do título. */
+  display: { family: string; weight: number; letterSpacing: number };
+  /** Assinatura da marca no quadro. */
+  brandRow: BrandRowKind;
+  /** Alinhamento do título — "middle" nos presets editoriais. */
+  anchor: "start" | "middle";
+  /** Rótulos (eyebrow/marca) em mono nos presets alternativos. */
+  labelFont: "mono" | "display";
+}
+
+const PRESET_VIDEO_IDENTITY: Record<LayoutPreset, Omit<VideoIdentity, "display">> = {
+  "editorial-noir": { brandRow: "rule", anchor: "middle", labelFont: "display" },
+  "serif-luxe": { brandRow: "rule", anchor: "middle", labelFont: "mono" },
+  brutalism: { brandRow: "block", anchor: "start", labelFont: "mono" },
+  "swiss-mono": { brandRow: "bar", anchor: "start", labelFont: "mono" },
+  "pop-creator": { brandRow: "pill", anchor: "start", labelFont: "mono" },
+};
+
+/**
+ * Identidade completa a aplicar nos overlays de VÍDEO (Reels, feed e
+ * card interior). Existe porque esses três formatos desenham SVG
+ * próprio em image.ts, sem passar pelos builders de card de cada
+ * layout-*.ts — sem isso saíam todos iguais, qualquer que fosse o
+ * preset escolhido em Ajustes.
+ */
+export function videoIdentityFor(
+  preset: LayoutPreset | undefined,
+  fallbackFamily: string
+): VideoIdentity {
+  const base = PRESET_VIDEO_IDENTITY[preset ?? "editorial-noir"];
+  const font = displayFontFor(preset, fallbackFamily);
+  // Serifada e Varela pedem espaçamento neutro; grotescas fecham um
+  // pouco pra dar a mancha compacta que os layouts de card já usam.
+  const letterSpacing = font.weight >= 800 ? -1 : 0;
+  return { ...base, display: { ...font, letterSpacing } };
+}
+
 /** Variação de conteúdo da PÁGINA 1 do post único (kit v2 §3) — ortogonal
  * ao layoutPreset (que decide a tipografia/estrutura). "cover" = estilo
  * capa do carrossel (wordmark + título display). "centered" = fonte no

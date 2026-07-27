@@ -20,6 +20,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { BrandTemplate, IgProfile, VisualIdentity } from "@/lib/types";
 import { FONT_FAMILY } from "@/lib/font-data";
 import { rasterizeSvg } from "@/lib/svg-render";
+import { videoIdentityFor, MONO_FONT, type BrandRowKind } from "@/lib/render-shared";
 import { searchStockPhoto, fetchStockPhotoBuffer } from "@/lib/stock-photos";
 import { buildProfileChipLayers } from "@/lib/profile-chip";
 import { buildCoverSvg, composePhotoBg, coverHeadlineSize, stripEmoji, wrapText, brandLabelText, type CardBrand } from "@/lib/carousel-render";
@@ -680,14 +681,18 @@ export async function buildReelsVideoOverlayPng(
   cardBrand: CardBrand,
   posterFrame: Buffer
 ): Promise<Buffer> {
-  const family = cardBrand.fontFamily || "Inter";
+  // Identidade do PRESET de layout (tipografia + assinatura da marca):
+  // sem isso os três formatos de vídeo saíam idênticos em qualquer
+  // preset, enquanto o carrossel mudava — ver videoIdentityFor().
+  const identity = videoIdentityFor(cardBrand.layoutPreset, cardBrand.fontFamily);
+  const { family, weight: displayWeight } = identity.display;
+  const labelFamily = identity.labelFont === "mono" ? MONO_FONT : family;
   const accent = cardBrand.colorAccent || "#7C5CFF";
   const wm = (cardBrand.wordmark || cardBrand.brandName || "").toUpperCase();
 
   const headlineText = stripEmoji(headline ?? "");
   const { size, lineH, maxChars } = coverHeadlineSize(headlineText);
   const safeWidth = REELS_W - REELS_SAFE_MARGIN_X - REELS_SAFE_MARGIN_RIGHT;
-  const safeCx = REELS_SAFE_MARGIN_X + safeWidth / 2;
   // A zona segura é mais estreita que a capa 4:5 inteira — reduz o nº
   // de caracteres por linha na mesma proporção pra não estourar a
   // largura reservada (mesma fonte, só quebra mais cedo).
@@ -717,13 +722,21 @@ export async function buildReelsVideoOverlayPng(
   // na mesma banda, sem precisar de placa separada pra marca.
   const scrim = buildOverlayGradientSvg("reels-safezone", zoneTop, REELS_H - zoneTop, REELS_W, theme, alpha, "bottom");
 
-  const halfText = wm ? (wm.length * 18) / 2 + 20 : 0;
-  const dividerSvg = wm
-    ? `<line x1="${REELS_SAFE_MARGIN_X}" y1="${dividerY}" x2="${safeCx - halfText}" y2="${dividerY}" stroke="${textColor}" stroke-opacity="0.45" stroke-width="1.5"/>
-  <line x1="${safeCx + halfText}" y1="${dividerY}" x2="${REELS_SAFE_MARGIN_X + safeWidth}" y2="${dividerY}" stroke="${textColor}" stroke-opacity="0.45" stroke-width="1.5"/>
-  <text x="${safeCx}" y="${dividerY + 6}" font-family="${family}" font-weight="600" font-size="20" letter-spacing="4" fill="${accent}" text-anchor="middle">${escapeXmlLocal(wm)}</text>`
-    : "";
-  const headlineSvg = `<text font-family="${family}" font-weight="800" font-size="${size}" fill="${textColor}" text-anchor="start" letter-spacing="-1">${tspansLocal(lines, REELS_SAFE_MARGIN_X, headStartY, lineH)}</text>`;
+  // Assinatura da marca no estilo do preset (filete, bloco, barra ou
+  // cápsula) — o Reels mantém a geometria de zona segura de 2026-07-23;
+  // o que muda por preset é a identidade, não o enquadramento.
+  const dividerSvg = brandRowSvg({
+    kind: identity.brandRow,
+    text: wm,
+    x: REELS_SAFE_MARGIN_X,
+    y: dividerY + 6,
+    width: safeWidth,
+    textColor,
+    accent,
+    labelFamily,
+    fontSize: 20,
+  });
+  const headlineSvg = `<text font-family="${family}" font-weight="${displayWeight}" font-size="${size}" fill="${textColor}" text-anchor="start" letter-spacing="${identity.display.letterSpacing}">${tspansLocal(lines, REELS_SAFE_MARGIN_X, headStartY, lineH)}</text>`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${REELS_W}" height="${REELS_H}" viewBox="0 0 ${REELS_W} ${REELS_H}">
   ${scrim}
@@ -771,7 +784,12 @@ export function feedVideoLayoutParts(
   headline: string,
   cardBrand: CardBrand
 ): { bg: string; text: string; frame: FeedVideoFrame; dividerSvg: string; headlineSvg: string } {
-  const family = cardBrand.fontFamily || "Inter";
+  // Identidade do PRESET de layout (tipografia + assinatura da marca):
+  // sem isso os três formatos de vídeo saíam idênticos em qualquer
+  // preset, enquanto o carrossel mudava — ver videoIdentityFor().
+  const identity = videoIdentityFor(cardBrand.layoutPreset, cardBrand.fontFamily);
+  const { family, weight: displayWeight } = identity.display;
+  const labelFamily = identity.labelFont === "mono" ? MONO_FONT : family;
   const bg = cardBrand.colorBackground || "#0A0A0A"; // padrão preto (kit v2, editorial-noir-prototype.html)
   const accent = cardBrand.colorAccent || "#7C5CFF";
   const text = cardBrand.colorText || "#FFFFFF";
@@ -800,14 +818,23 @@ export function feedVideoLayoutParts(
   const dividerY = dividerYRel + groupTop;
   const headStartY = headStartYRel + groupTop;
 
-  const halfText = wm ? (wm.length * 22) / 2 + 24 : 0;
-  const dividerSvg = wm
-    ? `<line x1="${FEED_FRAME_MARGIN_X}" y1="${dividerY}" x2="${cx - halfText}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.45" stroke-width="1.5"/>
-  <line x1="${cx + halfText}" y1="${dividerY}" x2="${WIDTH - FEED_FRAME_MARGIN_X}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.45" stroke-width="1.5"/>
-  <text x="${cx}" y="${dividerY + 8}" font-family="${family}" font-weight="600" font-size="26" letter-spacing="6" fill="${accent}" text-anchor="middle">${escapeXmlLocal(wm)}</text>`
-    : "";
+  const dividerSvg = brandRowSvg({
+    kind: identity.brandRow,
+    text: wm,
+    x: FEED_FRAME_MARGIN_X,
+    y: dividerY + 8,
+    width: WIDTH - FEED_FRAME_MARGIN_X * 2,
+    textColor: text,
+    accent,
+    labelFamily,
+    fontSize: 26,
+  });
 
-  const headlineSvg = `<text font-family="${family}" font-weight="800" font-size="${size}" fill="${text}" text-anchor="middle" letter-spacing="-1">${tspansLocal(lines, cx, headStartY, lineH)}</text>`;
+  // Presets não-editoriais alinham o título à esquerda, como fazem nos
+  // cards; Editorial Noir e Serif Luxe mantêm o centro.
+  const headAnchor = identity.anchor;
+  const headX = headAnchor === "middle" ? cx : FEED_FRAME_MARGIN_X;
+  const headlineSvg = `<text font-family="${family}" font-weight="${displayWeight}" font-size="${size}" fill="${text}" text-anchor="${headAnchor}" letter-spacing="${identity.display.letterSpacing}">${tspansLocal(lines, headX, headStartY, lineH)}</text>`;
 
   return { bg, text, frame, dividerSvg, headlineSvg };
 }
@@ -920,7 +947,12 @@ export function cardVideoLayoutParts(
   card: { headline: string | null; body: string | null },
   cardBrand: CardBrand
 ): { bg: string; frame: FeedVideoFrame; headlineSvg: string; bodySvg: string; labelSvg: string } {
-  const family = cardBrand.fontFamily || "Inter";
+  // Identidade do PRESET de layout (tipografia + assinatura da marca):
+  // sem isso os três formatos de vídeo saíam idênticos em qualquer
+  // preset, enquanto o carrossel mudava — ver videoIdentityFor().
+  const identity = videoIdentityFor(cardBrand.layoutPreset, cardBrand.fontFamily);
+  const { family, weight: displayWeight } = identity.display;
+  const labelFamily = identity.labelFont === "mono" ? MONO_FONT : family;
   const bg = cardBrand.colorBackground || "#0A0A0A";
   const text = cardBrand.colorText || "#FFFFFF";
   const pad = CARD_VIDEO_PAD;
@@ -940,15 +972,25 @@ export function cardVideoLayoutParts(
   };
   const bodyStartY = frame.y + frame.h + CARD_VIDEO_GAP_FRAME_TO_BODY;
 
-  const headlineSvg = `<text font-family="${family}" font-weight="700" font-size="${headSize}" fill="${text}" text-anchor="start">${tspansLocal(headlineLines, pad, headStartY, headLineH)}</text>`;
+  const headlineSvg = `<text font-family="${family}" font-weight="${displayWeight}" font-size="${headSize}" fill="${text}" text-anchor="start" letter-spacing="${identity.display.letterSpacing}">${tspansLocal(headlineLines, pad, headStartY, headLineH)}</text>`;
   const bodySvg = bodyLines.length
     ? `<text font-family="${family}" font-weight="400" font-size="${CARD_VIDEO_BODY_SIZE}" fill="${text}" fill-opacity="0.82" text-anchor="start">${tspansLocal(bodyLines, pad, bodyStartY, CARD_VIDEO_BODY_LINE_H)}</text>`
     : "";
   const rawLabel = brandLabelText(cardBrand);
   const label = rawLabel && rawLabel.length > 50 ? rawLabel.slice(0, 49).trimEnd() + "…" : rawLabel;
-  const labelSvg = label
-    ? `<text x="${pad}" y="${HEIGHT - 70}" font-family="${family}" font-weight="600" font-size="24" letter-spacing="3" fill="${text}" fill-opacity="0.85">${escapeXmlLocal(label)}</text>`
-    : "";
+  // Rótulo de marca do card interior também segue o preset (bloco no
+  // Brutalism, barra no Swiss, cápsula no Pop, filete nos editoriais).
+  const labelSvg = brandRowSvg({
+    kind: identity.brandRow,
+    text: label ?? "",
+    x: pad,
+    y: HEIGHT - 70,
+    width: WIDTH - pad * 2,
+    textColor: text,
+    accent: cardBrand.colorAccent || "#7C5CFF",
+    labelFamily,
+    fontSize: 24,
+  });
 
   return { bg, frame, headlineSvg, bodySvg, labelSvg };
 }
@@ -979,6 +1021,81 @@ export function buildCardVideoOverlay(
 </svg>`;
 
   return { overlayPng: rasterizeSvg(svg), frame };
+}
+
+/**
+ * Assinatura da marca nos overlays de VÍDEO, no estilo do preset de
+ * layout escolhido — é a peça que faz o Reels/feed/interior parecerem
+ * do mesmo "kit" que os cards do carrossel. Antes de 2026-07-27 os três
+ * desenhavam sempre o filete central (estilo Editorial Noir), então
+ * todos os presets saíam idênticos no vídeo.
+ *
+ * `y` é a linha de base do texto; a peça é desenhada em volta dela,
+ * dentro da faixa [x, x + width].
+ */
+function brandRowSvg(opts: {
+  kind: BrandRowKind;
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  textColor: string;
+  accent: string;
+  /** Fonte do rótulo (mono nos presets alternativos). */
+  labelFamily: string;
+  fontSize: number;
+}): string {
+  const { kind, text, x, y, width, textColor, accent, labelFamily, fontSize } = opts;
+  if (!text) return "";
+  const label = escapeXmlLocal(text);
+  const letter = 4;
+  // Largura aproximada do texto: mono/uppercase renderiza perto de
+  // 0.62em por caractere, mais o letter-spacing acumulado.
+  const textW = text.length * (fontSize * 0.62 + letter);
+  const base = `font-family="${labelFamily}" font-weight="600" font-size="${fontSize}" letter-spacing="${letter}"`;
+
+  // Todas as variantes ocupam a MESMA faixa, terminando 6px acima de `y`
+  // (onde o filete é desenhado). Sem isso, as peças com caixa (bloco e
+  // cápsula) avançavam sobre a primeira linha do título.
+  const bandBottom = y - 6;
+
+  if (kind === "block") {
+    // Brutalism: bloco sólido na cor de destaque, texto vazado.
+    const padX = 18;
+    const h = fontSize + 18;
+    const top = bandBottom - h;
+    const baseline = top + h / 2 + fontSize * 0.36;
+    return `<rect x="${x}" y="${top}" width="${textW + padX * 2}" height="${h}" fill="${accent}"/>
+  <text x="${x + padX}" y="${baseline}" ${base} fill="#0A0A0A">${label}</text>`;
+  }
+
+  if (kind === "bar") {
+    // Swiss Mono: barra vertical de destaque à esquerda do rótulo.
+    const barW = 6;
+    const h = fontSize + 12;
+    const top = bandBottom - h;
+    const baseline = top + h / 2 + fontSize * 0.36;
+    return `<rect x="${x}" y="${top}" width="${barW}" height="${h}" fill="${accent}"/>
+  <text x="${x + barW + 16}" y="${baseline}" ${base} fill="${textColor}">${label}</text>`;
+  }
+
+  if (kind === "pill") {
+    // Pop Creator: cápsula preenchida com a cor de destaque.
+    const padX = 22;
+    const h = fontSize + 20;
+    const w = textW + padX * 2;
+    const top = bandBottom - h;
+    const baseline = top + h / 2 + fontSize * 0.36;
+    return `<rect x="${x}" y="${top}" width="${w}" height="${h}" rx="${h / 2}" fill="${accent}"/>
+  <text x="${x + w / 2}" y="${baseline}" ${base} fill="#0A0A0A" text-anchor="middle">${label}</text>`;
+  }
+
+  // "rule" (Editorial Noir / Serif Luxe): wordmark entre dois filetes.
+  const cx = x + width / 2;
+  const half = textW / 2 + 20;
+  return `<line x1="${x}" y1="${y - 6}" x2="${cx - half}" y2="${y - 6}" stroke="${textColor}" stroke-opacity="0.45" stroke-width="1.5"/>
+  <line x1="${cx + half}" y1="${y - 6}" x2="${x + width}" y2="${y - 6}" stroke="${textColor}" stroke-opacity="0.45" stroke-width="1.5"/>
+  <text x="${cx}" y="${y}" ${base} fill="${accent}" text-anchor="middle">${label}</text>`;
 }
 
 function escapeXmlLocal(s: string): string {
