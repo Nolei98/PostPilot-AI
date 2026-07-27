@@ -41,9 +41,20 @@ async function collectOnce(postId: string, metricWindow: "24h" | "72h") {
       likes: insights.likes,
       comments: insights.comments,
     });
+    // Coleta boa limpa o erro anterior (a janela de 72h costuma passar
+    // depois de uma falha transitória na de 24h).
+    await supabase.from("posts").update({ metrics_error: null }).eq("id", postId);
     return { collected: true };
   } catch (err) {
+    // Antes isto só ia pro console: falha de coleta ficava invisível no
+    // banco, ao contrário de publish_error/video_error. Registrar aqui é
+    // o que permite ver POR QUE um post publicado está sem métrica.
+    const message = err instanceof Error ? err.message : String(err);
     console.error(`[collect-insights] falha ao coletar ${metricWindow} do post ${postId}:`, err);
+    await supabase
+      .from("posts")
+      .update({ metrics_error: `[${metricWindow}] ${message}` })
+      .eq("id", postId);
     return { collected: false };
   }
 }

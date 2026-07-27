@@ -163,9 +163,15 @@ export const publishScheduledPosts = inngest.createFunction(
         });
         publishedCount++;
 
-        inngest
-          .send({ name: "post/published", data: { postId: post.id } })
-          .catch((err) => console.warn("[publish-scheduled-posts] não foi possível enfileirar métricas:", err));
+        // step.sendEvent (durável) em vez de inngest.send solto: sem
+        // await e fora de step, a promise podia nunca resolver — em
+        // serverless o processo é congelado assim que o handler retorna.
+        // Era exatamente isso que fazia o collect-insights não rodar pra
+        // parte dos posts publicados (métrica faltando sem erro nenhum).
+        await step.sendEvent(`enqueue-metrics-${post.id}`, {
+          name: "post/published",
+          data: { postId: post.id },
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[publish-scheduled-posts] falha ao publicar o post ${post.id}:`, err);
