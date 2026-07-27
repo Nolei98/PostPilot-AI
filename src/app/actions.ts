@@ -10,6 +10,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inngest } from "@/inngest/client";
+import { enqueue } from "@/lib/enqueue";
 import type {
   BrandTemplate,
   CardLayoutOverride,
@@ -567,9 +568,13 @@ export async function uploadPostVideo(
     };
   }
 
-  inngest
-    .send({ name: "post/attach-video.requested", data: { postId, userId: user.id, shape } })
-    .catch((err) => console.warn("[uploadPostVideo] não foi possível enfileirar o processamento:", err));
+  // COM await de propósito (ver enqueue() em @/lib/enqueue): sem ele o
+  // vídeo ficava "processando" pra sempre em produção, porque a função
+  // serverless congela no return antes do evento sair.
+  await enqueue("uploadPostVideo", {
+    name: "post/attach-video.requested",
+    data: { postId, userId: user.id, shape },
+  });
 
   revalidatePath("/");
   revalidatePath("/ready");
@@ -632,9 +637,10 @@ export async function uploadCarouselCardVideo(
     };
   }
 
-  inngest
-    .send({ name: "card/attach-video.requested", data: { cardId, userId: user.id } })
-    .catch((err) => console.warn("[uploadCarouselCardVideo] não foi possível enfileirar o processamento:", err));
+  await enqueue("uploadCarouselCardVideo", {
+    name: "card/attach-video.requested",
+    data: { cardId, userId: user.id },
+  });
 
   revalidatePath("/");
   revalidatePath("/ready");
@@ -1622,15 +1628,13 @@ export async function saveLayoutPreset(formData: FormData) {
   // posts únicos pendentes (a página 1 também depende do layout_preset
   // desde a unificação com o motor de layouts) e rodar isso síncrono
   // dentro do Server Action arrisca estourar o timeout serverless.
-  // Disparo é FIRE-AND-FORGET DE PROPÓSITO (sem await): o SDK do Inngest
-  // tenta de novo com backoff por vários segundos se a fila não estiver
-  // acessível (ex: dev sem `npx inngest-cli dev` rodando) — travar o
-  // Save nesse retry (mesmo com timeout/race) deixou a ação lenta na
-  // prática. O preset já foi salvo acima; se o envio falhar, o resync
-  // fica pendente até o próximo save ou o dev subir a fila.
-  inngest
-    .send({ name: "post/resync-layout.requested", data: { clientId, userId: user.id } })
-    .catch((err) => console.warn("[saveLayoutPreset] não foi possível enfileirar o resync:", err));
+  // O envio do evento, porém, PRECISA ser aguardado: sem await a função
+  // serverless congela no return e o evento nunca sai — era por isso que
+  // salvar o layout não atualizava a fila em produção.
+  await enqueue("saveLayoutPreset", {
+    name: "post/resync-layout.requested",
+    data: { clientId, userId: user.id },
+  });
 
   revalidatePath("/settings");
   revalidatePath("/");
@@ -1664,9 +1668,10 @@ export async function saveSinglePostStyle(formData: FormData) {
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
 
-  inngest
-    .send({ name: "post/resync-layout.requested", data: { clientId, userId: user.id } })
-    .catch((err) => console.warn("[saveSinglePostStyle] não foi possível enfileirar o resync:", err));
+  await enqueue("saveSinglePostStyle", {
+    name: "post/resync-layout.requested",
+    data: { clientId, userId: user.id },
+  });
 
   revalidatePath("/settings");
   revalidatePath("/");

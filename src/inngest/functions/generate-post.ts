@@ -105,18 +105,19 @@ export const generatePost = inngest.createFunction(
       };
       const applyMode: TemplateApplyMode =
         data?.template_apply_mode === "on_approval" ? "on_approval" : "all";
-      // Conta ilimitada (flag manual, uso interno): custo zero sempre,
-      // ignora o que estiver salvo em Ajustes.
-      const textProvider: "claude" | "gemini" | "pollinations" = quota.unlimited
-        ? "pollinations"
-        : data?.text_provider === "claude" || data?.text_provider === "pollinations"
+      // A flag `unlimited` (manual, uso interno) libera o TETO de posts do
+      // plano — e só isso. Ela NÃO escolhe provider: até 2026-07-27 forçava
+      // pollinations "pra custo zero", o que deixou a conta ilimitada presa
+      // no único provider que passou a cobrar (402 em requests
+      // multi-mensagem), com a fila parada e Ajustes sem efeito nenhum.
+      const textProvider: "claude" | "gemini" | "pollinations" =
+        data?.text_provider === "claude" || data?.text_provider === "pollinations"
           ? data.text_provider
           : "gemini";
-      const imageProvider: "fal" | "gemini" | "pollinations" | "stock" = quota.unlimited
-        ? "pollinations"
-        : data?.image_provider === "fal" ||
-          data?.image_provider === "pollinations" ||
-          data?.image_provider === "gemini"
+      const imageProvider: "fal" | "gemini" | "pollinations" | "stock" =
+        data?.image_provider === "fal" ||
+        data?.image_provider === "pollinations" ||
+        data?.image_provider === "gemini"
           ? data.image_provider
           : "stock";
       const brand: BrandTemplate = {
