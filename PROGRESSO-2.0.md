@@ -4,8 +4,8 @@
 > técnico do plano estratégico e do handoff v2. Ordem importa: as
 > tarefas têm dependência.
 
-**Branch de trabalho:** `feat/multi-tenant-brand-kit` — mergeada na `main` (PRs #4 e #5); produção Vercel roda a branch direto (deploy manual), `main` só formaliza.
-**Última atualização:** 2026-07-23 — Template Studio completo (B9-B15, ver §4.2b); publicação Instagram corrigida (polling de status antes de publicar, ver §4.3.1); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga não recebe mais commits.
+**Última atualização:** 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
 ### Bloqueio ativo: Pollinations.ai exige pagamento pra requests multi-mensagem
 Descoberto 2026-07-22 investigando por que a fila não recebia posts novos há dias
@@ -23,6 +23,97 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0-A. Sessão 2026-07-27 — merge na `main`, Sprint C endurecido, produção sincronizada
+
+Sessão curta e cirúrgica: nenhuma feature nova de conteúdo, só fechar as
+pontas soltas do Sprint C e alinhar `main`/produção. **247 testes verdes**,
+`tsc` e `eslint` limpos, build de produção OK, tudo verificado com a conta
+real em produção (não só em teste).
+
+### 0-A.1 `main` virou a linha principal de verdade
+- A `main` estava 21 commits ATRÁS da `feat/multi-tenant-brand-kit` (faltavam
+  Sprint D D1/D2, Template Studio B14/B15, vídeo feed 4:5, migrations 035-037).
+  Merge feito localmente, sem conflito, e empurrado: `4b49b43..da67c55`.
+- **Descoberta:** existe integração GitHub↔Vercel ativa — o `git push` na `main`
+  disparou deploy de Production sozinho. A sessão anterior tinha concluído o
+  contrário (deploy 24/07 parecia manual). Produção agora = `main`.
+- Ponto de restauração: tag `restore-pre-merge-2026-07-27` (commit `4b49b43`).
+
+### 0-A.2 Sprint C: o que estava dado como pendente já funcionava
+A §4.3.1 dizia que o post agendado nunca publicou. Conferido no banco: **publica
+sim**, com `ig_media_id` REAL (não mock) — `18048709571795360` (21/07),
+`18109194898803364` (24/07), `17962575269962661` (25/07). O post das 23:48 UTC
+que a doc dava como travado publicou depois. Loop do Sprint C fecha ponta a ponta.
+
+⚠️ **Armadilha de diagnóstico (custou uma sessão inteira antes):** `GET
+/api/inngest` devolver `{"message":"Unauthorized"}` **é o comportamento normal
+em produção** — o SDK valida assinatura no GET e recusa requisição não assinada
+(`node_modules/inngest/components/InngestCommHandler.js`, ~linha 985). Isso NÃO
+indica falta de sync. O teste que realmente decide: mandar o evento da função
+pra `https://inn.gs/e/$INNGEST_EVENT_KEY` e consultar
+`https://api.inngest.com/v1/events/<id>/runs` com `Authorization: Bearer
+$INNGEST_SIGNING_KEY` — zero runs = função não registrada.
+
+### 0-A.3 Renovação automática do token do Instagram (migration 038)
+Bomba-relógio com data marcada: o token de longa duração vale ~60 dias, era
+gravado uma vez no OAuth e nunca renovado. O da conta real vence em
+**2026-09-19** — depois disso a publicação falharia em silêncio pra sempre
+(o job só grava `publish_error` e retenta a cada 5min, sem avisar ninguém).
+- `src/lib/token-refresh.ts` — decisão pura: janela de 14 dias, regra das 24h
+  de vida mínima exigida pela Meta, token vencido → reconectar. 9 testes.
+- `src/inngest/functions/refresh-social-tokens.ts` — cron diário `0 6 * * *` +
+  evento manual. Falha de renovação NÃO desconecta (o token atual segue válido);
+  grava `last_error` e tenta amanhã, dentro da folga. Vencido → `status='error'`.
+- `refreshLongLivedToken` em `instagram-graph.ts`, mock-first como o resto.
+- Ajustes filtrava a conexão por `status='connected'`, então uma conexão em
+  'error' sumia da tela e voltava ao estado "nunca conectou", sem motivo. Agora
+  mostra o aviso com a razão + botão de reconectar.
+- **Verificado em produção**: run `Completed`, output
+  `{"checked":1,"failed":0,"needReconnect":0,"refreshed":0}` — examinou a conexão
+  e decidiu não renovar (faltam 54 dias). Começa a agir por volta de 05/09.
+
+### 0-A.4 Métricas: evento perdido + falha invisível
+3 posts publicados com media ID real tinham só 1 linha em `post_metrics`, sem
+erro nenhum registrado. Duas causas, ambas corrigidas:
+- `publish-scheduled-posts` disparava `inngest.send("post/published")` **sem
+  `await` e fora de `step`** — fire-and-forget. Em serverless o processo é
+  congelado no `return`, então a promise podia nunca resolver e o
+  `collect-insights` nunca rodava. Trocado por `step.sendEvent` (durável).
+- `collect-insights` engolia a exceção no `console.error` — falha de coleta era
+  invisível no banco, ao contrário de `publish_error`/`video_error`. Agora grava
+  `posts.metrics_error` e limpa em coleta bem-sucedida.
+
+### 0-A.5 Migrations — estado real conferido no Supabase
+- `035` e `037`: já estavam aplicadas.
+- `036`: aplicada (confirmado indiretamente — existem 2 posts com
+  `format='video_feed'`, que o CHECK novo é quem permite).
+- `038_token_refresh_and_metrics_error.sql`: **aplicada pelo usuário em 27/07**
+  (`social_connections.last_refreshed_at/last_error`, `posts.metrics_error`).
+
+### 0-A.6 Pendências que sobraram desta sessão
+- [ ] **App Review do Meta** — gargalo pra vender: sem ele só contas cadastradas
+      como "Testador do Instagram" conectam, ou seja, nenhum cliente pago. Falta
+      construir Política de Privacidade, Termos e página de exclusão de dados
+      (o site hoje não tem nenhuma das três), e os links `app.html`/`brand.html`
+      do rodapé da landing apontam pra arquivos que não existem em `public/`.
+- [ ] **Integração Vercel↔Inngest** (vercel.com/integrations) — sem ela, todo
+      deploy que ADICIONE ou REMOVA função Inngest precisa de um `PUT` manual no
+      endpoint (foi preciso hoje pra registrar o `refresh-social-tokens`).
+      Mudança dentro de função já existente não precisa.
+- [ ] **Provider de IA do cliente ativo** — ver §0-A.7.
+
+### 0-A.7 O bloqueio da Pollinations é por cliente, não global
+Conferido nos `brand_kits`: o cliente ativo (`9618ce4a…`, o que tem o Instagram
+conectado) está com `text_provider=pollinations` e `image_provider=pollinations`
+— o provider que passou a exigir pagamento. Outros clientes já estão em `gemini`.
+A chave Gemini do `.env.local` foi testada e **funciona** (HTTP 200 em
+`gemini-2.5-flash`). Em produção as env vars vêm redigidas como `[SENSITIVE]`
+pelo Vercel, então não dá pra conferir por CLI se `GEMINI_API_KEY` tem valor lá.
+Saída mais barata: trocar o provider desse cliente pra `gemini` em Ajustes e
+garantir a chave em Production — sem isso a fila continua sem posts novos.
 
 ---
 
@@ -254,6 +345,10 @@ npm run test:e2e         # Playwright (LOCAL only — cria/apaga usuário efême
 npx tsc --noEmit         # typecheck
 ```
 
+- **⚠️ Ordem importa:** suba o `npm run dev` PRIMEIRO e o Inngest DEPOIS. O
+  `predev` (`scripts/free-ports.mjs`) libera as portas 3000 **e 8288**, então
+  reiniciar o dev mata o Inngest dev server junto (ele morre com exit 1 e o
+  vídeo/resync fica "processando" pra sempre até você notar).
 - **⚠️ Inngest local:** qualquer coisa que dispare job (Varrer agora, gerar post/carrossel)
   precisa do **Inngest Dev Server** rodando junto (`npx inngest-cli dev`). Sem ele:
   `ECONNREFUSED` → "Não foi possível iniciar a varredura". Dashboard: `localhost:8288`.
@@ -414,6 +509,10 @@ Meta) — plugar a chave real depois não muda nenhum código.
     `https://wise-needles-work.loca.lt/api/instagram/callback` (túnel morto,
     pode remover), `https://post-pilot-ai-seven.vercel.app/api/instagram/callback`.
 
+> ✅ **Fechado em 2026-07-27 (ver §0-A.2):** publica de verdade, com
+> `ig_media_id` real gravado em 3 posts. O relato abaixo ficou como
+> histórico do diagnóstico — a conclusão dele sobre o 401 estava errada.
+
 **Update 2026-07-21/22 (madrugada) — Conectou, mas não publicou:** você
 logou em produção e conectou o Instagram de verdade (confirmado no banco:
 `social_connections` com `ig_username=joaorodrigues.ia`, `ig_business_account_id`
@@ -430,6 +529,9 @@ mexer em código:
   o deploy foi promovido manualmente via `vercel deploy --prod` (fora do
   fluxo normal git push → integração Vercel↔Inngest que dispara o sync
   automático).
+  > ❌ **Esta leitura estava ERRADA** (corrigido em 2026-07-27, ver §0-A.2):
+  > o 401 no GET é o comportamento normal do SDK em produção (exige
+  > assinatura), não sinal de falta de sync. Não repita este diagnóstico.
 - Env vars conferidas: `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` presentes
   em Production no Vercel, código lê do env padrão (sem hardcode/mock) —
   configuração de código está correta, é puramente falta de sync no
@@ -473,6 +575,38 @@ publicar — single/vídeo/carrossel, incluindo cada item do carrossel).
 **Confirmado em produção**: post real publicado, `ig_media_id` gravado. A cada
 deploy novo (hash do endpoint muda) é preciso re-sincronizar com o mesmo `curl
 -X PUT`.
+
+#### 4.3.3 App Review do Meta — NÃO INICIADO (gargalo comercial, 2026-07-27)
+
+Enquanto o app do Meta estiver em modo Desenvolvimento, **só contas adicionadas
+como "Testador do Instagram" conseguem conectar** — ou seja, nenhum cliente
+pagante consegue ligar o Instagram dele. O fluxo manual (gerar post + baixar
+arte + copiar legenda) funciona pra qualquer um e não depende disto.
+
+Escopos pedidos hoje (`src/app/api/instagram/connect/route.ts`), todos exigindo
+Advanced Access via App Review: `instagram_business_basic`,
+`instagram_business_content_publish`, `instagram_business_manage_insights`.
+
+O que falta, separado por quem consegue fazer:
+
+**Depende de código (dá pra construir aqui):**
+- [ ] Página de **Política de Privacidade** pública — o Meta não aceita a
+      submissão sem URL válida. Hoje o site não tem: `src/app/` só tem
+      `fila/`, `login/`, `pricing/`, `ready/`, `settings/`, e a raiz é servida
+      de `public/index.html`.
+- [ ] Página de **Termos de Uso** — exigida pra app comercial.
+- [ ] **Exclusão de dados do usuário** — o Meta pede uma das duas: URL de
+      instruções ou callback de deleção. Não existe nenhuma.
+- [ ] Consertar os links quebrados do rodapé da landing: `app.html` e
+      `brand.html` não existem em `public/` (o revisor do Meta navega o site).
+
+**Depende do usuário (conta Meta, não dá pra automatizar):**
+- [ ] Preencher ícone, categoria e descrição do app no painel.
+- [ ] **Verificação de negócio** (Business Verification) — costuma exigir
+      documento/CNPJ; é o passo mais lento.
+- [ ] **Screencast** demonstrando cada uma das 3 permissões em uso, do login
+      até publicar, com conta de teste.
+- [ ] Justificativa escrita por permissão (por que o app precisa de cada uma).
 
 ### 4.4 SPRINT D — Video Engine (clipes reais, não slideshow)
 > ⚠️ **Update 2026-07-21 (ver seção 0.4):** um MVP mais simples já foi
