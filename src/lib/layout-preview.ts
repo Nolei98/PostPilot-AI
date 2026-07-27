@@ -13,7 +13,15 @@
 // que não dá pra embutir num SVG de preview; a POSIÇÃO/estrutura é fiel,
 // só a foto é substituída por um círculo com inicial.
 // ============================================================
-import { CARD_W, CARD_H, CLOSING_CORNER_MARGIN, type CardBrand, type LayoutPreset } from "@/lib/render-shared";
+import {
+  CARD_W,
+  CARD_H,
+  CLOSING_CORNER_MARGIN,
+  videoIdentityFor,
+  MONO_FONT,
+  type CardBrand,
+  type LayoutPreset,
+} from "@/lib/render-shared";
 import { buildCoverSvg, buildCardSvg } from "@/lib/carousel-render";
 import { feedVideoLayoutParts, cardVideoLayoutParts } from "@/lib/image";
 import { buildBrutalismCoverSvg, buildBrutalismCardSvg } from "@/lib/layout-brutalism";
@@ -145,23 +153,36 @@ function appendOverlay(svg: string, overlayGroup: string): string {
 }
 
 /** Capa normal (post único / capa estática) — 1 slide 4:5. */
+/**
+ * O preview pede um preset ESPECÍFICO (a linha da lista), mas vários
+ * builders decidem o layout lendo `brand.layoutPreset` por dentro —
+ * `renderAndUploadCard` (carousel-render.ts) e os overlays de vídeo
+ * (image.ts). Como o `previewBrand` de Ajustes carrega o preset SALVO
+ * (ou nenhum), as miniaturas saíam todas no mesmo visual, ignorando a
+ * linha. Fixar o preset no brand antes de desenhar resolve na raiz.
+ */
+function brandForPreset(brand: CardBrand, preset: LayoutPreset): CardBrand {
+  return { ...brand, layoutPreset: preset };
+}
+
 export function buildCoverPreview(preset: LayoutPreset, brand: CardBrand): string {
-  return previewCoverSvg(preset, "O título do seu próximo post", brand, { showSwipeHint: true });
+  return previewCoverSvg(preset, "O título do seu próximo post", brandForPreset(brand, preset), { showSwipeHint: true });
 }
 
 /** Contra-capa — mesma lógica da capa, sem swipe, com chip + ícones. */
 export function buildClosingPreview(preset: LayoutPreset, brand: CardBrand): string {
-  const svg = previewCoverSvg(preset, "Siga para não perder as próximas", brand, {
+  const b = brandForPreset(brand, preset);
+  const svg = previewCoverSvg(preset, "Siga para não perder as próximas", b, {
     showSwipeHint: false,
     body: "Todo dia um resumo do que importa.",
     showActionIcons: true,
   });
-  return appendOverlay(svg, chipPlaceholder(brand, CARD_H));
+  return appendOverlay(svg, chipPlaceholder(b, CARD_H));
 }
 
 /** Interior — 1 card do meio do carrossel. */
 export function buildInteriorPreview(preset: LayoutPreset, brand: CardBrand): string {
-  return previewCardSvg(preset, "O que muda na prática", "Um parágrafo curto de apoio explicando o ponto.", brand, 3, 7);
+  return previewCardSvg(preset, "O que muda na prática", "Um parágrafo curto de apoio explicando o ponto.", brandForPreset(brand, preset), 3, 7);
 }
 
 /** Carrossel — as 3 miniaturas encadeadas (capa → interior → contra-capa). */
@@ -184,7 +205,9 @@ const REELS_SAFE_MARGIN_X = 64;
 const REELS_SAFE_MARGIN_RIGHT = 170;
 const REELS_SAFE_BOTTOM = 220;
 function wrapAsReelsFrame(headline: string, brand: CardBrand): string {
-  const family = brand.fontFamily || "Inter";
+  const { display, labelFont } = videoIdentityFor(brand.layoutPreset, brand.fontFamily);
+  const family = display.family;
+  const labelFamily = labelFont === "mono" ? MONO_FONT : family;
   const wm = (brand.wordmark || brand.brandName || "").toUpperCase();
   const text = "#FFFFFF";
   const playCx = REELS_W / 2;
@@ -201,17 +224,17 @@ function wrapAsReelsFrame(headline: string, brand: CardBrand): string {
   </defs>
   <rect width="${REELS_W}" height="${REELS_H}" fill="url(#video-hatch)"/>
   <rect x="${REELS_SAFE_MARGIN_X - 20}" y="${safeTop}" width="${REELS_W - REELS_SAFE_MARGIN_X - REELS_SAFE_MARGIN_RIGHT + 20}" height="${safeH}" fill="none" stroke="#ff4646" stroke-opacity="0.6" stroke-width="3" stroke-dasharray="14 10" rx="12"/>
-  <text x="${REELS_SAFE_MARGIN_X}" y="130" font-family="${family}" font-weight="600" font-size="24" letter-spacing="4" fill="${text}" fill-opacity="0.85">${escapeXml(wm)}</text>
+  <text x="${REELS_SAFE_MARGIN_X}" y="130" font-family="${labelFamily}" font-weight="600" font-size="24" letter-spacing="4" fill="${text}" fill-opacity="0.85">${escapeXml(wm)}</text>
   <text x="${REELS_W - 24}" y="60" font-family="IBM Plex Mono" font-weight="700" font-size="24" letter-spacing="2" fill="#fff" text-anchor="end">REELS</text>
   <circle cx="${playCx}" cy="${playCy}" r="${playR}" fill="#000" fill-opacity="0.4"/>
   <path d="M ${playCx - 20} ${playCy - 28} L ${playCx - 20} ${playCy + 28} L ${playCx + 26} ${playCy} Z" fill="#fff"/>
-  <text x="${REELS_SAFE_MARGIN_X}" y="${REELS_H - REELS_SAFE_BOTTOM}" font-family="${family}" font-weight="800" font-size="52" fill="${text}" text-anchor="start">${escapeXml(headline)}</text>
+  <text x="${REELS_SAFE_MARGIN_X}" y="${REELS_H - REELS_SAFE_BOTTOM}" font-family="${family}" font-weight="${display.weight}" font-size="52" fill="${text}" text-anchor="start">${escapeXml(headline)}</text>
 </svg>`;
 }
 
 /** Vídeo Reels — 1 frame 9:16, vídeo full-bleed + zona segura à esquerda. */
 export function buildVideoPreview(preset: LayoutPreset, brand: CardBrand): string {
-  return wrapAsReelsFrame("Seu próximo Reels", brand);
+  return wrapAsReelsFrame("Seu próximo Reels", brandForPreset(brand, preset));
 }
 
 /** Vídeo feed — moldura 16:9 ("tamanho YouTube") com cantos
@@ -223,7 +246,7 @@ export function buildVideoPreview(preset: LayoutPreset, brand: CardBrand): strin
 export function buildFeedVideoPreview(preset: LayoutPreset, brand: CardBrand): string {
   const { bg, frame, dividerSvg, headlineSvg } = feedVideoLayoutParts(
     "O título do seu próximo vídeo",
-    brand
+    brandForPreset(brand, preset)
   );
   const accent = brand.colorAccent || "#7C5CFF";
   const playCx = frame.x + frame.w / 2;
@@ -248,10 +271,10 @@ export function buildFeedVideoPreview(preset: LayoutPreset, brand: CardBrand): s
 /** Interior com vídeo — moldura 16:9 no MEIO do card (título em cima,
  * corpo embaixo), mesma geometria do render real (cardVideoLayoutParts,
  * image.ts) — exemplo-modelos-com-video.png, caso "Interior". */
-export function buildInteriorVideoPreview(brand: CardBrand): string {
+export function buildInteriorVideoPreview(preset: LayoutPreset, brand: CardBrand): string {
   const { bg, frame, headlineSvg, bodySvg, labelSvg } = cardVideoLayoutParts(
     { headline: "Quando o vídeo explica melhor que o texto", body: "Um retângulo de vídeo entra no grid como uma imagem — mesmo tratamento e margens." },
-    brand
+    brandForPreset(brand, preset)
   );
   const accent = brand.colorAccent || "#7C5CFF";
   const playCx = frame.x + frame.w / 2;

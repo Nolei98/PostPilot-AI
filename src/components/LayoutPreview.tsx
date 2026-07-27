@@ -79,7 +79,7 @@ export function LayoutPreview({
   if (format === "video-interior") {
     return (
       <div aria-label={`${layoutPreset} — interior com vídeo`} className="w-24 shrink-0">
-        <Frame svg={buildInteriorVideoPreview(brand)} aspect="4:5" />
+        <Frame svg={buildInteriorVideoPreview(layoutPreset, brand)} aspect="4:5" />
       </div>
     );
   }

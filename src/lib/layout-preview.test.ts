@@ -13,7 +13,7 @@ import {
   REELS_W,
   REELS_H,
 } from "@/lib/layout-preview";
-import type { CardBrand } from "@/lib/render-shared";
+import type { CardBrand, LayoutPreset } from "@/lib/render-shared";
 
 const brand: CardBrand = {
   colorBackground: "#0B0B12",
@@ -72,10 +72,20 @@ describe.each(PREVIEW_LAYOUTS)("layout-preview — $label", ({ key }) => {
 
 describe("buildInteriorVideoPreview", () => {
   it("quadro 4:5, moldura de vídeo no meio (título em cima, corpo embaixo)", () => {
-    const svg = buildInteriorVideoPreview(brand);
+    const svg = buildInteriorVideoPreview("editorial-noir", brand);
     expect(svg).toContain('width="1080" height="1350"');
     expect(svg).toContain("<path"); // ícone de play
     expect(svg).toContain("video-card-hatch"); // moldura de vídeo (mockup)
+  });
+
+  it("herda a identidade do preset pedido, não a do brand salvo", () => {
+    // brand vem de Ajustes com o preset SALVO (ou nenhum): a miniatura
+    // precisa refletir a LINHA da lista, senão as 5 saem iguais.
+    const luxe = buildInteriorVideoPreview("serif-luxe", brand);
+    const pop = buildInteriorVideoPreview("pop-creator", brand);
+    expect(luxe).toContain("DM Serif Display");
+    expect(pop).toContain("Varela Round");
+    expect(luxe).not.toBe(pop);
   });
 });
 
@@ -89,5 +99,51 @@ describe("scaleSvg", () => {
     // o retângulo de fundo (mesmas dimensões nominais) não é afetado —
     // só a tag <svg> de abertura muda
     expect(scaled).toContain('<rect width="1080" height="1350"');
+  });
+});
+
+// Regressão 2026-07-27: o `previewBrand` de Ajustes não carrega
+// layoutPreset, e vários builders decidem o layout lendo
+// `brand.layoutPreset` por dentro (renderAndUploadCard, overlays de
+// vídeo). Sem fixar o preset no brand, as 5 linhas da lista saíam
+// todas com a mesma identidade — o usuário via "capa e interior não
+// carregam o layout".
+describe("preset da LINHA vence o preset do brand", () => {
+  const brandComPresetErrado: CardBrand = {
+    colorBackground: "#0B0B12",
+    colorAccent: "#C8A24A",
+    colorText: "#FFFFFF",
+    fontFamily: "Inter",
+    brandName: "Marca",
+    wordmark: "MARCA®",
+    handle: "marca.ia",
+    // Simula Ajustes com Serif Luxe salvo enquanto se pede outra linha.
+    layoutPreset: "serif-luxe",
+  };
+
+  it("capa: cada preset gera SVG distinto mesmo com brand em serif-luxe", () => {
+    const presets: LayoutPreset[] = [
+      "editorial-noir",
+      "brutalism",
+      "serif-luxe",
+      "swiss-mono",
+      "pop-creator",
+    ];
+    const svgs = presets.map((p) => buildCoverPreview(p, brandComPresetErrado));
+    expect(new Set(svgs).size).toBe(presets.length);
+  });
+
+  it("interior: idem para os cards do meio do carrossel", () => {
+    const brut = buildInteriorPreview("brutalism", brandComPresetErrado);
+    const pop = buildInteriorPreview("pop-creator", brandComPresetErrado);
+    expect(brut).toContain("Anton");
+    expect(pop).toContain("Varela Round");
+  });
+
+  it("vídeo de feed: a miniatura segue a linha, não o brand", () => {
+    const brut = buildFeedVideoPreview("brutalism", brandComPresetErrado);
+    const luxe = buildFeedVideoPreview("serif-luxe", brandComPresetErrado);
+    expect(brut).toContain("Anton");
+    expect(luxe).toContain("DM Serif Display");
   });
 });
