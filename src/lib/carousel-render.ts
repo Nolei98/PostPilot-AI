@@ -8,6 +8,7 @@ import sharp from "sharp";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rasterizeSvg } from "@/lib/svg-render";
 import { buildProfileChipLayers } from "@/lib/profile-chip";
+import { buildOverlayGradientSvg } from "@/lib/contrast";
 import {
   pickTheme,
   textColorForTheme,
@@ -63,7 +64,7 @@ function escapeXml(s: string): string {
  * quebra) que a IA às vezes gera — as fontes embutidas (Inter/Sora/Space
  * Grotesk) não têm esses glifos, e o resvg desenha um quadrado com "?"
  * no lugar (tofu) em vez de simplesmente pular o caractere. */
-function stripEmoji(s: string): string {
+export function stripEmoji(s: string): string {
   return s
     .replace(/[\p{Extended_Pictographic}‍️]/gu, "")
     .replace(/[‐‑‒–—―]/g, "-") // travessões → hífen normal
@@ -120,7 +121,7 @@ export function brandLabelText(brand: CardBrand): string | null {
 }
 
 /** Tamanho de fonte da headline da capa/fechamento por comprimento (auto-fit simples). */
-function coverHeadlineSize(headline: string): { size: number; lineH: number; maxChars: number } {
+export function coverHeadlineSize(headline: string): { size: number; lineH: number; maxChars: number } {
   const n = headline.length;
   if (n <= 36) return { size: 104, lineH: 114, maxChars: 15 };
   if (n <= 64) return { size: 86, lineH: 96, maxChars: 19 };
@@ -236,7 +237,12 @@ export function buildCoverSvg(
       cursor = bodyStartY - 66;
     }
     const headStartY = cursor - (lines.length - 1) * lineH;
-    cursor = headStartY - 90;
+    // Gap ESCALA com o tamanho da fonte do título: um valor fixo (90)
+    // ficava colado em títulos grandes (size~104) — a altura das letras
+    // "come" parte do espaço já que a posição é pela BASELINE, não pelo
+    // topo do glifo. size*0.6 mantém a folga visual (não a distância de
+    // baseline) parecida entre título curto/grande.
+    cursor = headStartY - Math.round(90 + size * 0.6);
     const dividerY = cursor;
     return { dividerY, headStartY, bodyStartY, swipeY };
   };
@@ -289,9 +295,10 @@ export function buildCoverSvg(
   // este overlay tematizado, calibrado pela luminância REAL da banda
   // (contrast.ts) — nunca mais um escurecimento fixo às cegas.
   const bgRect = transparent ? "" : `<rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>`;
+  const overlayBandY = Math.max(0, dividerY - 90);
   const overlayRect =
-    transparent && opts.overlay && opts.overlay.alpha > 0
-      ? `<rect x="0" y="${Math.max(0, dividerY - 90)}" width="${CARD_W}" height="${CARD_H - Math.max(0, dividerY - 90)}" fill="${opts.overlay.theme === "dark" ? "#000" : "#fff"}" fill-opacity="${opts.overlay.alpha}"/>`
+    transparent && opts.overlay
+      ? buildOverlayGradientSvg("overlay-noir", overlayBandY, CARD_H - overlayBandY, CARD_W, opts.overlay.theme, opts.overlay.alpha)
       : "";
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
@@ -335,7 +342,6 @@ export function buildCardSvg(
 
   const isHook = card.role === "hook";
   const isCta = card.role === "cta";
-  const headStartY = isHook ? 520 : 300;
 
   // Rótulo (@handle · palavras-chave) SEMPRE em uma linha só — nunca
   // quebra; se não couber, corta com reticências (nunca estoura o quadro).
@@ -346,6 +352,27 @@ export function buildCardSvg(
   // mesmo carrossel sempre produz a mesma alternância).
   const labelAtBottom = card.idx % 2 === 1;
   const labelY = labelAtBottom ? CARD_H - 70 : 130;
+
+  // Cards "value" (a maioria do miolo do carrossel): o bloco título+corpo
+  // acompanha o @ em vez de ficar sempre fixo no mesmo lugar — quando o
+  // rótulo sobe pro topo, o bloco desce pro terço inferior (e vice-versa).
+  // Sem isso o bloco ficava sempre colado em y=300, então metade das
+  // páginas tinha o rótulo bem perto do título (topo) e a outra metade
+  // sempre "no lado oposto" — nunca variava de verdade, só o rótulo
+  // bailava em volta de um texto parado. Hook/cta mantêm o centro fixo
+  // (composição deliberada, não sofre desse problema).
+  let headStartY = isHook ? 520 : 300;
+  if (!isHook && !isCta) {
+    const blockBottomMargin = CARD_H - 220; // folga acima do número da página
+    // Distância do início do bloco (headStartY) até a baseline da ÚLTIMA
+    // linha (corpo, se houver — senão a própria headline) — mesma conta
+    // usada mais abaixo pra posicionar o corpo a partir de headStartY.
+    const lastBaselineOffset = bodyLines.length
+      ? headLineH * headlineLines.length + Math.round(headSize * 0.6) + bodyLineH * (bodyLines.length - 1)
+      : headLineH * (headlineLines.length - 1);
+    const lowerHeadStartY = blockBottomMargin - lastBaselineOffset;
+    headStartY = labelAtBottom ? 300 : lowerHeadStartY;
+  }
 
   // Sem foto: fundo sólido. Com foto: SEM retângulo fixo — o overlay agora
   // é calibrado pela luminância real da foto (contrast.ts); só aparece
@@ -372,6 +399,109 @@ export function buildCardSvg(
   }
   <text x="${CARD_W - pad}" y="${CARD_H - 70}" font-family="${family}" font-weight="400" font-size="30" fill="${text}" opacity="0.5" text-anchor="end">${card.idx + 1}</text>
 </svg>`;
+}
+
+export interface HalfImageBand {
+  top: number;
+  height: number;
+}
+
+/** Tamanho de fonte pro card com imagem em METADE — só ~550px úteis de
+ * altura pro texto (metade do card menos margens/rótulo), bem menor que
+ * o card full-bleed (que usa a altura inteira via coverHeadlineSize). */
+function halfCardHeadlineSize(headline: string): { size: number; lineH: number; maxChars: number } {
+  const n = headline.length;
+  if (n <= 30) return { size: 56, lineH: 62, maxChars: 22 };
+  if (n <= 60) return { size: 46, lineH: 52, maxChars: 28 };
+  return { size: 38, lineH: 44, maxChars: 34 };
+}
+
+function halfCardBodySize(headSize: number): { size: number; lineH: number; maxChars: number } {
+  if (headSize >= 56) return { size: 28, lineH: 38, maxChars: 40 };
+  if (headSize >= 46) return { size: 26, lineH: 34, maxChars: 44 };
+  return { size: 24, lineH: 32, maxChars: 48 };
+}
+
+/**
+ * Card interior com imagem em METADE do quadro (topo ou base) — pedido
+ * do usuário: "adicionar imagens topo ou baixo" com título/corpo se
+ * ajustando. Diferente do card full-bleed (buildCardSvg): aqui a foto
+ * ocupa só METADE (borda a borda, sem moldura) e o título+corpo vivem
+ * na outra metade, sobre fundo sólido da marca — nunca sobrepostos.
+ * SVG sai com um "buraco" transparente exatamente na metade da imagem
+ * (o resto é fundo sólido) — `composeHalfPhotoCard` encaixa a foto ali.
+ */
+export function buildCardSvgHalfImage(
+  card: CarouselCard,
+  brand: CardBrand,
+  imagePosition: "top" | "bottom"
+): { svg: string; imageBand: HalfImageBand } {
+  const family = brand.fontFamily || "Inter";
+  const bg = brand.colorBackground || "#0B0B12";
+  const text = brand.colorText || "#FFFFFF";
+  const pad = 96;
+  const halfH = CARD_H / 2; // 675 — inteiro, sem risco de sharp.extract fracionário
+
+  const headlineText = stripEmoji(card.headline ?? "");
+  const { size: headSize, lineH: headLineH, maxChars } = halfCardHeadlineSize(headlineText);
+  const headlineLines = wrapText(headlineText, maxChars).slice(0, 2);
+  const { size: bodySize, lineH: bodyLineH, maxChars: bodyMaxChars } = halfCardBodySize(headSize);
+  const bodyLines = card.body ? wrapText(stripEmoji(card.body), bodyMaxChars).slice(0, 2) : [];
+
+  const imageBand: HalfImageBand =
+    imagePosition === "top" ? { top: 0, height: halfH } : { top: halfH, height: CARD_H - halfH };
+  const textTop = imagePosition === "top" ? halfH : 0;
+  const textBottom = imagePosition === "top" ? CARD_H : halfH;
+
+  // Rótulo na borda EXTERNA dessa metade (longe da emenda com a foto);
+  // o título começa DEPOIS do rótulo (gap fixo) quando o rótulo fica no
+  // topo — senão colidiam (bug visto ao vivo). Quando o rótulo fica no
+  // rodapé, o título já nasce livre no topo da sua metade.
+  const label = brandLabelText(brand);
+  const labelAtTop = textTop === 0;
+  const labelY = labelAtTop ? 90 : textBottom - 70;
+  const headStartY = labelAtTop ? labelY + 70 : textTop + 110;
+  const bodyStartY = headStartY + headLineH * headlineLines.length + Math.round(headSize * 0.6);
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
+  <rect x="0" y="${textTop}" width="${CARD_W}" height="${textBottom - textTop}" fill="${bg}"/>
+  ${label ? `<text x="${pad}" y="${labelY}" font-family="${family}" font-weight="600" font-size="24" letter-spacing="3" fill="${text}" fill-opacity="0.85">${escapeXml(label)}</text>` : ""}
+  <text font-family="${family}" font-weight="700" font-size="${headSize}" fill="${text}" text-anchor="start">
+    ${tspans(headlineLines, pad, headStartY, headLineH)}
+  </text>
+  ${
+    bodyLines.length
+      ? `<text font-family="${family}" font-weight="400" font-size="${bodySize}" fill="${text}" opacity="0.82" text-anchor="start">
+    ${tspans(bodyLines, pad, bodyStartY, bodyLineH)}
+  </text>`
+      : ""
+  }
+  <text x="${CARD_W - pad}" y="${CARD_H - 70}" font-family="${family}" font-weight="400" font-size="30" fill="${text}" opacity="0.5" text-anchor="end">${card.idx + 1}</text>
+</svg>`;
+
+  return { svg, imageBand };
+}
+
+/** Compõe o card com imagem em metade (buildCardSvgHalfImage) — a foto
+ * cover-fit na sua metade (`imageBand`), o resto vem do próprio SVG
+ * (fundo sólido + texto, já opaco ali) por cima. */
+export async function composeHalfPhotoCard(photo: Buffer, svg: string, imageBand: HalfImageBand): Promise<Buffer> {
+  const croppedPhoto = await sharp(photo)
+    .resize(CARD_W, imageBand.height, { fit: "cover", position: "attention" })
+    .toBuffer();
+  const canvas = await sharp({
+    create: { width: CARD_W, height: CARD_H, channels: 3, background: "#000000" },
+  })
+    .png()
+    .toBuffer();
+  const overlay = rasterizeSvg(svg);
+  return sharp(canvas)
+    .composite([
+      { input: croppedPhoto, top: imageBand.top, left: 0 },
+      { input: overlay, top: 0, left: 0 },
+    ])
+    .png()
+    .toBuffer();
 }
 
 /**
@@ -453,17 +583,32 @@ async function renderAltLayoutCard(
     };
     if (bgImage) {
       const probe = buildCover(card.headline ?? "", { ...brand, colorText: "#FFFFFF" }, true, opts);
-      const band = await sharp(bgImage)
+      const covered = await sharp(bgImage)
         .resize(CARD_W, CARD_H, { fit: "cover", position: "attention" })
+        .toBuffer();
+      const band = await sharp(covered)
         .extract({ left: 0, top: probe.blurBandTop, width: CARD_W, height: CARD_H - probe.blurBandTop })
         .toBuffer();
       const luminance = await measureImageLuminance(band);
       const theme = pickTheme(luminance);
       const textColor = textColorForTheme(theme);
       const alpha = overlayAlphaFor(theme, textColor, luminance);
+      // Meta-linha do TOPO (eyebrow + @handle) fica FORA da banda de
+      // identidade (rodapé) — sem essa checagem própria, herdava o
+      // tema/cor do rodapé cegamente e podia sumir contra a foto (bug
+      // real visto ao vivo: rótulo quase invisível no topo de um post).
+      // Mesma cor de texto (textColor já escolhida), só a OPACIDADE da
+      // placa muda com a luminância LOCAL do topo — 0 quando já dá pra
+      // ler sem ajuda.
+      const topBand = await sharp(covered)
+        .extract({ left: 0, top: 0, width: CARD_W, height: 140 })
+        .toBuffer();
+      const topLuminance = await measureImageLuminance(topBand);
+      const topAlpha = overlayAlphaFor(theme, textColor, topLuminance);
       const { svg, blurBandTop } = buildCover(card.headline ?? "", { ...brand, colorText: textColor }, true, {
         ...opts,
         overlay: { theme, alpha },
+        topOverlay: { theme, alpha: topAlpha },
       });
       return composePhotoBg(bgImage, svg, blurBandTop);
     }
@@ -500,13 +645,21 @@ export async function renderAndUploadCard(
   pageKind: CoverPageKind = "interior",
   bgImage: Buffer | null = null,
   profile: IgProfile | null = null,
-  totalCards = 1
+  totalCards = 1,
+  /** "topo"/"base" — card INTERIOR só (pedido do usuário): a foto ocupa
+   * metade do quadro (borda a borda), texto na outra metade, em vez do
+   * full-bleed padrão. Ignorado pra capa/fechamento (mantêm a banda de
+   * identidade própria) e quando não há foto. */
+  imagePosition: "top" | "bottom" | null = null
 ): Promise<string> {
   const isCoverStyle = pageKind === "cover" || pageKind === "closing";
   const altLayout = brand.layoutPreset ? ALT_LAYOUTS[brand.layoutPreset] : undefined;
 
   let png: Buffer;
-  if (altLayout) {
+  if (!isCoverStyle && bgImage && imagePosition) {
+    const { svg, imageBand } = buildCardSvgHalfImage(card, brand, imagePosition);
+    png = await composeHalfPhotoCard(bgImage, svg, imageBand);
+  } else if (altLayout) {
     png = await renderAltLayoutCard(altLayout, card, brand, pageKind, bgImage, totalCards);
   } else if (isCoverStyle) {
     const coverOpts: CoverOptions = {

@@ -9,15 +9,16 @@
 // ============================================================
 import { searchStockPhoto, fetchStockPhotoBuffer } from "@/lib/stock-photos";
 
-/** niche → query visual (inglês) para o banco de fotos. */
-const NICHE_QUERY: Record<string, string> = {
+/** niche → query visual (inglês) para o banco de fotos/vídeos (reusado
+ * pelo b-roll de vídeo em video-assembly.ts). */
+export const NICHE_QUERY: Record<string, string> = {
   tecnologia: "technology abstract dark",
   marketing: "marketing business office",
   financas: "finance money city skyline",
   saude: "health wellness lifestyle",
   games: "gaming neon setup",
 };
-function nicheQuery(niche: string | null | undefined): string {
+export function nicheQuery(niche: string | null | undefined): string {
   return NICHE_QUERY[niche ?? ""] ?? "abstract dark texture";
 }
 

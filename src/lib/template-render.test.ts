@@ -93,6 +93,40 @@ describe("renderTemplateCardPng", () => {
     expect([png[0], png[1], png[2], png[3]]).toEqual([0x89, 0x50, 0x4e, 0x47]);
   });
 
+  it("override showLabel:false esconde wordmark/divisor/rótulo (B9)", async () => {
+    const png = await renderTemplateCardPng(
+      coverPreset,
+      brand,
+      { headline: "Sem marca" },
+      null,
+      { showLabel: false }
+    );
+    const withLabel = await renderTemplateCardPng(coverPreset, brand, { headline: "Sem marca" }, null);
+    expect(png.length).toBeGreaterThan(1000);
+    expect(png.length).not.toBe(withLabel.length);
+  });
+
+  it("override textColor força a cor ignorando o tema automático (B9)", async () => {
+    const lightPhoto = await sharp({
+      create: { width: 200, height: 200, channels: 3, background: { r: 245, g: 245, b: 245 } },
+    })
+      .jpeg()
+      .toBuffer();
+    // Foto clara normalmente escolheria texto escuro; força claro mesmo assim.
+    const forced = renderFromSpec(
+      coverPreset,
+      { ...brand, colorText: "#FFFFFF" },
+      { headline: "H" },
+      undefined,
+      { transparentBg: true, overlay: { theme: "dark", alpha: 0 } }
+    );
+    expect(forced).toContain("#FFFFFF");
+    const png = await renderTemplateCardPng(coverPreset, brand, { headline: "H" }, lightPhoto, {
+      textColor: "light",
+    });
+    expect(png.length).toBeGreaterThan(1000);
+  });
+
   it("dimensão final bate com o canvas da spec (video_cover 1080x1920)", async () => {
     const reelSpec: TemplateSpec = { ...coverPreset, canvas: { w: 1080, h: 1920 } };
     const photo = await sharp({

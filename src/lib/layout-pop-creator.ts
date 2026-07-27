@@ -12,6 +12,7 @@
 // Mesmo contrato {svg, blurBandTop} de buildCoverSvg/buildCardSvg —
 // drop-in compatível no seletor de layout.
 // ============================================================
+import { buildOverlayGradientSvg } from "@/lib/contrast";
 import { CARD_W, CARD_H, actionIconsRail, CLOSING_CORNER_MARGIN, type CardBrand } from "@/lib/render-shared";
 
 const DISPLAY_FONT = "Varela Round";
@@ -84,6 +85,11 @@ export interface PopCreatorCoverOptions {
   showSwipeHint?: boolean;
   body?: string | null;
   overlay?: { theme: "light" | "dark"; alpha: number };
+  /** Placa por trás do @handle do topo-DIREITO — o eyebrow esquerdo já
+   * tem sua própria pílula de acento (protegida por natureza); só o
+   * texto solto da direita fica exposto direto na foto. alpha=0 não
+   * desenha nada (checagem de contraste local feita pelo chamador). */
+  topOverlay?: { theme: "light" | "dark"; alpha: number };
   eyebrow?: string;
   eyebrowRight?: string | null;
   /** Força mostrar/esconder a trilha de ícones, sobrepondo a heurística
@@ -136,8 +142,18 @@ export function buildPopCreatorCoverSvg(
   const pillW = approxTextWidth(eyebrow, 22) + 44;
   const pillH = 44;
   const pillY = 56;
+  // Placa por trás do @handle direito — só aparece quando o contraste
+  // LOCAL (medido pelo chamador nessa região específica) não é suficiente.
+  const rightW = approxTextWidth(eyebrowRight, 22) + 28;
+  const topOverlay = opts.topOverlay;
+  const rightPlate =
+    transparent && topOverlay && topOverlay.alpha > 0
+      ? `<rect x="${CARD_W - pad - rightW}" y="${pillY}" width="${rightW}" height="${pillH}" rx="${pillH / 2}" fill="${topOverlay.theme === "dark" ? "#000" : "#fff"}" fill-opacity="${topOverlay.alpha}"/>`
+      : "";
+
   const eyebrowPill = `<rect x="${pad}" y="${pillY}" width="${pillW}" height="${pillH}" rx="${pillH / 2}" fill="${accent}"/>
   <text x="${pad + pillW / 2}" y="${pillY + pillH / 2 + 7}" font-family="${MONO_FONT}" font-weight="700" font-size="20" letter-spacing="1" fill="#0A0A0A" text-anchor="middle">${escapeXml(eyebrow)}</text>
+  ${rightPlate}
   <text x="${CARD_W - pad}" y="${pillY + pillH / 2 + 7}" font-family="${MONO_FONT}" font-weight="400" font-size="22" letter-spacing="1" fill="${text}" fill-opacity="0.85" text-anchor="end">${escapeXml(eyebrowRight)}</text>`;
 
   // Blob decorativo — círculo suave atrás do bloco de texto, saindo da borda.
@@ -166,7 +182,7 @@ export function buildPopCreatorCoverSvg(
   const blurBandTop = Math.max(0, Math.round(headStartY - size * 0.95 - 30));
   const overlayRect =
     transparent && overlay && overlay.alpha > 0
-      ? `<rect x="0" y="${blurBandTop}" width="${CARD_W}" height="${CARD_H - blurBandTop}" fill="${overlay.theme === "dark" ? "#000" : "#fff"}" fill-opacity="${overlay.alpha}"/>`
+      ? buildOverlayGradientSvg("overlay-band", blurBandTop, CARD_H - blurBandTop, CARD_W, overlay.theme, overlay.alpha)
       : "";
 
   const bgRect = transparent ? "" : `<rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>`;

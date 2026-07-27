@@ -9,7 +9,8 @@
 //   Descartar→ card desliza p/ esquerda (vermelho) e some
 //   Editar   → modal com legenda + hashtags
 // ============================================================
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
+import { useRouter } from "next/navigation";
 /* eslint-disable @next/next/no-img-element */
 import {
   applyTemplateToPost,
@@ -25,13 +26,14 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardActions } from "@/components/ui/Card";
 import { Drawer } from "@/components/ui/Drawer";
 import { Modal } from "@/components/ui/Modal";
+import { LoadingOrb } from "@/components/ui/LoadingOrb";
 import { Input, Textarea } from "@/components/ui/Input";
 import { CarouselPreview } from "@/components/CarouselPreview";
 import { CarouselDownload } from "@/components/CarouselDownload";
 import { CarouselEditor } from "@/components/CarouselEditor";
 import { resizeImageForUpload } from "@/lib/resizeImageClient";
 import { useToast } from "@/components/ui/Toast";
-import type { IgProfile, PostWithNews, VisualIdentity } from "@/lib/types";
+import type { IgProfile, PostWithNews, Surface, VisualIdentity } from "@/lib/types";
 
 type ExitDirection = "right" | "left" | null;
 
@@ -47,15 +49,19 @@ export function PostCard({
   profile,
   identityDefaults,
   hasInstagramConnected = false,
+  templateSelection = {},
 }: {
   post: PostWithNews;
   profile: IgProfile;
   identityDefaults: VisualIdentity;
   /** Sprint C — só habilita o botão "Agendar" se o cliente tiver Instagram conectado. */
   hasInstagramConnected?: boolean;
+  /** Template Studio (B9) — modelo escolhido por superfície do cliente ativo. */
+  templateSelection?: Partial<Record<Surface, string>>;
 }) {
   const HANDLE = profile.handle;
   const toast = useToast();
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [cardsOpen, setCardsOpen] = useState(false);
   const [hook, setHook] = useState(post.hook);
@@ -79,6 +85,17 @@ export function PostCard({
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   });
+
+  // Polling automático enquanto o vídeo processa em background (Inngest
+  // + ffmpeg pode levar dezenas de segundos) — sem isso o card ficava
+  // preso em "processando" até o usuário dar refresh manual na página.
+  // router.refresh() busca o post de novo no servidor; quando o job
+  // termina, video_status muda e o efeito abaixo para sozinho.
+  useEffect(() => {
+    if (post.video_status !== "processing") return;
+    const id = setInterval(() => router.refresh(), 4000);
+    return () => clearInterval(id);
+  }, [post.video_status, router]);
 
   function handleToggleTemplate(checked: boolean) {
     if (checked) {
@@ -116,22 +133,25 @@ export function PostCard({
     });
   }
 
-  function handleVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setVideoError(null);
-    startVideoUpload(async () => {
-      try {
-        const fd = new FormData();
-        fd.set("post_id", post.id);
-        fd.set("video", file);
-        const result = await uploadPostVideo(fd);
-        if (!result.ok) setVideoError(result.error ?? "Falha ao subir vídeo.");
-      } catch {
-        setVideoError("Falha ao subir vídeo. Tente um arquivo menor.");
-      }
-    });
+  function handleVideoUpload(shape: "reels" | "feed" | "feed-blur") {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      setVideoError(null);
+      startVideoUpload(async () => {
+        try {
+          const fd = new FormData();
+          fd.set("post_id", post.id);
+          fd.set("video", file);
+          fd.set("shape", shape);
+          const result = await uploadPostVideo(fd);
+          if (!result.ok) setVideoError(result.error ?? "Falha ao subir vídeo.");
+        } catch {
+          setVideoError("Falha ao subir vídeo. Tente um arquivo menor.");
+        }
+      });
+    };
   }
 
   // ---- Identidade visual (por post) ----
@@ -198,17 +218,25 @@ export function PostCard({
   // Carrossel (format='carousel'): a galeria são os cards renderizados,
   // em ordem. Post single: página de conteúdo + contra-capa (se houver).
   const isCarousel = post.format === "carousel";
-  const cardImages = (post.carousel_cards ?? [])
-    .slice()
-    .sort((a, b) => a.idx - b.idx)
-    .map((c) => c.image_url)
-    .filter((u): u is string => !!u);
+  const sortedCards = (post.carousel_cards ?? []).slice().sort((a, b) => a.idx - b.idx);
+  const cardsWithImage = sortedCards.filter((c) => !!c.image_url);
+  // videos/posters ficam na MESMA ordem/tamanho de previewImages — cada
+  // posição corresponde ao mesmo card, null quando esse card não tem
+  // vídeo pronto (CarouselPreview mostra a imagem nesse caso).
   const previewImages =
-    isCarousel && cardImages.length > 0
-      ? cardImages
+    isCarousel && cardsWithImage.length > 0
+      ? cardsWithImage.map((c) => c.image_url as string)
       : [post.image_url, post.closing_image_url].filter(
           (u): u is string => !!u
         );
+  const previewVideos =
+    isCarousel && cardsWithImage.length > 0
+      ? cardsWithImage.map((c) => (c.video_status === "ready" ? c.video_url : null))
+      : undefined;
+  const previewPosters =
+    isCarousel && cardsWithImage.length > 0
+      ? cardsWithImage.map((c) => c.video_poster_url)
+      : undefined;
 
   /** Toca a animação de saída e só então executa a action */
   function exitAndRun(direction: Exclude<ExitDirection, null>, action: () => Promise<void>) {
@@ -325,10 +353,12 @@ export function PostCard({
           </label>
           {uploadError && <p className="text-micro text-error">{uploadError}</p>}
 
-          {/* Vídeo anexado (Fase 4, kit v2 §3) — upload manual, composto
-              em background (Inngest + ffmpeg) no quadro Reels 9:16. */}
+          {/* Vídeo anexado (Fase 4, kit v2 §3; feed 4:5 = migration 036) —
+              upload manual, composto em background (Inngest + ffmpeg).
+              Um post só guarda 1 vídeo por vez — anexar no outro formato
+              troca (reprocessa) o que já tinha. */}
           <div className="flex items-center justify-between gap-2 pt-1">
-            <span className="text-micro text-subtle">🎬 Reels (vídeo)</span>
+            <span className="text-micro text-subtle">🎬 Vídeo</span>
             {post.video_status === "processing" && (
               <span className="text-micro text-warning">Processando…</span>
             )}
@@ -343,16 +373,61 @@ export function PostCard({
                 ? "Enviando…"
                 : post.video_status === "processing"
                   ? "Vídeo em processamento…"
-                  : post.video_status === "ready"
-                    ? "Trocar vídeo (reprocessa)"
-                    : "Anexar vídeo (.mp4/.mov)"}
+                  : post.format === "video" && post.video_status === "ready"
+                    ? "Reels (9:16) ✓ — trocar vídeo"
+                    : "Anexar Reels (9:16)"}
             </span>
             <input
               type="file"
               accept="video/mp4,video/quicktime"
               className="hidden"
               disabled={uploadingVideo || post.video_status === "processing"}
-              onChange={handleVideoUpload}
+              onChange={handleVideoUpload("reels")}
+            />
+          </label>
+          <label
+            className={`flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content ${
+              post.video_status === "processing" ? "opacity-50" : ""
+            }`}
+          >
+            <span>
+              {uploadingVideo
+                ? "Enviando…"
+                : post.video_status === "processing"
+                  ? "Vídeo em processamento…"
+                  : post.format === "video_feed" && post.video_status === "ready"
+                    ? "Feed (4:5) ✓ — trocar vídeo"
+                    : "Anexar Feed (4:5, sem letterbox)"}
+            </span>
+            <input
+              type="file"
+              accept="video/mp4,video/quicktime"
+              className="hidden"
+              disabled={uploadingVideo || post.video_status === "processing"}
+              onChange={handleVideoUpload("feed")}
+            />
+          </label>
+          {/* Feed com fundo borrado (2026-07-23, em teste) — mesmo
+              upload, o vídeo vira o próprio fundo (borrado) atrás da
+              moldura nítida, em vez de cor sólida. */}
+          <label
+            className={`flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content ${
+              post.video_status === "processing" ? "opacity-50" : ""
+            }`}
+          >
+            <span>
+              {uploadingVideo
+                ? "Enviando…"
+                : post.video_status === "processing"
+                  ? "Vídeo em processamento…"
+                  : "Anexar Feed (fundo borrado)"}
+            </span>
+            <input
+              type="file"
+              accept="video/mp4,video/quicktime"
+              className="hidden"
+              disabled={uploadingVideo || post.video_status === "processing"}
+              onChange={handleVideoUpload("feed-blur")}
             />
           </label>
           {videoError && <p className="text-micro text-error">{videoError}</p>}
@@ -368,22 +443,31 @@ export function PostCard({
         <div className="bg-black">
           {/* Header (foto/nome/@) removido: já aparece no chip da imagem — evita redundância */}
 
-          {/* Vídeo pronto (Reels 9:16) vira a mídia principal do post —
-              senão, mesma preview de sempre (single: pág 1 + contra-capa;
-              carrossel: todos os cards, em ordem). */}
+          {/* Vídeo pronto (Reels 9:16 ou feed 4:5) vira a mídia principal do
+              post — senão, mesma preview de sempre (single: pág 1 +
+              contra-capa; carrossel: todos os cards, em ordem). Enquanto
+              upload/processamento (imagem OU vídeo) está rolando, o orbe
+              da marca gira por cima pra deixar claro que tem algo em
+              andamento (sem isso só o botão dizia "processando", a
+              prévia ficava parada/enganosa). */}
           {post.video_status === "ready" && post.video_url ? (
             <video
               src={post.video_url}
               poster={post.video_poster_url ?? undefined}
               controls
-              className="aspect-[9/16] w-full bg-black"
+              className={`w-full bg-black ${post.format === "video_feed" ? "aspect-[4/5]" : "aspect-[9/16]"}`}
             />
           ) : (
-            <CarouselPreview
-              images={previewImages}
-              alt={post.hook}
-              className="aspect-[4/5] w-full"
-            />
+            <div className="relative">
+              <CarouselPreview
+                images={previewImages}
+                videos={previewVideos}
+                posters={previewPosters}
+                alt={post.hook}
+                className="aspect-[4/5] w-full"
+              />
+              {(uploading || uploadingVideo || post.video_status === "processing") && <LoadingOrb />}
+            </div>
           )}
 
           <div className="flex gap-4 px-3 py-2.5">
@@ -455,11 +539,16 @@ export function PostCard({
         </div>
         )}
 
-        {/* ===== Ações — 1 clique, sem manual ===== */}
+        {/* ===== Ações — 1 clique, sem manual =====
+            Só ícone + title (tooltip nativo no hover) — o texto ao lado
+            de cada botão poluía o card; o ícone já é reconhecível e o
+            tooltip cobre quem precisar confirmar. */}
         <CardActions>
           <Button
             variant="primary"
             className="flex-1"
+            title="Aprovar"
+            aria-label="Aprovar"
             disabled={isPending || exit !== null}
             onClick={() =>
               exitAndRun("right", async () => {
@@ -468,32 +557,33 @@ export function PostCard({
               })
             }
           >
-            ✓ Aprovar
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
           </Button>
           <Button
             variant="secondary"
             className="flex-1"
+            title={hasInstagramConnected ? "Agendar" : "Conecte o Instagram em Ajustes para agendar"}
+            aria-label="Agendar"
             disabled={isPending || exit !== null || !hasInstagramConnected}
-            title={
-              hasInstagramConnected
-                ? undefined
-                : "Conecte o Instagram em Ajustes para agendar"
-            }
             onClick={() => setScheduling(true)}
           >
-            🗓 Agendar
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2.5" /><path d="M3 9.5h18M8 3v3M16 3v3" /></svg>
           </Button>
           <Button
             variant="warning"
             className="flex-1"
+            title="Editar"
+            aria-label="Editar"
             disabled={isPending || exit !== null}
             onClick={() => setEditing(true)}
           >
-            ✎ Editar
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>
           </Button>
           <Button
             variant="danger"
             className="flex-grow-0 w-[50px] shrink-0"
+            title="Descartar"
+            aria-label="Descartar"
             disabled={isPending || exit !== null}
             onClick={() =>
               exitAndRun("left", async () => {
@@ -502,7 +592,7 @@ export function PostCard({
               })
             }
           >
-            ✕
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </Button>
         </CardActions>
       </Card>
@@ -591,7 +681,7 @@ export function PostCard({
           Ajuste o texto de cada card. Salvar re-renderiza só aquele card
           com as cores/fonte da marca.
         </p>
-        <CarouselEditor cards={post.carousel_cards ?? []} />
+        <CarouselEditor cards={post.carousel_cards ?? []} templateSelection={templateSelection} />
       </Drawer>
 
       {/* ===== Modal da contra-capa (por post) ===== */}

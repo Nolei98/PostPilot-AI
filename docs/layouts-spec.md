@@ -149,13 +149,100 @@ escolhidas em Ajustes (`brand_kits.single_post_style`), cada uma usando os
 - **Fonte no meio**: frase curta centralizada no meio do quadro, SEM
   wordmark/marca nenhuma — minimalista, deixa a foto respirar.
 
-## Vídeo (Reels 9:16) — adicionado 2026-07-21
+## Vídeo (Reels 9:16) — adicionado 2026-07-21, redesenhado 2026-07-23 e 2026-07-24
 
 Existe um formato de vídeo (upload manual do usuário, sem geração por
-IA): o quadro final é **1080×1920 nativo** — a capa 4:5 (mesmo motor de
-layout acima) é encaixada pela LARGURA no rodapé do quadro, e o topo é
-preenchido com uma extensão desfocada do próprio vídeo/foto (nunca corta
-lateral). O texto usa o MESMO preset de layout escolhido em Ajustes. Isso
-ainda não tem preview/mockup pra IA de design pensar variações — é só
-overlay de marca sobre vídeo real, sem tipografia nova além dos 5 presets
-já documentados acima.
+IA). Versão original (descartada): a capa 4:5 era encaixada pela
+LARGURA no rodapé do quadro 1080×1920, com o topo preenchido por uma
+extensão desfocada — não batia com o protótipo de referência
+(exemplo-modelos-com-video.png, caso 3 "REELS 9:16"). O vídeo cobre o
+quadro 1080×1920 **INTEIRO** (cover-fit, nunca esticado). O texto fica
+numa **ZONA SEGURA** — título alinhado à ESQUERDA (nunca centralizado)
+numa faixa que reserva margem embaixo (220px, onde o Instagram desenha
+legenda/@) e à direita (170px, onde ficam os ícones de curtir/
+comentar/compartilhar) — nunca invade essas áreas.
+
+2026-07-24: o divisor (———WORDMARK®———) saiu do canto topo-esquerdo
+isolado (tratamento próprio, plaquinha separada) e voltou pra JUNTO do
+título — exatamente como nos outros modelos de vídeo (feed 4:5,
+interior do carrossel): divisor logo acima da 1ª linha do título,
+dentro da MESMA zona segura/gradiente, sem precisar de placa/medição
+separada pra marca (antes precisava, porque ela ficava fora da faixa
+protegida). Legibilidade vem de um gradiente (mesmo motor de
+`contrast.ts`) medido na própria zona segura do frame de pôster, não da
+foto/vídeo inteiro. `buildReelsVideoOverlayPng` (image.ts) +
+`composeReelsVideo` (video.ts, um simples cover-fit + overlay).
+
+### Direção do gradiente das placas (regra geral, 2026-07-24)
+
+`buildOverlayGradientSvg` (contrast.ts) ganhou um parâmetro `edge:
+"top" | "bottom"` — TODA placa de legibilidade que protege um rótulo
+isolado (fora da banda de identidade principal) é sólida na BORDA do
+quadro onde está "grudada" e vira transparente indo pro centro:
+- `edge: "bottom"` (default — bandas ancoradas no rodapé: capa,
+  fechamento, vídeo feed, zona segura do Reels): sólido na base do
+  quadro, funde subindo.
+- `edge: "top"` (meta-linha/eyebrow no TOPO dos 4 layouts
+  alternativos): sólido bem no topo do quadro, funde descendo.
+
+Nunca um retângulo de opacidade fixa desconectado — e a placa só
+aparece quando o contraste LOCAL medido pelo chamador não é suficiente
+(alpha=0 não desenha nada, mesma condição de sempre).
+
+## Vídeo feed (4:5) — adicionado 2026-07-23, redesenhado 2x no mesmo dia (migration 036)
+
+Segundo formato de vídeo, `format: "video_feed"` — MESMO upload manual
+do usuário, mas SEM o quadro 9:16 do Reels. Versão final (a 1ª e a 2ª
+tentativa foram descartadas — vídeo cobrindo o quadro inteiro, depois
+uma caixa no topo com cor sólida amostrada — nenhuma batia com o
+protótipo de referência): o vídeo vive numa **MOLDURA própria, tamanho
+YouTube (16:9), cantos arredondados (32px), com margem lateral de 90px**
+(igual ao `editorial-noir-prototype.html`, seção 06 "Modelos com
+vídeo") — nunca cobre o quadro inteiro. Fundo do card é **SÓLIDO,
+padrão PRETO** (`#0A0A0A`, ou `colorBackground` da marca) — não depende
+de luminância/cor do vídeo. Ordem vertical (cada elemento na SUA seção,
+nunca sobrepostos): divisor (wordmark) → moldura do vídeo → título.
+`feedVideoLayoutParts` (image.ts) calcula a geometria (a moldura sobe
+sozinha se o título tiver mais linhas, igual ao resto do sistema:
+grupo cresce de baixo pra cima a partir de uma margem de rodapé fixa).
+`buildFeedVideoOverlay` desenha o fundo sólido com um **buraco
+arredondado transparente** exatamente do tamanho da moldura (via SVG
+`<mask>`) — `composeFeedVideo` (video.ts) encaixa o vídeo (cover-fit)
+atrás desse buraco via `pad` do ffmpeg; os cantos arredondados saem de
+graça (o buraco já corta o vídeo na forma certa, não precisa mascarar
+o vídeo em si). Publica no Instagram pelo mesmo container REELS do
+Graph API. Anexado no post pelo mesmo botão de upload da Fila, numa
+opção separada ("Anexar Feed (4:5)") — um post só guarda 1 vídeo por
+vez; trocar de formato reprocessa por cima do que já tinha.
+
+## Interior com vídeo (carrossel) — adicionado 2026-07-23 (migration 037)
+
+Terceiro caso de vídeo, igual ao protótipo de referência (caso
+"Interior"): vídeo dentro de um CARD do meio do carrossel, não no post
+inteiro. Ordem vertical (cada seção no seu lugar): TÍTULO no topo →
+moldura de vídeo (16:9, cantos arredondados, MESMA técnica de buraco
+transparente do vídeo feed) → CORPO abaixo → rótulo de marca (@handle)
+no rodapé. Fundo sólido preto, igual ao vídeo feed. `cardVideoLayoutParts`
++ `buildCardVideoOverlay` (image.ts) calculam a geometria; reusa
+`composeFeedVideo` (video.ts) sem nenhuma mudança — a função já era
+genérica o bastante (só recebe a moldura como retângulo). Upload por
+card no editor de cards do carrossel (`CarouselEditor.tsx`), um botão
+"Anexar vídeo ao card" por card — `carousel_cards.video_url` guarda o
+resultado (migration 037). Job: `attach-card-video.ts`.
+
+**Corrigido (2026-07-24):** o preview principal do carrossel
+(`CarouselPreview.tsx`, usado na Fila) agora troca pra `<video>` no
+slide certo quando aquele card tem vídeo pronto (`video_status:
+"ready"`) — antes o upload/processamento funcionava certinho no
+backend, mas a galeria principal continuava mostrando só a imagem
+estática (bug real: parecia que o vídeo "não carregava", quando na
+verdade só não aparecia na prévia). `PostCard.tsx` monta `videos`/
+`posters` alinhados por índice com `images`; `types.ts`
+(`PostWithNews.carousel_cards`) e a query da Fila (`fila/page.tsx`)
+precisaram incluir as colunas de vídeo no select.
+
+**Limitação conhecida (2026-07-24):** a publicação (Graph API) ainda só
+manda `image_url` de cada card pro container do carrossel, não
+`video_url` — isso é trabalho futuro. `ReadyPostCard.tsx` (aba
+Prontos) também ainda não foi atualizado com o mesmo fix de preview
+(só usa `image_url`/`closing_image_url`, nem lê `carousel_cards`).

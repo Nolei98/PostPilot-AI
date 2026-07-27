@@ -221,7 +221,24 @@ export interface NewsItem {
   created_at: string;
 }
 
-export type PostFormat = "single" | "carousel" | "video";
+// "video" = Reels 9:16 (upload manual, quadro 4:5 encaixado + extensão
+// desfocada); "video_feed" = mesmo upload manual, mas composto DIRETO no
+// quadro 4:5 (1080x1350, igual ao post único/carrossel) — sem letterbox,
+// o vídeo cobre o quadro inteiro (migration 036).
+export type PostFormat = "single" | "carousel" | "video" | "video_feed";
+
+/** Override manual por card do Template Studio (Sprint B+, TAREFA B9) —
+ * só tem efeito quando a superfície do card usa um modelo (template_
+ * selection); no motor antigo é ignorado. Ver migration 035. */
+export interface CardLayoutOverride {
+  /** false esconde wordmark/divisor/rótulo de marca só NESTE card. */
+  showLabel?: boolean;
+  /** força a cor do texto, ignorando a escolha automática por contraste. */
+  textColor?: "auto" | "light" | "dark";
+  /** card INTERIOR: foto ocupa metade do quadro (topo ou base), texto na
+   * outra metade — em vez do full-bleed padrão. null/ausente = padrão. */
+  imagePosition?: "top" | "bottom" | null;
+}
 
 /** Card de um post do tipo carrossel (ver carousel_cards) */
 export interface CarouselCardRow {
@@ -232,6 +249,16 @@ export interface CarouselCardRow {
   headline: string | null;
   body: string | null;
   image_url: string | null;
+  /** Foto de fundo bruta do card (migration 029) — refetchada em
+   * re-renders (edição de texto, resync) pra não perder a foto. */
+  bg_url: string | null;
+  layout: CardLayoutOverride | null;
+  // Vídeo anexado ao card (migration 037) — mesmo pipeline do vídeo do
+  // post único, tratamento "interior com vídeo" (título + moldura 16:9 + corpo).
+  video_url: string | null;
+  video_poster_url: string | null;
+  video_status: "none" | "processing" | "ready" | "error";
+  video_error: string | null;
   created_at: string;
 }
 
@@ -319,6 +346,16 @@ export interface PostWithNews extends Post {
   // Presente só em posts format='carousel' (embed do PostgREST).
   carousel_cards?: Pick<
     CarouselCardRow,
-    "id" | "idx" | "role" | "headline" | "body" | "image_url"
+    | "id"
+    | "idx"
+    | "role"
+    | "headline"
+    | "body"
+    | "image_url"
+    | "layout"
+    | "video_url"
+    | "video_poster_url"
+    | "video_status"
+    | "video_error"
   >[];
 }

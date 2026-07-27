@@ -4,8 +4,22 @@
 > técnico do plano estratégico e do handoff v2. Ordem importa: as
 > tarefas têm dependência.
 
-**Branch de trabalho:** `feat/multi-tenant-brand-kit` (não mexer na `main`).
-**Última atualização:** 2026-07-21 — Sprint C (Graph API) completo, ver §4.3.
+**Branch de trabalho:** `feat/multi-tenant-brand-kit` — mergeada na `main` (PRs #4 e #5); produção Vercel roda a branch direto (deploy manual), `main` só formaliza.
+**Última atualização:** 2026-07-23 — Template Studio completo (B9-B15, ver §4.2b); publicação Instagram corrigida (polling de status antes de publicar, ver §4.3.1); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+
+### Bloqueio ativo: Pollinations.ai exige pagamento pra requests multi-mensagem
+Descoberto 2026-07-22 investigando por que a fila não recebia posts novos há dias
+(246 acumulados, sem erro visível). `generate-carousel` falha em "generate-structure"
+(`src/lib/ai/carousel.ts`) com `Pollinations respondeu 402`. Reproduzido fora do
+Inngest com `curl` direto: requests de **1 mensagem** continuam grátis (200, tier
+anônimo); requests de **2+ mensagens** (qualquer role, é o que o app sempre manda —
+system+user) retornam 401/402 mesmo com uma API key nova + pollen grátis de quest
+(0,25) na carteira. Precisa de pollen **pago** (mínimo $5.48 = 5 pollen em
+`enter.pollinations.ai`, dá pra ~25 mil requests no preço unitário atual).
+Criada uma API key (`postpilot`) na conta do usuário, sem saldo, não configurada
+em lugar nenhum — só existe, sem efeito, até ele decidir. `GEMINI_API_KEY` existe
+em produção mas está **vazia** (nome da env var criado, sem valor) — trocar de
+provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
@@ -312,23 +326,24 @@ Backend pronto e testado; falta a camada de UI e o gatilho.
 - **SPRINT B COMPLETO** ✅ — gera, mostra, edita, baixa, aprova; gatilho por cliente.
 - Runtime confirmado: RPC `find_duplicate_caption` casta `text→vector` no Supabase real.
 
-### 4.2b SPRINT B+ — Acabamento @0verlens + Template Studio  📄 [HANDOFF-overlens-template.md](./HANDOFF-overlens-template.md)
+### 4.2b SPRINT B+ — Acabamento @0verlens + Template Studio — ✅ COMPLETO (2026-07-22/23)  📄 [HANDOFF-overlens-template.md](./HANDOFF-overlens-template.md)
 Extensão do Carousel Engine: capas/cards com acabamento sofisticado (estilo @0verlens),
 **legibilidade adaptativa** ao fundo e **Template Studio** (galeria de modelos + editor
-visual). Brief completo + prompt mestre no arquivo linkado acima. **Ainda não iniciado.**
-- [x] **B6** — Estender Brand Kit (migration 027): `keywords`, `wordmark`, `font_heading_url`, `brand_mark`, `template_defaults` (reusa `ig_handle` como handle) + tipos `BrandMark`/`TemplateDefaults` + seção "Identidade de rótulo" em Ajustes (`BrandLabelForm`) com **preview ao vivo** + `saveBrandLabel` + teste de schema (pglite). *Fonte Geist (`font_heading_url` upload) fica no B8 quando embutir no Satori.* Decisões: **Geist** + editor **server-side**.
+visual). Brief completo + prompt mestre no arquivo linkado acima.
+- [x] **B6** — Estender Brand Kit (migration 027): `keywords`, `wordmark`, `font_heading_url`, `brand_mark`, `template_defaults` (reusa `ig_handle` como handle) + tipos `BrandMark`/`TemplateDefaults` + seção "Identidade de rótulo" em Ajustes (`BrandLabelForm`) com **preview ao vivo** + `saveBrandLabel` + teste de schema (pglite). Decisões: **Geist** + editor **server-side**.
 - [x] **B7** — Motor de legibilidade adaptativa (`src/lib/legibility.ts`): `contrastRatio` (WCAG), `measureBands` (sharp: L+desvio por faixa), `decideLegibility` (puro: cor/posição/scrim/auto-hide/override), `resolveLegibility`. 13 testes.
-- [x] **B8** — Render @0verlens via **SVG+resvg** (decisão: NÃO introduzi Satori às cegas — reuso o pipeline que já renderiza): `buildCoverSvg` (divisor `———— WORDMARK ————` + headline auto-fit + "DESLIZE PARA VER") + `brandLabelText`/label nos cards por `brand_mark`. **Verificado visualmente** (capa sai bonita). Fonte: usa a família atual (Geist entra quando o .ttf for fornecido).
-- [ ] **B9** — Overrides manuais na fila por card (`layout` → `carousel_cards`), re-render só do card. *(UI — pro teu retorno; precisa migration de `carousel_cards.layout`.)*
+- [x] **B8** — Render @0verlens via **SVG+resvg**: `buildCoverSvg` (divisor `———— WORDMARK ————` + headline auto-fit + "DESLIZE PARA VER") + `brandLabelText`/label nos cards por `brand_mark`. **Verificado visualmente**.
+- [x] **B9** (2026-07-23) — Overrides manuais por card na fila: `carousel_cards.layout` (migration 035, aplicada) — esconder rótulo de marca / forçar cor do texto só naquele card, controles em `CarouselEditor.tsx` (só aparecem pra superfícies com modelo do Template Studio escolhido). Corrigiu de quebra um bug real: `updateCarouselCard` sempre usava o motor antigo (revertia silenciosamente a escolha de modelo ao editar texto) — agora respeita `template_selection` igual ao gerador. Achado no teste ao vivo: upload usava client de sessão (RLS bloqueava) — trocado pro admin client. Testado ao vivo em produção.
 - [x] **B10** — Integrado no `generate-carousel` (card 0 = capa via `isCover`); passa wordmark/handle/keywords/brand_mark; best-effort se 027 ausente.
 - [x] **B11** — `templates` (presets sistema + custom por cliente) + `brand_kits.template_selection` (migration 028) + tipos `Template`/`Surface`/`TemplateSpec` + RLS (sistema público, custom por dono). 2 testes RLS.
 - [x] **B12** — `renderFromSpec` (`src/lib/template-render.ts`): desenha a spec (anchor/offset/style/bind → SVG), resolve cor auto/accent + legibilidade, wrap, z-order, visible. `template-presets.ts` = cover+card como spec. **Verificado visualmente**: capa por spec == capa hardcode do B8. Testes.
-- [ ] **B13** — Seed ≥4 presets/superfície no banco (os 2 base já existem como spec em `template-presets.ts`; falta variar marca×cor×fundo e inserir em `templates`). *(design visual — pro teu retorno.)*
-- [ ] **B14** — Editor visual interativo (drag+resize, snapping, camadas, undo/redo, live preview server-side). *(UI grande, precisa iteração visual — pro teu retorno.)*
-- [ ] **B15** — Pipeline usa `template_selection` por superfície. *(depende de B12/B13.)*
-- **Decisões travadas:** fonte = **Geist** (falta o arquivo .ttf p/ embutir no resvg); editor = **preview server-side**.
-- **Migrations a aplicar quando voltar:** `027_brand_label_identity.sql` (✅ já aplicou), `028_templates.sql` (pendente — aditiva, código não depende dela em runtime ainda).
-- **Decisão de engenharia (autônoma):** o brief pedia Satori; usei o render **SVG+resvg** que já existe e funciona (evita dep nova + risco). O contrato `spec` (B12) pode ser desenhado sobre esse mesmo render. Reverter pra Satori é possível se você preferir.
+- [x] **B13** (2026-07-22) — 16 presets do sistema semeados (4 por superfície: cover_image/video_cover/carousel_page/carousel_last), variando tratamento de marca (wordmark/@handle+kw/só @handle/sem marca) e posição. `scripts/seed-templates.ts` (idempotente, gera thumbnail real e sobe pro Storage). "Ícone" (logo raster) fica de fora — render ainda não compõe imagens de logo.
+- [x] **B14 v1** (2026-07-23) — Editor visual em `/settings/templates/[id]`: "Duplicar e editar" (nunca edita preset do sistema in-place) + painel de campos por elemento (âncora, posição x/y, tamanho, cor, peso, alinhamento, visibilidade) + prévia renderizada no servidor (debounce 500ms, mesmo `renderFromSpec` do post real). **Sem drag-and-drop/canvas interativo ainda** — escopo combinado: versão simples primeiro, evolui depois com feedback de layout. Testado ao vivo: duplicar isola do preset do sistema, salvar persiste, prévia reflete a marca real do cliente.
+- [x] **B15** (2026-07-22) — `generate-carousel.ts` usa a spec escolhida (`template_selection`) por superfície quando existe; sem escolha, motor antigo (zero mudança pra quem não optou). `renderTemplateCardPng` ganhou composição de foto de fundo + véu de legibilidade (mesmo motor de `contrast.ts`) — sem isso o Template Studio trocaria fotos por cor sólida. UI de seleção em Ajustes → Modelos.
+- **Decisões travadas:** fonte = **Geist** (segue pendente o .ttf pra embutir — os presets atuais usam a fonte da marca via `post_font_family`, não Geist especificamente); editor = **preview server-side** (confirmado, sem divergência editor×render).
+- **Migrations aplicadas:** 027, 028, 035 (`carousel_cards.layout`, B9).
+- **Decisão de engenharia (autônoma):** o brief pedia Satori; usei o render **SVG+resvg** que já existe e funciona (evita dep nova + risco). Mantido em B12-B15.
+- **Falta (não crítico):** drag-and-drop/canvas no editor (B14 v2), "ícone"/logo raster como brand mark, aplicar `template_selection` no post único e vídeo (hoje só carrossel usa B15).
 - Depende de: Sprint D (Remotion) para a montagem de vídeo do `video_cover` (aqui só o branding/legenda).
 
 ### 4.3 SPRINT C — Graph API (publicação auto + fecha o loop de métricas) — ✅ COMPLETO (2026-07-21)
@@ -446,6 +461,19 @@ Ponto de restauração local criado: git tag
 `restore-2026-07-21-inngest-sync-issue` (HEAD limpo, nenhuma mudança de
 código nesta investigação).
 
+#### 4.3.2 Resolvido (2026-07-22): sync manual + bug real de publicação
+Sync feito via `curl -X PUT .../api/inngest` (registra o app sem precisar do
+dashboard). Cron voltou a disparar — mas revelou um bug real, não só falta de
+sync: `publishMedia falhou: Media ID is not available`. Causa: a Graph API cria
+o container e devolve o id na hora, mas processa a mídia (download/transcode)
+de forma assíncrona — publicar antes de `status_code=FINISHED` falha. Corrigido
+em `src/lib/instagram-graph.ts` (`getContainerStatus`) +
+`publish-scheduled-posts.ts` (`waitForContainerReady`, polling antes de
+publicar — single/vídeo/carrossel, incluindo cada item do carrossel).
+**Confirmado em produção**: post real publicado, `ig_media_id` gravado. A cada
+deploy novo (hash do endpoint muda) é preciso re-sincronizar com o mesmo `curl
+-X PUT`.
+
 ### 4.4 SPRINT D — Video Engine (clipes reais, não slideshow)
 > ⚠️ **Update 2026-07-21 (ver seção 0.4):** um MVP mais simples já foi
 > construído fora de ordem (pedido pontual do usuário) — upload manual +
@@ -453,9 +481,9 @@ código nesta investigação).
 > 9:16. NÃO tem b-roll automático, NÃO tem legendas queimadas, NÃO usa
 > Remotion, NÃO publica (fica na fila pra aprovação manual, igual
 > foto/carrossel). O que falta abaixo continua de pé.
-- [ ] Roteiro (Sonnet): gancho 0–3s + beats + CTA; 9:16; duração por rede.
-- [ ] Montagem com **b-roll real** (Pexels/Pixabay Video ou upload) + legendas
-      queimadas + logo/chip via **Remotion** (⚠️ checar licença comercial do Remotion).
+- [x] **D1** (2026-07-23) — Roteiro (`src/lib/ai/video-script.ts`, `generateVideoScript`): mesmo padrão multi-provider de carousel.ts (claude/gemini/pollinations, mock em $0). Contrato: hook (0-3s) + 2-4 beats com duração + CTA, validado contra a janela de duração da rede (Reels 7-15s, TikTok 15-34s). 14 testes.
+- [x] **D2** (2026-07-23) — Montagem (`src/lib/video-assembly.ts` + `src/lib/stock-videos.ts`): **decisão — sem Remotion** (usuário pediu só ferramentas grátis; licença comercial do Remotion era a pendência travada aqui). B-roll real via **Pexels Video** (mesma key de stock-photos.ts, testado contra a API real) + montagem via **ffmpeg** (já no projeto): `buildScriptTimeline` deriva hook/beats/cta em janelas de tempo, `assembleScriptVideo` normaliza+concatena 1 clipe por segmento e queima a legenda de cada um só na sua janela (`overlay` + `enable=between(t,start,end)`; legenda = PNG via SVG+resvg, não ffmpeg drawtext — evita depender de .ttf). Testado ponta a ponta com ffmpeg real (clipes sintéticos): mp4 válido, transições corretas, acentos PT-BR ok, conferido visualmente. Logo/chip de marca fica pra depois (escopo desta v1 é b-roll+legenda). 9 testes.
+- [ ] **Falta pra fechar D1+D2**: decidir onde persistir o roteiro/vídeo montado e quando disparar (job Inngest + campo novo ou reuso de `posts.video_url`?) — D1/D2 hoje são módulos isolados testados, ainda não ligados a nenhum pipeline/fila.
 - [ ] Publicação Reels (Graph API) + TikTok (**Content Posting API** — pedir acesso cedo).
 - **Aceite:** Reel 9:16 com b-roll real + legendas + marca, aprovável na mesma fila.
 

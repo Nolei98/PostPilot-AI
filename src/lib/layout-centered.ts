@@ -12,6 +12,7 @@
 // Mesmo contrato {svg, blurBandTop} dos demais builders de capa —
 // drop-in compatível no dispatcher de image.ts (buildPageOneCoverSvg).
 // ============================================================
+import { buildOverlayGradientSvg } from "@/lib/contrast";
 import { CARD_W, CARD_H, type CardBrand } from "@/lib/render-shared";
 
 function escapeXml(s: string): string {
@@ -119,7 +120,7 @@ export function buildCenteredPhraseSvg(
   const overlay = opts.overlay;
   const overlayRect =
     transparent && overlay && overlay.alpha > 0
-      ? `<rect x="0" y="${blurBandTop}" width="${CARD_W}" height="${CARD_H - blurBandTop}" fill="${overlay.theme === "dark" ? "#000" : "#fff"}" fill-opacity="${overlay.alpha}"/>`
+      ? buildOverlayGradientSvg("overlay-band", blurBandTop, CARD_H - blurBandTop, CARD_W, overlay.theme, overlay.alpha)
       : "";
   const bgRect = transparent ? "" : `<rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>`;
 

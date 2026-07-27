@@ -89,6 +89,17 @@ h1, h2, h3, h4, h5, h6 {
   animation: ppPulse 4s ease-in-out infinite;
 }
 
+/* Girando — indicador de carregamento (upload/processamento de
+   imagem/vídeo em andamento) usando o mesmo orbe da marca. */
+@keyframes ppSpin {
+  to { transform: rotate(360deg); }
+}
+.orb-logo-spin {
+  background: radial-gradient(circle at 32% 28%, #FF7ACD 0%, #E0219C 34%, #7B2FF7 78%, #4a12a8 100%);
+  box-shadow: 0 0 24px rgba(224,33,156,.55), inset 0 1px 4px rgba(255,255,255,.35);
+  animation: ppSpin 1s linear infinite;
+}
+
 /* ---------- MICRO-INTERAÇÕES (keyframes) ------------------- */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(12px); }

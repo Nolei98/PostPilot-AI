@@ -10,7 +10,14 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inngest } from "@/inngest/client";
-import type { BrandTemplate, IgProfile, VisualIdentity } from "@/lib/types";
+import type {
+  BrandTemplate,
+  CardLayoutOverride,
+  IgProfile,
+  Surface,
+  TemplateSpec,
+  VisualIdentity,
+} from "@/lib/types";
 import type { CardBrand } from "@/lib/carousel-render";
 import { resolvePostFontFamily } from "@/lib/font-data";
 
@@ -499,8 +506,9 @@ export async function uploadPostImage(
 /**
  * Anexa um vídeo a um post pendente (Fase 4, kit v2 §3) — sobe o
  * arquivo bruto pro Storage e dispara o processamento em BACKGROUND
- * (Inngest): o ffmpeg compõe o quadro Reels 9:16 por cima, o que pode
- * levar dezenas de segundos — não dá pra fazer síncrono como a foto.
+ * (Inngest): o ffmpeg compõe o quadro por cima (Reels 9:16 ou feed 4:5,
+ * migration 036 — `shape` no FormData), o que pode levar dezenas de
+ * segundos — não dá pra fazer síncrono como a foto.
  * `video_status` vira 'processing' na hora; a fila mostra isso e
  * atualiza quando o job terminar (revalidatePath cobre o próximo load).
  */
@@ -515,6 +523,11 @@ export async function uploadPostVideo(
 
   const postId = String(formData.get("post_id") ?? "");
   const file = formData.get("video") as File | null;
+  // "reels" (9:16, default), "feed" (4:5, fundo sólido — migration 036)
+  // ou "feed-blur" (4:5, fundo = o próprio vídeo borrado, 2026-07-23) —
+  // decide o quadro de composição em attach-video.ts.
+  const shapeRaw = formData.get("shape");
+  const shape = shapeRaw === "feed" ? "feed" : shapeRaw === "feed-blur" ? "feed-blur" : "reels";
   if (!postId || !file || file.size === 0) {
     return { ok: false, error: "Selecione um vídeo." };
   }
@@ -555,8 +568,73 @@ export async function uploadPostVideo(
   }
 
   inngest
-    .send({ name: "post/attach-video.requested", data: { postId, userId: user.id } })
+    .send({ name: "post/attach-video.requested", data: { postId, userId: user.id, shape } })
     .catch((err) => console.warn("[uploadPostVideo] não foi possível enfileirar o processamento:", err));
+
+  revalidatePath("/");
+  revalidatePath("/ready");
+  return { ok: true };
+}
+
+/**
+ * Anexa um vídeo a um CARD do carrossel (migration 037) — mesmo padrão
+ * de uploadPostVideo: sobe o arquivo bruto pro Storage e dispara o
+ * processamento em BACKGROUND (Inngest); o ffmpeg compõe o card
+ * "interior com vídeo" (título + moldura 16:9 + corpo). RLS de
+ * carousel_cards já garante que o card pertence ao usuário (join com
+ * posts.user_id) — não precisa de checagem extra aqui.
+ */
+export async function uploadCarouselCardVideo(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+
+  const cardId = String(formData.get("card_id") ?? "");
+  const file = formData.get("video") as File | null;
+  if (!cardId || !file || file.size === 0) {
+    return { ok: false, error: "Selecione um vídeo." };
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    return { ok: false, error: "Vídeo muito grande (máx 50MB)." };
+  }
+
+  const { data: card } = await supabase
+    .from("carousel_cards")
+    .select("id, post_id, idx")
+    .eq("id", cardId)
+    .maybeSingle();
+  if (!card) return { ok: false, error: "Card não encontrado." };
+
+  try {
+    const buf = Buffer.from(await file.arrayBuffer());
+    const admin = createAdminClient();
+    const sourcePath = `${card.post_id}-card-${card.idx}-video-source.mp4`;
+    const { error: upErr } = await admin.storage.from("post-images").upload(sourcePath, buf, {
+      contentType: file.type || "video/mp4",
+      upsert: true,
+    });
+    if (upErr) throw new Error(upErr.message);
+
+    const { error } = await supabase
+      .from("carousel_cards")
+      .update({ video_status: "processing", video_error: null })
+      .eq("id", cardId);
+    if (error) return { ok: false, error: error.message };
+  } catch (err) {
+    console.error("[uploadCarouselCardVideo] falha ao subir vídeo:", err);
+    return {
+      ok: false,
+      error: "Não foi possível processar esse vídeo. Tente outro arquivo (.mp4/.mov).",
+    };
+  }
+
+  inngest
+    .send({ name: "card/attach-video.requested", data: { cardId, userId: user.id } })
+    .catch((err) => console.warn("[uploadCarouselCardVideo] não foi possível enfileirar o processamento:", err));
 
   revalidatePath("/");
   revalidatePath("/ready");
@@ -848,9 +926,13 @@ export async function saveVisualIdentity(formData: FormData) {
     .eq("client_id", clientId)
     .maybeSingle();
 
+  // colorAccent NÃO vem do formData deste form de propósito — é editado
+  // só em "Cor da marca" (saveBrandTemplate/BrandColorPicker), pra não ter
+  // 2 controles da mesma coluna se sobrescrevendo. Aqui só lê o valor
+  // atual (oldConfig) pra manter o resync/preview corretos.
   const newIdentity: VisualIdentity = {
     colorBackground: hex("color_background", "#0B0B12"),
-    colorAccent: hex("color_accent", "#7C5CFF"),
+    colorAccent: oldConfig?.color_accent ?? "#7C5CFF",
     colorText: hex("color_text", "#FFFFFF"),
     colorKeywordBox: hex("color_keyword_box", "#7C5CFF"),
     keyword: text("tpl_keyword", "IA"),
@@ -863,7 +945,6 @@ export async function saveVisualIdentity(formData: FormData) {
     .from("brand_kits")
     .update({
       color_background: newIdentity.colorBackground,
-      color_accent: newIdentity.colorAccent,
       color_text: newIdentity.colorText,
       color_keyword_box: newIdentity.colorKeywordBox,
       tpl_keyword: newIdentity.keyword,
@@ -972,7 +1053,7 @@ export async function saveBrandTemplate(formData: FormData) {
       show_brand_logo: showBrandLogo,
       ...(brandName && { brand_name: brandName }),
       ...(logoUrl && { logo_url: logoUrl }),
-      ...(brandColor && { color_accent: brandColor, color_keyword_box: brandColor }),
+      ...(brandColor && { color_accent: brandColor }),
     })
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
@@ -1006,7 +1087,7 @@ export async function saveBrandTemplate(formData: FormData) {
         bottomText: oldConfig.tpl_bottom_text,
         ctaEnabled: oldConfig.tpl_cta_enabled ?? false,
       };
-      const newIdentity: VisualIdentity = { ...oldIdentity, colorAccent: brandColor, colorKeywordBox: brandColor };
+      const newIdentity: VisualIdentity = { ...oldIdentity, colorAccent: brandColor };
       await resyncIdentityOnUnmodifiedPendingPosts(user.id, clientId, oldIdentity, newIdentity, profile, false, brand);
     }
   }
@@ -1201,7 +1282,13 @@ export async function revertApproval(
  */
 export async function updateCarouselCard(
   cardId: string,
-  fields: { headline: string; body: string }
+  fields: {
+    headline: string;
+    body: string;
+    showLabel?: boolean;
+    textColor?: "auto" | "light" | "dark";
+    imagePosition?: "top" | "bottom" | null;
+  }
 ) {
   const supabase = createClient();
   const {
@@ -1212,7 +1299,7 @@ export async function updateCarouselCard(
   // RLS garante posse (via post). Pega o card + o cliente do post.
   const { data: card, error: cardErr } = await supabase
     .from("carousel_cards")
-    .select("id, post_id, idx, role, bg_url")
+    .select("id, post_id, idx, role, bg_url, layout")
     .eq("id", cardId)
     .single();
   if (cardErr || !card) throw new Error("Card não encontrado");
@@ -1224,6 +1311,8 @@ export async function updateCarouselCard(
   const lastIdx = (totalCards ?? 1) - 1;
   const pageKind =
     card.idx === 0 ? "cover" : card.idx === lastIdx ? "closing" : "interior";
+  const surface: Surface =
+    pageKind === "cover" ? "cover_image" : pageKind === "closing" ? "carousel_last" : "carousel_page";
 
   const { data: post } = await supabase
     .from("posts")
@@ -1249,16 +1338,143 @@ export async function updateCarouselCard(
   }
 
   const { resolvePostFontFamily } = await import("@/lib/font-data");
-  const { renderAndUploadCard } = await import("@/lib/carousel-render");
-  const imageUrl = await renderAndUploadCard(
-    card.post_id,
-    {
-      idx: card.idx,
-      role: card.role as "hook" | "value" | "cta",
-      headline: fields.headline,
-      body: fields.body,
-    },
-    {
+  const cardBrand: CardBrand = {
+    colorBackground: bk?.color_background ?? "#0B0B12",
+    colorAccent: bk?.color_accent ?? "#7C5CFF",
+    colorText: bk?.color_text ?? "#FFFFFF",
+    fontFamily: resolvePostFontFamily(bk?.post_font_family),
+    brandName: bk?.brand_name ?? null,
+    wordmark: bk?.wordmark ?? null,
+    handle: bk?.ig_handle ?? null,
+    keywords: bk?.keywords ?? null,
+    brandMark: bk?.brand_mark ?? "auto",
+    layoutPreset: bk?.layout_preset ?? "editorial-noir",
+  };
+
+  // Override do card (B9) — merge com o que já existia, só os campos enviados.
+  const previousLayout = (card.layout as CardLayoutOverride | null) ?? {};
+  const layout: CardLayoutOverride = {
+    ...previousLayout,
+    ...(fields.showLabel !== undefined ? { showLabel: fields.showLabel } : {}),
+    ...(fields.textColor !== undefined ? { textColor: fields.textColor } : {}),
+    ...(fields.imagePosition !== undefined ? { imagePosition: fields.imagePosition } : {}),
+  };
+
+  // Template Studio (B15): se o cliente escolheu um modelo pra essa
+  // superfície, edita/re-renderiza por ele (senão o texto voltaria a sair
+  // no motor antigo, revertendo silenciosamente a escolha de modelo).
+  const { resolveTemplateSpecs } = await import("@/lib/template-selection");
+  const templateSelection =
+    (bk?.template_selection as Partial<Record<Surface, string>> | null) ?? {};
+  const specs = await resolveTemplateSpecs(templateSelection, [surface]);
+  const chosenSpec = specs[surface];
+
+  let imageUrl: string;
+  if (chosenSpec) {
+    const { renderTemplateCardPng } = await import("@/lib/template-render");
+    const png = await renderTemplateCardPng(
+      chosenSpec,
+      cardBrand,
+      { headline: fields.headline, body: fields.body },
+      bgBuf,
+      { showLabel: layout.showLabel, textColor: layout.textColor }
+    );
+    const path = `${card.post_id}-card-${card.idx}.png`;
+    const admin = createAdminClient();
+    const { error: uploadError } = await admin.storage
+      .from("post-images")
+      .upload(path, png, { contentType: "image/png", upsert: true });
+    if (uploadError) throw new Error(`upload do card falhou: ${uploadError.message}`);
+    const { data: pub } = admin.storage.from("post-images").getPublicUrl(path);
+    imageUrl = `${pub.publicUrl}?v=${Date.now()}`;
+  } else {
+    const { renderAndUploadCard } = await import("@/lib/carousel-render");
+    imageUrl = await renderAndUploadCard(
+      card.post_id,
+      {
+        idx: card.idx,
+        role: card.role as "hook" | "value" | "cta",
+        headline: fields.headline,
+        body: fields.body,
+      },
+      cardBrand,
+      pageKind,
+      bgBuf,
+      {
+        handle: bk?.ig_handle ?? "seuperfil.ia",
+        displayName: bk?.ig_display_name ?? "Seu Perfil",
+        avatarUrl: bk?.ig_avatar_url ?? null,
+        verified: bk?.ig_verified ?? false,
+        showProfileChip: bk?.show_profile_chip ?? true,
+      },
+      totalCards ?? 1,
+      layout.imagePosition ?? null
+    );
+  }
+
+  const { error } = await supabase
+    .from("carousel_cards")
+    .update({ headline: fields.headline, body: fields.body, image_url: imageUrl, layout })
+    .eq("id", cardId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+  revalidatePath("/ready");
+}
+
+/**
+ * Troca a foto de fundo de um card do carrossel (capa, interior ou
+ * fechamento) — mesmo padrão de uploadPostImage, mas por card. Sobe a
+ * foto bruta pro Storage (vira o novo `bg_url`, reusado em edições de
+ * texto futuras) e re-renderiza esse card na hora (sharp é rápido,
+ * não precisa de job em background como vídeo/ffmpeg).
+ */
+export async function uploadCarouselCardImage(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+
+  const cardId = String(formData.get("card_id") ?? "");
+  const file = formData.get("image") as File | null;
+  if (!cardId || !file || file.size === 0) {
+    return { ok: false, error: "Selecione uma imagem." };
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    return { ok: false, error: "Imagem muito grande (máx 20MB)." };
+  }
+
+  const { data: card } = await supabase
+    .from("carousel_cards")
+    .select("id, post_id, idx, role, headline, body, layout")
+    .eq("id", cardId)
+    .maybeSingle();
+  if (!card) return { ok: false, error: "Card não encontrado." };
+
+  try {
+    const { count: totalCards } = await supabase
+      .from("carousel_cards")
+      .select("id", { count: "exact", head: true })
+      .eq("post_id", card.post_id);
+    const lastIdx = (totalCards ?? 1) - 1;
+    const pageKind: "cover" | "interior" | "closing" =
+      card.idx === 0 ? "cover" : card.idx === lastIdx ? "closing" : "interior";
+
+    const { data: post } = await supabase
+      .from("posts")
+      .select("client_id")
+      .eq("id", card.post_id)
+      .single();
+    const { data: bk } = await supabase
+      .from("brand_kits")
+      .select("*")
+      .eq("client_id", post?.client_id ?? "")
+      .maybeSingle();
+
+    const { resolvePostFontFamily } = await import("@/lib/font-data");
+    const cardBrand: CardBrand = {
       colorBackground: bk?.color_background ?? "#0B0B12",
       colorAccent: bk?.color_accent ?? "#7C5CFF",
       colorText: bk?.color_text ?? "#FFFFFF",
@@ -1269,26 +1485,60 @@ export async function updateCarouselCard(
       keywords: bk?.keywords ?? null,
       brandMark: bk?.brand_mark ?? "auto",
       layoutPreset: bk?.layout_preset ?? "editorial-noir",
-    },
-    pageKind,
-    bgBuf,
-    {
+    };
+    const profile: IgProfile = {
       handle: bk?.ig_handle ?? "seuperfil.ia",
       displayName: bk?.ig_display_name ?? "Seu Perfil",
       avatarUrl: bk?.ig_avatar_url ?? null,
       verified: bk?.ig_verified ?? false,
       showProfileChip: bk?.show_profile_chip ?? true,
-    },
-    totalCards ?? 1
-  );
+    };
 
-  const { error } = await supabase
-    .from("carousel_cards")
-    .update({ headline: fields.headline, body: fields.body, image_url: imageUrl })
-    .eq("id", cardId);
-  if (error) throw new Error(error.message);
+    const buf = Buffer.from(await file.arrayBuffer());
+    const admin = createAdminClient();
+    const bgPath = `${card.post_id}-card-${card.idx}-bg-source.jpg`;
+    const { error: bgUpErr } = await admin.storage.from("post-images").upload(bgPath, buf, {
+      contentType: file.type || "image/jpeg",
+      upsert: true,
+    });
+    if (bgUpErr) throw new Error(bgUpErr.message);
+    const { data: bgPub } = admin.storage.from("post-images").getPublicUrl(bgPath);
+    const bgUrl = `${bgPub.publicUrl}?v=${Date.now()}`;
+
+    const layout = (card.layout as CardLayoutOverride | null) ?? {};
+    const { renderAndUploadCard } = await import("@/lib/carousel-render");
+    const imageUrl = await renderAndUploadCard(
+      card.post_id,
+      {
+        idx: card.idx,
+        role: card.role as "hook" | "value" | "cta",
+        headline: card.headline ?? "",
+        body: card.body ?? "",
+      },
+      cardBrand,
+      pageKind,
+      buf,
+      profile,
+      totalCards ?? 1,
+      layout.imagePosition ?? null
+    );
+
+    const { error } = await supabase
+      .from("carousel_cards")
+      .update({ image_url: imageUrl, bg_url: bgUrl })
+      .eq("id", cardId);
+    if (error) return { ok: false, error: error.message };
+  } catch (err) {
+    console.error("[uploadCarouselCardImage] falha ao processar imagem:", err);
+    return {
+      ok: false,
+      error: "Não foi possível processar essa imagem. Tente um JPG/PNG.",
+    };
+  }
+
   revalidatePath("/");
   revalidatePath("/ready");
+  return { ok: true };
 }
 
 /**
@@ -1463,6 +1713,101 @@ export async function saveTemplateSelection(formData: FormData) {
   if (error) throw new Error(error.message);
 
   revalidatePath("/settings");
+}
+
+/**
+ * Duplica um modelo (preset do sistema OU já seu) pra uma cópia própria
+ * editável do cliente ativo (Sprint B+, TAREFA B14) — nunca edita o preset
+ * do sistema em si (é compartilhado por todos). Se a origem já for uma
+ * cópia própria deste cliente, ainda assim duplica (edição sempre em
+ * cópia nova, mais previsível que mutar in-place).
+ */
+export async function duplicateTemplateForEditing(templateId: string): Promise<string> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
+
+  const { data: source, error: fetchError } = await supabase
+    .from("templates")
+    .select("surface, name, spec")
+    .eq("id", templateId)
+    .single();
+  if (fetchError || !source) throw new Error("Modelo não encontrado");
+
+  const { data: created, error } = await supabase
+    .from("templates")
+    .insert({
+      client_id: clientId,
+      surface: source.surface,
+      name: `${source.name} (meu)`,
+      spec: source.spec,
+      is_system: false,
+    })
+    .select("id")
+    .single();
+  if (error || !created) throw new Error(error?.message ?? "Erro ao duplicar modelo");
+
+  return created.id as string;
+}
+
+/** Salva a spec (e opcionalmente o nome) editada de um modelo PRÓPRIO do
+ * cliente ativo (B14). RLS garante que só edita templates do próprio
+ * cliente; o filtro is_system=false é defesa extra contra editar preset. */
+export async function saveTemplateSpec(templateId: string, spec: TemplateSpec, name?: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { error } = await supabase
+    .from("templates")
+    .update(name ? { spec, name } : { spec })
+    .eq("id", templateId)
+    .eq("is_system", false);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/settings");
+  revalidatePath(`/settings/templates/${templateId}`);
+}
+
+/**
+ * Renderiza uma prévia (PNG em data URL) de uma spec em edição — mesmo
+ * `renderFromSpec` usado no post de verdade (sem foto, fundo sólido da
+ * marca), pra o editor nunca divergir do resultado real. Conteúdo de
+ * exemplo fixo (a marca real do cliente ativo entra nas cores/fonte).
+ */
+export async function previewTemplateSpec(spec: TemplateSpec): Promise<string> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  const { data: bk } = await supabase
+    .from("brand_kits")
+    .select("*")
+    .eq("client_id", clientId ?? "")
+    .maybeSingle();
+
+  const brand = buildCardBrand(bk as Record<string, unknown> | null);
+  const { renderFromSpec } = await import("@/lib/template-render");
+  const { rasterizeSvg } = await import("@/lib/svg-render");
+  const svg = renderFromSpec(spec, brand, {
+    headline: "Um título forte que prende a atenção",
+    body: "Um resumo curto que dá contexto pro leitor em uma frase.",
+    cta: "DESLIZE PARA VER →",
+  });
+  const png = rasterizeSvg(svg);
+  return `data:image/png;base64,${png.toString("base64")}`;
 }
 
 /**

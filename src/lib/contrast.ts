@@ -74,6 +74,48 @@ export function overlayAlphaFor(
 }
 
 /**
+ * Overlay de legibilidade como GRADIENTE — nunca mais um retângulo de
+ * opacidade fixa ("caixa" estática desconectada da foto). SÓLIDO na
+ * BORDA do quadro onde a banda está "presa" (`edge`) — é ali que o
+ * texto precisa de proteção garantida — e vai ficando TRANSPARENTE à
+ * medida que se afasta dessa borda, numa faixa CURTA de transição (no
+ * máx. 70px ou 20% da banda, o que for menor), até sumir de vez no
+ * resto da foto/vídeo — nunca um "quadrado" estático desconectado.
+ * `edge: "bottom"` (default, bandas ancoradas no rodapé — capa,
+ * fechamento, identidade) = sólido na base, funde pro topo da banda.
+ * `edge: "top"` (bandas ancoradas no TOPO — marca/eyebrow no topo dos
+ * layouts alternativos e do Reels) = sólido no topo, funde pra base.
+ * `bandY`/`bandH` é a região a cobrir; `alpha` é o pico calibrado por
+ * WCAG (overlayAlphaFor). `gradientId` precisa ser único dentro do
+ * mesmo <svg> (evita colisão de <defs> se dois overlays coexistirem).
+ */
+export function buildOverlayGradientSvg(
+  gradientId: string,
+  bandY: number,
+  bandH: number,
+  width: number,
+  theme: Theme,
+  alpha: number,
+  edge: "top" | "bottom" = "bottom"
+): string {
+  if (alpha <= 0 || bandH <= 0) return "";
+  const color = theme === "dark" ? "#000000" : "#ffffff";
+  const transitionFrac = Math.min(0.2, bandH > 0 ? 70 / bandH : 0.2);
+  const stops =
+    edge === "bottom"
+      ? `<stop offset="0" stop-color="${color}" stop-opacity="0"/>
+    <stop offset="${transitionFrac.toFixed(3)}" stop-color="${color}" stop-opacity="${alpha}"/>
+    <stop offset="1" stop-color="${color}" stop-opacity="${alpha}"/>`
+      : `<stop offset="0" stop-color="${color}" stop-opacity="${alpha}"/>
+    <stop offset="${(1 - transitionFrac).toFixed(3)}" stop-color="${color}" stop-opacity="${alpha}"/>
+    <stop offset="1" stop-color="${color}" stop-opacity="0"/>`;
+  return `<defs><linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1">
+    ${stops}
+  </linearGradient></defs>
+  <rect x="0" y="${bandY}" width="${width}" height="${bandH}" fill="url(#${gradientId})"/>`;
+}
+
+/**
  * Luminância relativa média de uma imagem (0=preto, 1=branco). Amostra
  * pequena (48x60) — suficiente pra decidir tema, muito mais barato que
  * processar a foto inteira.
