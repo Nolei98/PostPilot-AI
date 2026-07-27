@@ -59,3 +59,45 @@ describe("triageNews (mock)", () => {
     expect(out.map((r) => r.id)).toEqual(["x1", "x2"]);
   });
 });
+
+// Regressão do incidente de 2026-07-27: o tier grátis do Gemini (20
+// requests/dia) devolveu 429 e a varredura inteira morreu com
+// status='error' — nenhuma notícia coletada por causa da etapa de
+// pontuação. Agora cai no mock e avisa, em vez de derrubar o scan.
+describe("triageNews — provider fora do ar", () => {
+  it("cai no MOCK e reporta o motivo quando o provider falha", async () => {
+    vi.stubEnv("AI_PROVIDER", "gemini");
+    vi.stubEnv("GEMINI_API_KEY", "chave-que-vai-falhar");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("429 RESOURCE_EXHAUSTED: quota exceeded"));
+
+    const motivos: string[] = [];
+    const out = await triageNews(
+      [{ id: "z1", title: "OpenAI anuncia lançamento", summary: null }],
+      "tecnologia",
+      (reason) => motivos.push(reason)
+    );
+
+    // Resultado utilizável (mock), não exceção
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe("z1");
+    expect(out[0].reason).toContain("[MOCK]");
+    // E a degradação foi reportada pra ficar registrada no scan_run
+    expect(motivos).toHaveLength(1);
+    expect(motivos[0]).toContain("quota exceeded");
+
+    fetchSpy.mockRestore();
+  });
+
+  it("não reporta degradação quando não havia provider configurado", async () => {
+    const motivos: string[] = [];
+    const out = await triageNews(
+      [{ id: "z2", title: "gpt", summary: null }],
+      null,
+      (reason) => motivos.push(reason)
+    );
+    expect(out).toHaveLength(1);
+    expect(motivos).toEqual([]);
+  });
+});

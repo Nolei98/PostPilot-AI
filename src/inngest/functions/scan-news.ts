@@ -53,6 +53,12 @@ export const scanNews = inngest.createFunction(
     const manualClientId = (event as { data?: { clientId?: string } })?.data
       ?.clientId;
 
+    // Motivo da primeira degradação da triagem nesta rodada (provider
+    // falhou e caiu no mock). A varredura segue e termina como 'done',
+    // mas o motivo fica gravado — senão a rodada pareceria perfeita e
+    // ninguém saberia que os scores vieram do mock.
+    let triageDegradedReason: string | null = null;
+
     async function finishScanRun(result: {
       sources: number;
       inserted: number;
@@ -69,6 +75,9 @@ export const scanNews = inngest.createFunction(
               inserted: result.inserted,
               triaged: result.triaged,
               candidates: result.candidates,
+              error_message: triageDegradedReason
+                ? `Triagem degradada (scores do MOCK): ${triageDegradedReason}`
+                : null,
               finished_at: new Date().toISOString(),
             })
             .eq("id", scanRunId);
@@ -254,14 +263,22 @@ export const scanNews = inngest.createFunction(
       const batch = newsForNiche.slice(i, i + TRIAGE_BATCH_SIZE);
       const idx = batchIndex++;
 
-      const scored = await step.run(`triage-batch-${idx}`, async () => {
+      const { scored, degraded } = await step.run(`triage-batch-${idx}`, async () => {
         const inputs: TriageInput[] = batch.map((n) => ({
           id: n.id,
           title: n.title,
           summary: n.summary,
         }));
-        return triageNews(inputs, niche);
+        let degradedReason: string | null = null;
+        const results = await triageNews(inputs, niche, (reason) => {
+          degradedReason = reason;
+        });
+        // Retornado pelo step (e não gravado numa variável de fora) porque
+        // o Inngest memoiza o resultado do step: em retry/replay o efeito
+        // colateral não roda de novo, mas o valor retornado volta igual.
+        return { scored: results, degraded: degradedReason as string | null };
       });
+      if (degraded && !triageDegradedReason) triageDegradedReason = degraded;
 
       // 4. Grava scores e decide candidato vs descarte por fonte
       const newCandidates = await step.run(`save-scores-${idx}`, async () => {

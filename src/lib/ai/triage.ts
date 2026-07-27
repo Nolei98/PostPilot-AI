@@ -210,15 +210,35 @@ async function geminiTriage(
  */
 export async function triageNews(
   items: TriageInput[],
-  niche?: string | null
+  niche?: string | null,
+  onDegraded?: (reason: string) => void
 ): Promise<TriageResult[]> {
   if (items.length === 0) return [];
-  if (process.env.AI_PROVIDER === "gemini" && process.env.GEMINI_API_KEY) {
-    return geminiTriage(items, niche);
-  }
-  if (!process.env.ANTHROPIC_API_KEY) {
+
+  const real =
+    process.env.AI_PROVIDER === "gemini" && process.env.GEMINI_API_KEY
+      ? () => geminiTriage(items, niche)
+      : process.env.ANTHROPIC_API_KEY
+        ? () => claudeTriage(items, niche)
+        : null;
+
+  if (!real) {
     console.warn("[triage] nenhuma API key de IA — usando MOCK");
     return mockTriage(items);
   }
-  return claudeTriage(items, niche);
+
+  try {
+    return await real();
+  } catch (err) {
+    // Falha do provider (cota estourada, rede, chave inválida) NÃO pode
+    // derrubar a varredura inteira: sem isso, um 429 do tier grátis do
+    // Gemini fazia o scan morrer com status 'error' e nenhuma notícia
+    // era coletada — o pipeline inteiro parava por causa da triagem, que
+    // é só a etapa de pontuação. Cai no mock (score por palavra-chave) e
+    // avisa quem chamou, pra ficar registrado que a rodada foi degradada.
+    const reason = err instanceof Error ? err.message : String(err);
+    console.warn(`[triage] provider falhou, caindo pro MOCK: ${reason}`);
+    onDegraded?.(reason);
+    return mockTriage(items);
+  }
 }
