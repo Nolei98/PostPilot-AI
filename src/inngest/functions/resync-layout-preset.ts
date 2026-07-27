@@ -62,6 +62,27 @@ export const resyncLayoutPreset = inngest.createFunction(
       return (await getUserPlan(userId)) === "free";
     });
 
+    // Marca TUDO que este job vai reprocessar como 'pending' antes de
+    // começar. A Fila usa isso pra mostrar "aplicando o layout novo"
+    // enquanto o trabalho acontece de verdade — sem esse sinal o
+    // usuário vê a arte antiga por minutos e conclui que o layout não
+    // foi aplicado (aconteceu em 2026-07-27). Cada post volta pra
+    // 'idle' assim que o seu render termina.
+    await step.run("mark-rerendering", async () => {
+      const { count } = await supabase
+        .from("posts")
+        .update({ rerender_status: "pending" }, { count: "exact" })
+        .eq("client_id", clientId)
+        .eq("status", "pending_approval")
+        .in("format", ["single", "carousel", "video", "video_feed"]);
+      return { marked: count ?? 0 };
+    });
+
+    /** Devolve o post pro estado normal — a UI para de mostrar o spinner. */
+    async function clearRerender(postId: string) {
+      await supabase.from("posts").update({ rerender_status: "idle" }).eq("id", postId);
+    }
+
     // --- Carrosséis pendentes ---
     const carouselPosts = await step.run("fetch-carousel-posts", async () => {
       const { data } = await supabase
@@ -131,6 +152,7 @@ export const resyncLayoutPreset = inngest.createFunction(
         if (coverUrl) {
           await supabase.from("posts").update({ image_url: coverUrl }).eq("id", post.id);
         }
+        await clearRerender(post.id);
         return { cards: cards.length };
       });
     }
@@ -196,6 +218,14 @@ export const resyncLayoutPreset = inngest.createFunction(
           }
         });
       }
+
+      // Só depois da contra-capa (quando existe) o post único está
+      // realmente pronto — liberar antes deixaria o card sem spinner
+      // com a arte ainda mudando.
+      await step.run(`single-done-${post.id}`, async () => {
+        await clearRerender(post.id);
+        return { done: true };
+      });
     }
 
     // --- Posts de vídeo (Reels) já prontos ---
@@ -246,6 +276,7 @@ export const resyncLayoutPreset = inngest.createFunction(
               video_error: null,
             })
             .eq("id", post.id);
+          await clearRerender(post.id);
           return { updated: true };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -302,6 +333,7 @@ export const resyncLayoutPreset = inngest.createFunction(
               video_error: null,
             })
             .eq("id", post.id);
+          await clearRerender(post.id);
           return { updated: true };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -359,6 +391,19 @@ export const resyncLayoutPreset = inngest.createFunction(
         }
       });
     }
+
+    // Varredura final: qualquer post que ficou 'pending' (render que
+    // falhou no meio, formato que este job não cobre) volta pra 'idle'.
+    // Sem isso um erro isolado deixaria o card girando pra sempre —
+    // spinner eterno é pior que arte velha, porque promete algo.
+    await step.run("clear-rerendering", async () => {
+      const { count } = await supabase
+        .from("posts")
+        .update({ rerender_status: "idle" }, { count: "exact" })
+        .eq("client_id", clientId)
+        .eq("rerender_status", "pending");
+      return { cleared: count ?? 0 };
+    });
 
     return {
       carouselCount: carouselPosts.length,
