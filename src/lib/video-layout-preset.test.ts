@@ -167,3 +167,58 @@ describe("assinatura de marca por preset (card interior com vídeo)", () => {
     );
   });
 });
+
+// "Capa é capa, ainda com vídeo": o card 0 com vídeo saía com a mesma
+// estrutura de um card do meio — sem faixa de eyebrow, sem wordmark e
+// sem chamada de deslize. Reportado em 2026-07-27 no carrossel de MCPs.
+describe("card com vídeo: capa x interior", () => {
+  const card = { headline: "2026: MCPs que aguentam o tranco!", body: "Chegou a hora de separar o que funciona." };
+
+  it("capa traz eyebrow, wordmark e chamada de deslize", () => {
+    const capa = cardVideoLayoutParts(card, brandWith("serif-luxe"), {
+      pageKind: "cover",
+      index: 0,
+      total: 10,
+    });
+    expect(capa.headlineSvg).toContain("ENSAIO"); // faixa de eyebrow
+    expect(capa.headlineSvg).toContain("MARCA®"); // wordmark
+    expect(capa.labelSvg).toContain("Deslize"); // chamada de deslize
+  });
+
+  it("interior traz numeral e contador, não deslize", () => {
+    const interior = cardVideoLayoutParts(card, brandWith("serif-luxe"), {
+      pageKind: "interior",
+      index: 4,
+      total: 10,
+    });
+    expect(interior.headlineSvg).toContain(">04<"); // numeral de destaque
+    expect(interior.labelSvg).toContain("04/10"); // contador do rodapé
+    expect(interior.labelSvg).not.toContain("Deslize");
+  });
+
+  it("fechamento é capa sem convite a deslizar", () => {
+    const fim = cardVideoLayoutParts(card, brandWith("serif-luxe"), {
+      pageKind: "closing",
+      index: 9,
+      total: 10,
+    });
+    expect(fim.headlineSvg).toContain("MARCA®");
+    expect(fim.labelSvg).not.toContain("Deslize");
+  });
+
+  it("a capa com vídeo muda de identidade junto com o preset", () => {
+    const luxe = cardVideoLayoutParts(card, brandWith("serif-luxe"), { pageKind: "cover" });
+    const pop = cardVideoLayoutParts(card, brandWith("pop-creator"), { pageKind: "cover" });
+    expect(luxe.headlineSvg).toContain("DM Serif Display");
+    expect(pop.headlineSvg).toContain("Varela Round");
+    expect(pop.labelSvg).toContain("Deslize para ver mais");
+  });
+
+  it("a moldura de vídeo continua no quadro em qualquer papel", () => {
+    for (const kind of ["cover", "interior", "closing"] as const) {
+      const { frame } = cardVideoLayoutParts(card, brandWith("brutalism"), { pageKind: kind });
+      expect(frame.y).toBeGreaterThan(0);
+      expect(frame.y + frame.h).toBeLessThan(1350);
+    }
+  });
+});

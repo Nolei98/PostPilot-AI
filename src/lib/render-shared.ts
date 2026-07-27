@@ -82,14 +82,48 @@ export interface VideoIdentity {
   anchor: "start" | "middle";
   /** Rótulos (eyebrow/marca) em mono nos presets alternativos. */
   labelFont: "mono" | "display";
+  /** Texto do canto superior esquerdo da CAPA, no formato do preset. */
+  eyebrow: string;
+  /** Chamada de deslize da capa, no tom do preset. */
+  swipeHint: string;
 }
 
 const PRESET_VIDEO_IDENTITY: Record<LayoutPreset, Omit<VideoIdentity, "display">> = {
-  "editorial-noir": { brandRow: "rule", anchor: "middle", labelFont: "display" },
-  "serif-luxe": { brandRow: "rule", anchor: "middle", labelFont: "mono" },
-  brutalism: { brandRow: "block", anchor: "start", labelFont: "mono" },
-  "swiss-mono": { brandRow: "bar", anchor: "start", labelFont: "mono" },
-  "pop-creator": { brandRow: "pill", anchor: "start", labelFont: "mono" },
+  "editorial-noir": {
+    brandRow: "rule",
+    anchor: "middle",
+    labelFont: "display",
+    eyebrow: "Nº01 · ENSAIO",
+    swipeHint: "DESLIZE PARA VER →",
+  },
+  "serif-luxe": {
+    brandRow: "rule",
+    anchor: "middle",
+    labelFont: "mono",
+    eyebrow: "Nº01 · ENSAIO",
+    swipeHint: "Deslize para conhecer",
+  },
+  brutalism: {
+    brandRow: "block",
+    anchor: "start",
+    labelFont: "mono",
+    eyebrow: "Nº01 — ENSAIO",
+    swipeHint: "Deslize para conhecer",
+  },
+  "swiss-mono": {
+    brandRow: "bar",
+    anchor: "start",
+    labelFont: "mono",
+    eyebrow: "01 / ENSAIO",
+    swipeHint: "Deslize para conhecer",
+  },
+  "pop-creator": {
+    brandRow: "pill",
+    anchor: "start",
+    labelFont: "mono",
+    eyebrow: "Nº 01",
+    swipeHint: "Deslize para ver mais →",
+  },
 };
 
 /**

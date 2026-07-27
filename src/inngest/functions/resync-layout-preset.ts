@@ -368,9 +368,21 @@ export const resyncLayoutPreset = inngest.createFunction(
           const { composeFeedVideo } = await import("@/lib/video");
           const { buildCardVideoOverlay } = await import("@/lib/image");
 
+          // Mesmo cálculo do attach-card-video: capa, fechamento ou
+          // interior — sem isso o resync devolvia a capa com estrutura
+          // de card do meio, perdendo eyebrow/wordmark/deslize.
+          const { count: totalCards } = await supabase
+            .from("carousel_cards")
+            .select("*", { count: "exact", head: true })
+            .eq("post_id", card.post_id);
+          const total = totalCards ?? 0;
+          const pageKind =
+            card.idx === 0 ? "cover" : total > 0 && card.idx === total - 1 ? "closing" : "interior";
+
           const { overlayPng, frame } = buildCardVideoOverlay(
             { headline: card.headline, body: card.body },
-            prefs.cardBrand
+            prefs.cardBrand,
+            { pageKind, index: card.idx, total }
           );
           const finalVideo = await composeFeedVideo(videoBuffer, overlayPng, frame);
 

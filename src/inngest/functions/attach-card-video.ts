@@ -66,9 +66,21 @@ export const attachCardVideo = inngest.createFunction(
         const { extractPosterFrame, composeFeedVideo } = await import("@/lib/video");
         const { buildCardVideoOverlay } = await import("@/lib/image");
 
+        // Quantos cards o carrossel tem — define se este é a capa (0),
+        // o fechamento (último) ou um interior, e alimenta o contador
+        // "04/10" do rodapé. "Capa é capa, ainda com vídeo".
+        const { count: totalCards } = await supabase
+          .from("carousel_cards")
+          .select("*", { count: "exact", head: true })
+          .eq("post_id", card.post_id);
+        const total = totalCards ?? 0;
+        const pageKind =
+          card.idx === 0 ? "cover" : total > 0 && card.idx === total - 1 ? "closing" : "interior";
+
         const { overlayPng, frame } = buildCardVideoOverlay(
           { headline: card.headline, body: card.body },
-          cardBrand
+          cardBrand,
+          { pageKind, index: card.idx, total }
         );
         const finalVideo = await composeFeedVideo(videoBuffer, overlayPng, frame);
 

@@ -20,7 +20,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { BrandTemplate, IgProfile, VisualIdentity } from "@/lib/types";
 import { FONT_FAMILY } from "@/lib/font-data";
 import { rasterizeSvg } from "@/lib/svg-render";
-import { videoIdentityFor, MONO_FONT, type BrandRowKind } from "@/lib/render-shared";
+import {
+  videoIdentityFor,
+  MONO_FONT,
+  type BrandRowKind,
+  type CoverPageKind,
+} from "@/lib/render-shared";
 import { searchStockPhoto, fetchStockPhotoBuffer } from "@/lib/stock-photos";
 import { buildProfileChipLayers } from "@/lib/profile-chip";
 import { buildCoverSvg, composePhotoBg, coverHeadlineSize, stripEmoji, wrapText, brandLabelText, type CardBrand } from "@/lib/carousel-render";
@@ -945,8 +950,18 @@ const CARD_VIDEO_BODY_LINE_H = 54;
  */
 export function cardVideoLayoutParts(
   card: { headline: string | null; body: string | null },
-  cardBrand: CardBrand
+  cardBrand: CardBrand,
+  /**
+   * Papel da página no carrossel + posição. "capa é capa, ainda com
+   * vídeo": sem isso o card 0 com vídeo saía com a MESMA estrutura de
+   * um card do meio (título, moldura, corpo, rodapé), perdendo a faixa
+   * de eyebrow, o wordmark e a chamada de deslize que identificam uma
+   * capa em todos os 5 presets.
+   */
+  opts: { pageKind?: CoverPageKind; index?: number; total?: number } = {}
 ): { bg: string; frame: FeedVideoFrame; headlineSvg: string; bodySvg: string; labelSvg: string } {
+  const pageKind = opts.pageKind ?? "interior";
+  const isCoverLike = pageKind === "cover" || pageKind === "closing";
   // Identidade do PRESET de layout (tipografia + assinatura da marca):
   // sem isso os três formatos de vídeo saíam idênticos em qualquer
   // preset, enquanto o carrossel mudava — ver videoIdentityFor().
@@ -962,7 +977,80 @@ export function cardVideoLayoutParts(
   const headlineLines = wrapText(headlineText, maxChars).slice(0, 3);
   const bodyLines = card.body ? wrapText(stripEmoji(card.body), 34).slice(0, 3) : [];
 
-  const headStartY = 160;
+  const accent = cardBrand.colorAccent || "#7C5CFF";
+  const anchorX = identity.anchor === "middle" ? WIDTH / 2 : pad;
+
+  // ---- CAPA (e fechamento) com vídeo -------------------------------
+  // Estrutura de capa: faixa de eyebrow no topo, moldura de vídeo,
+  // assinatura da marca, título display e chamada de deslize. Mesma
+  // ordem de leitura da capa estática de cada preset.
+  if (isCoverLike) {
+    const eyebrowY = 92;
+    const frame: FeedVideoFrame = {
+      x: pad,
+      y: eyebrowY + 60,
+      w: WIDTH - pad * 2,
+      h: CARD_VIDEO_FRAME_H,
+      radius: CARD_VIDEO_FRAME_RADIUS,
+    };
+    const brandY = frame.y + frame.h + 78;
+    const headStart = brandY + 58 + Math.round(headSize * 0.6);
+
+    const handle = cardBrand.handle ? `@${cardBrand.handle}`.toUpperCase() : "";
+    const eyebrowSvg =
+      `<text x="${pad}" y="${eyebrowY}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${text}" fill-opacity="0.8">${escapeXmlLocal(identity.eyebrow)}</text>` +
+      (handle
+        ? `<text x="${WIDTH - pad}" y="${eyebrowY}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${text}" fill-opacity="0.8" text-anchor="end">${escapeXmlLocal(handle)}</text>`
+        : "");
+
+    const wm = (cardBrand.wordmark || cardBrand.brandName || "").toUpperCase();
+    const brandSvg = brandRowSvg({
+      kind: identity.brandRow,
+      text: wm,
+      x: pad,
+      y: brandY,
+      width: WIDTH - pad * 2,
+      textColor: text,
+      accent,
+      labelFamily,
+      fontSize: 24,
+    });
+
+    const headlineSvg =
+      eyebrowSvg +
+      brandSvg +
+      `<text font-family="${family}" font-weight="${displayWeight}" font-size="${headSize}" fill="${text}" text-anchor="${identity.anchor}" letter-spacing="${identity.display.letterSpacing}">${tspansLocal(headlineLines, anchorX, headStart, headLineH)}</text>`;
+
+    // Fechamento não convida a deslizar — é o fim do carrossel.
+    const swipeSvg =
+      pageKind === "cover"
+        ? `<text x="${anchorX}" y="${HEIGHT - 96}" font-family="${labelFamily}" font-weight="600" font-size="26" letter-spacing="4" fill="${text}" fill-opacity="0.75" text-anchor="${identity.anchor === "middle" ? "middle" : "start"}">${escapeXmlLocal(identity.swipeHint)}</text>`
+        : "";
+
+    // O corpo só entra se couber ACIMA da chamada de deslize — sem essa
+    // checagem as duas se sobrepunham na capa (título longo empurra o
+    // corpo pra cima da linha do "Deslize").
+    const bodyTop = headStart + headlineLines.length * headLineH + 20;
+    const bodyBottom = bodyTop + bodyLines.length * CARD_VIDEO_BODY_LINE_H;
+    const cabeCorpo = bodyLines.length > 0 && bodyBottom < HEIGHT - 150;
+    const bodySvg = cabeCorpo
+      ? `<text font-family="${family}" font-weight="400" font-size="${CARD_VIDEO_BODY_SIZE}" fill="${text}" fill-opacity="0.82" text-anchor="${identity.anchor}">${tspansLocal(bodyLines, anchorX, bodyTop, CARD_VIDEO_BODY_LINE_H)}</text>`
+      : "";
+
+    return { bg, frame, headlineSvg, bodySvg, labelSvg: swipeSvg };
+  }
+
+  // ---- INTERIOR com vídeo -----------------------------------------
+  // Numeral de destaque no topo (como o card interior estático de todos
+  // os presets), título, moldura, corpo e rodapé com marca + contador.
+  const idx = opts.index ?? 0;
+  const total = opts.total ?? 0;
+  const numeralY = 108;
+  const numeralSvg = idx
+    ? `<text x="${anchorX}" y="${numeralY}" font-family="${family}" font-weight="${displayWeight}" font-size="44" fill="${accent}" text-anchor="${identity.anchor}">${String(idx).padStart(2, "0")}</text>`
+    : "";
+
+  const headStartY = idx ? 200 : 160;
   const frame: FeedVideoFrame = {
     x: pad,
     y: headStartY + (headlineLines.length - 1) * headLineH + Math.round(headSize * 0.6) + CARD_VIDEO_GAP_HEAD_TO_FRAME,
@@ -972,25 +1060,33 @@ export function cardVideoLayoutParts(
   };
   const bodyStartY = frame.y + frame.h + CARD_VIDEO_GAP_FRAME_TO_BODY;
 
-  const headlineSvg = `<text font-family="${family}" font-weight="${displayWeight}" font-size="${headSize}" fill="${text}" text-anchor="start" letter-spacing="${identity.display.letterSpacing}">${tspansLocal(headlineLines, pad, headStartY, headLineH)}</text>`;
+  const headlineSvg =
+    numeralSvg +
+    `<text font-family="${family}" font-weight="${displayWeight}" font-size="${headSize}" fill="${text}" text-anchor="${identity.anchor}" letter-spacing="${identity.display.letterSpacing}">${tspansLocal(headlineLines, anchorX, headStartY, headLineH)}</text>`;
   const bodySvg = bodyLines.length
-    ? `<text font-family="${family}" font-weight="400" font-size="${CARD_VIDEO_BODY_SIZE}" fill="${text}" fill-opacity="0.82" text-anchor="start">${tspansLocal(bodyLines, pad, bodyStartY, CARD_VIDEO_BODY_LINE_H)}</text>`
+    ? `<text font-family="${family}" font-weight="400" font-size="${CARD_VIDEO_BODY_SIZE}" fill="${text}" fill-opacity="0.82" text-anchor="${identity.anchor}">${tspansLocal(bodyLines, anchorX, bodyStartY, CARD_VIDEO_BODY_LINE_H)}</text>`
     : "";
   const rawLabel = brandLabelText(cardBrand);
   const label = rawLabel && rawLabel.length > 50 ? rawLabel.slice(0, 49).trimEnd() + "…" : rawLabel;
   // Rótulo de marca do card interior também segue o preset (bloco no
   // Brutalism, barra no Swiss, cápsula no Pop, filete nos editoriais).
-  const labelSvg = brandRowSvg({
-    kind: identity.brandRow,
-    text: label ?? "",
-    x: pad,
-    y: HEIGHT - 70,
-    width: WIDTH - pad * 2,
-    textColor: text,
-    accent: cardBrand.colorAccent || "#7C5CFF",
-    labelFamily,
-    fontSize: 24,
-  });
+  const labelSvg =
+    brandRowSvg({
+      kind: identity.brandRow,
+      text: label ?? "",
+      x: pad,
+      // Reserva o canto direito quando há contador ("04/10"), senão o
+      // filete passa por trás do número.
+      width: WIDTH - pad * 2 - (idx && total ? 130 : 0),
+      y: HEIGHT - 70,
+      textColor: text,
+      accent,
+      labelFamily,
+      fontSize: 24,
+    }) +
+    (idx && total
+      ? `<text x="${WIDTH - pad}" y="${HEIGHT - 70}" font-family="${labelFamily}" font-weight="400" font-size="22" letter-spacing="1.5" fill="${accent}" text-anchor="end">${String(idx).padStart(2, "0")}/${String(total).padStart(2, "0")}</text>`
+      : "");
 
   return { bg, frame, headlineSvg, bodySvg, labelSvg };
 }
@@ -1003,9 +1099,11 @@ export function cardVideoLayoutParts(
  */
 export function buildCardVideoOverlay(
   card: { headline: string | null; body: string | null },
-  cardBrand: CardBrand
+  cardBrand: CardBrand,
+  /** Papel da página + posição — ver cardVideoLayoutParts. */
+  opts: { pageKind?: CoverPageKind; index?: number; total?: number } = {}
 ): { overlayPng: Buffer; frame: FeedVideoFrame } {
-  const { bg, frame, headlineSvg, bodySvg, labelSvg } = cardVideoLayoutParts(card, cardBrand);
+  const { bg, frame, headlineSvg, bodySvg, labelSvg } = cardVideoLayoutParts(card, cardBrand, opts);
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
   <defs>

@@ -274,7 +274,8 @@ export function buildFeedVideoPreview(preset: LayoutPreset, brand: CardBrand): s
 export function buildInteriorVideoPreview(preset: LayoutPreset, brand: CardBrand): string {
   const { bg, frame, headlineSvg, bodySvg, labelSvg } = cardVideoLayoutParts(
     { headline: "Quando o vídeo explica melhor que o texto", body: "Um retângulo de vídeo entra no grid como uma imagem — mesmo tratamento e margens." },
-    brandForPreset(brand, preset)
+    brandForPreset(brand, preset),
+    { pageKind: "interior", index: 4, total: 10 }
   );
   const accent = brand.colorAccent || "#7C5CFF";
   const playCx = frame.x + frame.w / 2;
