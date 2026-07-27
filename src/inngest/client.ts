@@ -49,6 +49,9 @@ type Events = {
   // Um post acabou de ser publicado via Graph API → dispara a coleta
   // de métricas 24h/72h depois (Sprint C, collect-insights.ts).
   "post/published": { data: { postId: string } };
+  // Disparo manual da renovação dos tokens do Instagram — o cron diário
+  // do refresh-social-tokens já cobre isso.
+  "social/refresh-tokens.requested": { data: Record<string, never> };
 };
 
 export const inngest = new Inngest({

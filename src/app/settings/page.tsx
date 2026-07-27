@@ -79,11 +79,14 @@ export default async function SettingsPage({
     .eq("client_id", shell.activeClientId ?? "")
     .maybeSingle();
 
+  // Sem filtro de status de propósito: uma conexão com status 'error'
+  // (token vencido, marcado pelo job refresh-social-tokens) precisa
+  // APARECER aqui pedindo reconexão — filtrando por 'connected' ela
+  // sumia e a tela voltava ao estado "nunca conectou", sem dizer por quê.
   const { data: igConn } = await supabase
     .from("social_connections")
     .select("*")
     .eq("client_id", shell.activeClientId ?? "")
-    .eq("status", "connected")
     .maybeSingle();
 
   // Template Studio (Sprint B+, B13/B15): presets do sistema + os do
@@ -692,7 +695,7 @@ export default async function SettingsPage({
                 : "."}
             </p>
           )}
-          {socialConnection ? (
+          {socialConnection && socialConnection.status === "connected" ? (
             <>
               <p className="text-body text-content">
                 Conectado como <strong>@{socialConnection.ig_username}</strong>
@@ -701,11 +704,35 @@ export default async function SettingsPage({
                 Posts agendados (botão &quot;Agendar&quot; na Fila) publicam
                 sozinhos no horário escolhido.
               </p>
+              {socialConnection.last_error && (
+                <p className="text-micro text-subtle">
+                  Última renovação de token falhou: {socialConnection.last_error}.
+                  O token atual continua valendo; o sistema tenta de novo todo dia.
+                </p>
+              )}
               <form action={disconnectInstagram}>
                 <SubmitButton savingLabel="Desconectando...">
                   Desconectar Instagram
                 </SubmitButton>
               </form>
+            </>
+          ) : socialConnection ? (
+            <>
+              <p className="rounded-control border border-error/40 bg-error/10 px-3 py-2 text-caption text-error">
+                ✕ Conexão com @{socialConnection.ig_username} precisa ser refeita
+                {socialConnection.last_error ? ` — ${socialConnection.last_error}` : "."}
+              </p>
+              <p className="text-micro text-subtle">
+                Enquanto isso, posts agendados não publicam. O fluxo manual
+                (copiar legenda + baixar arte + &quot;Postei&quot;) continua
+                funcionando.
+              </p>
+              <a
+                href={`/api/instagram/connect?clientId=${shell.activeClientId ?? ""}`}
+                className="inline-flex items-center justify-center gap-2 rounded-control bg-gradient-to-br from-[#E0219C] via-[#A020F0] to-[#7B2FF7] px-5 py-3 text-body font-medium text-white shadow-[0_0_34px_rgba(224,33,156,0.35)] transition-all hover:-translate-y-[2px] hover:shadow-[0_0_50px_rgba(224,33,156,0.6)]"
+              >
+                Reconectar Instagram
+              </a>
             </>
           ) : (
             <>

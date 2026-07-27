@@ -3,6 +3,7 @@ import {
   exchangeCodeForToken,
   getLongLivedToken,
   getInstagramUsername,
+  refreshLongLivedToken,
   createMediaContainer,
   createCarouselContainer,
   publishMedia,
@@ -33,6 +34,13 @@ describe("instagram-graph (modo mock — sem META_APP_ID)", () => {
     const r = await getLongLivedToken("mock-short-lived-token");
     expect(r.accessToken).toBe("mock-long-lived-token");
     expect(r.expiresIn).toBeGreaterThan(3600);
+  });
+
+  it("refreshLongLivedToken devolve outro token de ~60 dias sem rede", async () => {
+    const r = await refreshLongLivedToken("mock-long-lived-token");
+    expect(r.accessToken).toBe("mock-refreshed-token");
+    // 60 dias — o job usa isso pra recalcular token_expires_at.
+    expect(r.expiresIn).toBe(5_184_000);
   });
 
   it("getInstagramUsername retorna handle mock", async () => {

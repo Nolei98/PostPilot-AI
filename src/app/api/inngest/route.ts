@@ -16,6 +16,7 @@ import { attachVideo } from "@/inngest/functions/attach-video";
 import { attachCardVideo } from "@/inngest/functions/attach-card-video";
 import { publishScheduledPosts } from "@/inngest/functions/publish-scheduled-posts";
 import { collectInsights } from "@/inngest/functions/collect-insights";
+import { refreshSocialTokens } from "@/inngest/functions/refresh-social-tokens";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -29,5 +30,6 @@ export const { GET, POST, PUT } = serve({
     attachCardVideo,
     publishScheduledPosts,
     collectInsights,
+    refreshSocialTokens,
   ],
 });

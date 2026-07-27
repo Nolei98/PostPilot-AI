@@ -304,6 +304,9 @@ export interface Post {
   // tentativa de publicação (não derruba o status, que continua
   // 'scheduled' até o próximo tick do job de publicação).
   publish_error: string | null;
+  // Sprint C — erro da última coleta de métricas (migration 038). Só
+  // registro/depuração: não muda status nem impede a próxima janela.
+  metrics_error: string | null;
   created_at: string;
 }
 
@@ -321,6 +324,11 @@ export interface SocialConnection {
   token_expires_at: string | null;
   status: "connected" | "error" | "disconnected";
   connected_at: string;
+  // Migration 038 — rastro do job refresh-social-tokens (renovação do
+  // token de ~60 dias). last_error guarda o motivo da última falha de
+  // renovação; não desconecta nada por si só.
+  last_refreshed_at: string | null;
+  last_error: string | null;
 }
 
 // Sprint C — métricas reais coletadas via Graph API 24h/72h após a

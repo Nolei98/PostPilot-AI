@@ -75,6 +75,27 @@ describe("cleanup 024: notification_configs enxuto", () => {
   });
 });
 
+describe("migration 038: renovação de token + erro de métricas", () => {
+  it("social_connections tem o rastro da renovação (last_refreshed_at/last_error)", async () => {
+    const { rows } = await db.query<{ column_name: string }>(
+      "select column_name from information_schema.columns where table_name = 'social_connections'"
+    );
+    const cols = rows.map((r) => r.column_name);
+    for (const kept of ["token_expires_at", "connected_at", "last_refreshed_at", "last_error"]) {
+      expect(cols).toContain(kept);
+    }
+  });
+
+  it("posts tem metrics_error (falha de coleta deixa de ser invisível)", async () => {
+    const { rows } = await db.query<{ column_name: string }>(
+      "select column_name from information_schema.columns where table_name = 'posts'"
+    );
+    const cols = rows.map((r) => r.column_name);
+    expect(cols).toContain("metrics_error");
+    expect(cols).toContain("publish_error");
+  });
+});
+
 describe("RLS: isolamento entre tenants", () => {
   it("clients: cada usuário só enxerga os próprios", async () => {
     const a = await signup(db, { email: "a-cli@x.com" });

@@ -78,6 +78,24 @@ export async function getLongLivedToken(shortLivedToken: string): Promise<TokenR
   return { accessToken: data.access_token, expiresIn: data.expires_in };
 }
 
+/**
+ * Renova um token de longa duração, devolvendo outro de ~60 dias.
+ *
+ * Regras da Meta (valem pro job refresh-social-tokens): o token precisa
+ * ter no mínimo 24h de vida e ainda NÃO estar expirado. Token vencido
+ * não renova — só reconectando pelo OAuth de novo.
+ */
+export async function refreshLongLivedToken(longLivedToken: string): Promise<TokenResult> {
+  if (!hasMetaApp()) {
+    return { accessToken: "mock-refreshed-token", expiresIn: 5_184_000 };
+  }
+  const url =
+    `${IG_API_BASE}/refresh_access_token?grant_type=ig_refresh_token` +
+    `&access_token=${encodeURIComponent(longLivedToken)}`;
+  const data = await igFetch<{ access_token: string; expires_in: number }>(url);
+  return { accessToken: data.access_token, expiresIn: data.expires_in };
+}
+
 /** Busca o @username da conta IG Business (pra exibir na UI de conexão). */
 export async function getInstagramUsername(igUserId: string, accessToken: string): Promise<string> {
   if (!hasMetaApp()) return "mock.ig.account";
