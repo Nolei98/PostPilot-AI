@@ -36,9 +36,15 @@ export async function middleware(request: NextRequest) {
 
   const isLoginPage = request.nextUrl.pathname.startsWith("/login");
   const isRootPage = request.nextUrl.pathname === "/";
+  // Páginas legais precisam abrir SEM login: o revisor do App Review do
+  // Meta acessa a política de privacidade e as instruções de exclusão de
+  // dados sem ter conta (e a LGPD também pede acesso público).
+  const isLegalPage = ["/privacidade", "/termos", "/exclusao-de-dados"].some(
+    (p) => request.nextUrl.pathname.startsWith(p)
+  );
 
-  // Sem sessão e fora de rotas públicas (/) e (/login) → manda para o login
-  if (!user && !isLoginPage && !isRootPage) {
+  // Sem sessão e fora das rotas públicas → manda para o login
+  if (!user && !isLoginPage && !isRootPage && !isLegalPage) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
