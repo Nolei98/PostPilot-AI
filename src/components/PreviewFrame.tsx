@@ -1,3 +1,5 @@
+"use client";
+
 // ============================================================
 // Desenha UMA página do preview ao vivo (src/lib/post-preview.ts): a foto
 // base, a banda borrada, o SVG do layout e as camadas raster (logo,
@@ -9,6 +11,7 @@
 // blur usa cqw pelo mesmo motivo: um `blur(16px)` fixo seria proporcional
 // ao quadro de 1080px, não ao preview de ~300px.
 // ============================================================
+import { useRef } from "react";
 import type { PreviewLayer, PreviewPage } from "@/lib/post-preview";
 
 /** blur(16px) no quadro de 1080px = 1.48% da largura. */
@@ -84,7 +87,11 @@ function Layer({ layer }: { layer: PreviewLayer }) {
         muted
         loop
         playsInline
-        autoPlay
+        // PARADO por padrão: a fila é uma tela de leitura, e vídeo tocando
+        // sozinho em vários cards ao mesmo tempo pisca e rouba atenção.
+        // Mostra o frame de pôster e só toca enquanto o ponteiro está em
+        // cima — ao sair, volta pro início.
+        preload="metadata"
         aria-hidden
         className="absolute object-cover"
         style={{
@@ -121,6 +128,24 @@ export function PreviewFrame({
   alt: string;
   className?: string;
 }) {
+  // Vídeo entra junto do fundo: o SVG do layout vem por cima e é ele que
+  // recorta a moldura (buraco transparente) ou desenha o véu de leitura.
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  /** Toca os vídeos da página enquanto o ponteiro está em cima. */
+  function playVideos() {
+    rootRef.current?.querySelectorAll("video").forEach((v) => {
+      void v.play().catch(() => {});
+    });
+  }
+
+  function stopVideos() {
+    rootRef.current?.querySelectorAll("video").forEach((v) => {
+      v.pause();
+      v.currentTime = 0;
+    });
+  }
+
   // Post anterior à migration 040: não há foto crua pra desenhar por
   // cima, só a arte que já foi composta um dia. Mostra ela como está e
   // avisa — é honesto, e a aprovação vai gerar arte nova de qualquer jeito.
@@ -150,6 +175,11 @@ export function PreviewFrame({
     <div
       role="img"
       aria-label={alt}
+      ref={rootRef}
+      // O SVG do layout cobre o quadro inteiro, então o mouse nunca chega
+      // no <video>: quem controla a reprodução é o container.
+      onMouseEnter={playVideos}
+      onMouseLeave={stopVideos}
       className={`relative h-full w-full overflow-hidden bg-surface-2 ${className}`}
       style={{ containerType: "inline-size" }}
     >
