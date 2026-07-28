@@ -52,21 +52,38 @@ async function upload(p: string, body: Buffer, contentType: string): Promise<str
   return `${db.storage.from(BUCKET).getPublicUrl(p).data.publicUrl}?v=${Date.now()}`;
 }
 
-/** Vídeo branco de 3s, gerado com o ffmpeg que o próprio app usa. */
-function whiteVideo(w: number, h: number): Buffer {
+/**
+ * Vídeo de teste de 6s que COMEÇA ESCURO e TERMINA BRANCO.
+ *
+ * De propósito: a medição de contraste só enxerga o frame de pôster
+ * (0,5s). Um vídeo que clareia no meio é exatamente o caso que fazia o
+ * texto branco sumir — com o piso de véu (VIDEO_SCRIM_FLOOR) o título
+ * tem que continuar legível do começo ao fim.
+ */
+function fadeToWhiteVideo(w: number, h: number): Buffer {
   const ffmpeg = require("ffmpeg-static") as string;
   const out = path.join(os.tmpdir(), `seed-${w}x${h}-${Date.now()}.mp4`);
   execFileSync(ffmpeg, [
     "-y",
     "-f", "lavfi",
-    "-i", `color=c=white:s=${w}x${h}:d=3:r=24`,
+    "-i", `color=c=0x101014:s=${w}x${h}:d=6:r=24`,
+    "-vf", "fade=t=out:st=2:d=3:c=white",
     "-c:v", "libx264",
+    "-preset", "veryfast",
     "-pix_fmt", "yuv420p",
     out,
   ]);
   const buf = fs.readFileSync(out);
   fs.unlinkSync(out);
   return buf;
+}
+
+/** Frame representativo do vídeo acima (o trecho ESCURO, como o pôster
+ * de 0,5s que o attach-video extrai de verdade). */
+async function darkFrame(w: number, h: number): Promise<Buffer> {
+  return sharp({ create: { width: w, height: h, channels: 3, background: "#101014" } })
+    .jpeg({ quality: 92 })
+    .toBuffer();
 }
 
 interface NewPost {
@@ -205,31 +222,54 @@ async function main() {
     });
     if (error) throw new Error(`card ${c.idx}: ${error.message}`);
   }
-  criados.push(`carousel (4 cards) ${carouselId}`);
+  // Vídeo em UM card interior (idx 1): testa se a moldura 16:9 aparece só
+  // nele e se os vizinhos continuam cards normais — era o bug de
+  // "aplicou em todos os interiores".
+  const cardVideo = fadeToWhiteVideo(1080, 1080);
+  await upload(`${carouselId}-card-1-video-source.mp4`, cardVideo, "video/mp4");
+  const cardPoster = await darkFrame(1080, 1080);
+  const cardPosterUrl = await upload(
+    `${carouselId}-card-1-video-poster-raw.jpg`,
+    cardPoster,
+    "image/jpeg"
+  );
+  await db
+    .from("carousel_cards")
+    // bg_url fica NULO de propósito: card com vídeo tem fundo sólido da
+    // marca, o vídeo mora na moldura.
+    .update({ video_poster_url: cardPosterUrl, video_status: "ready", video_error: null })
+    .eq("post_id", carouselId)
+    .eq("idx", 1);
+  criados.push(`carousel (4 cards, vídeo no card 2) ${carouselId}`);
 
   // --- 3. Reels (9:16) e 4. vídeo feed (4:5), vídeo branco de 3s ---
   for (const [format, shape, w, h] of [
     ["video", "reels", 1080, 1920],
-    ["video_feed", "feed", 1080, 1920],
+    // O vídeo do feed entra numa moldura 16:9 — o material bruto é
+    // horizontal, como um clipe de celular deitado.
+    ["video_feed", "feed", 1920, 1080],
   ] as const) {
     const id = await insertPost(userId, {
       format,
-      hook: format === "video" ? "Reels de teste, fundo branco" : "Vídeo feed 4:5, fundo branco",
-      caption: "Vídeo branco de 3s — só pra conferir o quadro e o pôster no preview.",
+      hook:
+        format === "video"
+          ? "Reels: o vídeo clareia e o texto tem que continuar legível"
+          : "Vídeo feed 4:5 na moldura, título abaixo",
+      caption: "Clipe de 6s que começa escuro e termina branco — teste do véu de legibilidade.",
       videoShape: shape,
     });
-    const video = whiteVideo(w, h);
+    const video = fadeToWhiteVideo(w, h);
     await upload(`${id}-video-source.mp4`, video, "video/mp4");
-    // O pôster CRU é o que a Fila mostra por baixo do overlay desenhado
-    // no browser — mesmo papel do base_image_url dos outros formatos.
-    const poster = await whiteFrame(w, h);
+    const poster = await darkFrame(w, h);
     const posterUrl = await upload(`${id}-video-poster-raw.jpg`, poster, "image/jpeg");
     const posterGrid = await buildLuminanceGrid(poster);
     await db
       .from("posts")
       .update({
-        base_image_url: posterUrl,
-        base_luminance: posterGrid,
+        // base_* só no Reels: lá o vídeo É o fundo do quadro. No feed 4:5
+        // o fundo é sólido e o vídeo fica na moldura — gravar a base aqui
+        // faria a prévia cobrir o card inteiro com o pôster.
+        ...(shape === "reels" ? { base_image_url: posterUrl, base_luminance: posterGrid } : {}),
         video_poster_url: posterUrl,
         video_status: "ready",
         video_error: null,
