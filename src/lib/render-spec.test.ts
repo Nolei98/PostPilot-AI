@@ -20,8 +20,14 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/subscription", () => ({ getUserPlan: async () => "pro" }));
 
-const { resolveRenderSpec, withPost, cardBrandFromKit, resolveBackground, applyBackground } =
-  await import("@/lib/render-spec");
+const {
+  resolveRenderSpec,
+  withPost,
+  cardBrandFromKit,
+  resolveBackground,
+  applyBackground,
+  applyMarkColor,
+} = await import("@/lib/render-spec");
 
 const KIT = {
   color_background: "#101018",
@@ -255,5 +261,34 @@ describe("applyBackground (fundo por CARD do carrossel)", () => {
     const card = applyBackground(brand, "custom", "#FFE44D");
     expect(card.colorBackground).toBe("#FFE44D");
     expect(card.colorText).toBe("#0A0A0A");
+  });
+});
+
+describe("applyMarkColor (cor do wordmark, migration 043)", () => {
+  const brand = cardBrandFromKit(KIT);
+
+  it("'accent' não mexe em nada — é o comportamento histórico", () => {
+    expect(applyMarkColor(brand, "accent", null)).toBe(brand);
+    expect(applyMarkColor(brand, null, null)).toBe(brand);
+  });
+
+  it("'title' acompanha o título DEPOIS do fundo ter sido resolvido", () => {
+    // fundo claro vira título escuro; a marca tem que ir junto, senão
+    // continuaria no realce e brigaria com o texto
+    const claro = resolveBackground(brand, {
+      format: "single",
+      bg_mode: "light",
+      mark_mode: "title",
+    });
+    expect(claro.colorText).toBe("#0A0A0A");
+    expect(claro.markColor).toBe("#0A0A0A");
+  });
+
+  it("'custom' usa o hex escolhido", () => {
+    expect(applyMarkColor(brand, "custom", "#46E5B7").markColor).toBe("#46E5B7");
+  });
+
+  it("'custom' sem cor cai no realce em vez de sumir", () => {
+    expect(applyMarkColor(brand, "custom", null).markColor).toBe(brand.colorAccent);
   });
 });

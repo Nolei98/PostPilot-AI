@@ -53,7 +53,7 @@ export const renderApprovedPost = inngest.createFunction(
       const { data } = await supabase
         .from("posts")
         .select(
-          "id, client_id, news_item_id, format, hook, video_status, video_shape, render_token, bg_mode, bg_color, template_applied, tpl_keyword, tpl_top_text, tpl_bottom_text, tpl_cta_enabled, tpl_color_background, tpl_color_accent, tpl_color_text, tpl_color_keyword_box"
+          "id, client_id, news_item_id, format, hook, video_status, video_shape, render_token, bg_mode, bg_color, mark_mode, mark_color, template_applied, tpl_keyword, tpl_top_text, tpl_bottom_text, tpl_cta_enabled, tpl_color_background, tpl_color_accent, tpl_color_text, tpl_color_keyword_box"
         )
         .eq("id", postId)
         .maybeSingle();
@@ -75,6 +75,8 @@ export const renderApprovedPost = inngest.createFunction(
           video_shape: post.video_shape,
           bg_mode: post.bg_mode,
           bg_color: post.bg_color,
+          mark_mode: post.mark_mode,
+          mark_color: post.mark_color,
           tpl_keyword: post.tpl_keyword,
           tpl_top_text: post.tpl_top_text,
           tpl_bottom_text: post.tpl_bottom_text,

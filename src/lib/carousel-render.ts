@@ -204,6 +204,9 @@ export function buildCoverSvg(
   const bg = brand.colorBackground || "#0B0B12";
   const accent = brand.colorAccent || "#7C5CFF";
   const text = brand.colorText || "#FFFFFF";
+  // Wordmark pode andar por conta própria (migration 043): realce por
+  // padrão, ou acompanhando o título, ou cor livre.
+  const mark = brand.markColor || accent;
   const pad = 90;
   const cx = CARD_W / 2;
   const showSwipeHint = opts.showSwipeHint !== false;
@@ -269,8 +272,8 @@ export function buildCoverSvg(
   const divider = wm
     ? `<line x1="${pad}" y1="${dividerY}" x2="${cx - halfText}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.45" stroke-width="1.5"/>
   <line x1="${cx + halfText}" y1="${dividerY}" x2="${CARD_W - pad}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.45" stroke-width="1.5"/>
-  <text x="${cx}" y="${dividerY + 8}" font-family="${family}" font-weight="600" font-size="26" letter-spacing="6" fill="${accent}" text-anchor="middle">${escapeXml(wmBase)}</text>
-  ${hasRegMark ? registeredMarkGlyph(regMarkX, dividerY + 8, accent) : ""}`
+  <text x="${cx}" y="${dividerY + 8}" font-family="${family}" font-weight="600" font-size="26" letter-spacing="6" fill="${mark}" text-anchor="middle">${escapeXml(wmBase)}</text>
+  ${hasRegMark ? registeredMarkGlyph(regMarkX, dividerY + 8, mark) : ""}`
     : "";
   const swipeHint =
     swipeY != null

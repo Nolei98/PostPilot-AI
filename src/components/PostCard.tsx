@@ -23,6 +23,7 @@ import {
   attachUploadedPostVideo,
   createVideoUploadTicket,
   savePostBackground,
+  savePostMarkColor,
 } from "@/app/actions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardActions } from "@/components/ui/Card";
@@ -157,6 +158,19 @@ export function PostCard({
       await savePostBackground(post.id, mode, color ?? bgColor);
       // O preview é montado no servidor com o Brand Kit + os campos do
       // post, então precisa de um refresh pra redesenhar com a cor nova.
+      router.refresh();
+    });
+  }
+
+  // ---- Cor do wordmark (migration 043) ----
+  const [markMode, setMarkMode] = useState(post.mark_mode ?? "accent");
+  const [markColor, setMarkColor] = useState(post.mark_color ?? "#FFFFFF");
+
+  function applyMark(mode: "accent" | "title" | "custom", color?: string) {
+    setMarkMode(mode);
+    if (color) setMarkColor(color);
+    startBgSave(async () => {
+      await savePostMarkColor(post.id, mode, color ?? markColor);
       router.refresh();
     });
   }
@@ -435,6 +449,45 @@ export function PostCard({
           <p className="text-micro text-subtle">
             A cor do texto se ajusta sozinha ao fundo escolhido.
           </p>
+
+          {/* Cor do wordmark (migration 043) — a marca pode acompanhar o
+              título em vez de puxar sempre o realce. */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <span className="mr-1 text-micro text-subtle">✒️ Wordmark</span>
+            {(
+              [
+                ["accent", "Realce"],
+                ["title", "Igual ao título"],
+                ["custom", "Outra"],
+              ] as ["accent" | "title" | "custom", string][]
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={markMode === mode}
+                onClick={() => applyMark(mode)}
+                className={`rounded-full px-2.5 py-1 text-micro transition-colors ${
+                  markMode === mode
+                    ? "bg-content text-surface"
+                    : "bg-surface-2 text-muted hover:text-content"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            {markMode === "custom" && (
+              <label className="flex items-center gap-1.5 rounded-full bg-surface-2 px-2 py-1">
+                <input
+                  type="color"
+                  value={markColor}
+                  onChange={(e) => applyMark("custom", e.target.value)}
+                  aria-label="Cor do wordmark"
+                  className="h-5 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
+                />
+                <span className="text-micro text-muted">{markColor.toUpperCase()}</span>
+              </label>
+            )}
+          </div>
 
           {/* Vídeo anexado (Fase 4, kit v2 §3; feed 4:5 = migration 036) —
               upload manual, composto em background (Inngest + ffmpeg).

@@ -209,6 +209,9 @@ export type VideoShape = "reels" | "feed" | "feed-blur";
 /** Fundo escolhido por post (migration 042). */
 export type BackgroundMode = "brand" | "light" | "dark" | "custom";
 
+/** Cor do wordmark por post (migration 043). */
+export type MarkMode = "accent" | "title" | "custom";
+
 /**
  * SNAPSHOT do que decidiu a arte, congelado no momento da aprovação
  * (posts.render_spec, migration 040). É o contrato central do modelo
@@ -387,6 +390,9 @@ export interface Post {
    * é gravada — sai da luminância do fundo (ver resolveBackground). */
   bg_mode: BackgroundMode;
   bg_color: string | null;
+  /** Cor do wordmark (migration 043) — 'title' acompanha o título. */
+  mark_mode: MarkMode;
+  mark_color: string | null;
 
   created_at: string;
 }

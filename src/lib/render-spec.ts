@@ -25,6 +25,7 @@ import type { CardBrand } from "@/lib/render-shared";
 import type {
   BackgroundMode,
   BrandTemplate,
+  MarkMode,
   IgProfile,
   PostFormat,
   RenderSpec,
@@ -110,7 +111,11 @@ const SYSTEM_BACKGROUNDS = { light: "#FFFFFF", dark: "#0B0B12" } as const;
  * luminância vem da própria cor, não de uma medição.
  */
 export function resolveBackground(brand: CardBrand, post: RenderSpecPostInput): CardBrand {
-  return applyBackground(brand, post.bg_mode, post.bg_color);
+  return applyMarkColor(
+    applyBackground(brand, post.bg_mode, post.bg_color),
+    post.mark_mode,
+    post.mark_color
+  );
 }
 
 /**
@@ -130,11 +135,28 @@ export function applyBackground(
   return { ...brand, colorBackground, colorText: textColorForTheme(theme) };
 }
 
+/**
+ * Cor do wordmark (043). Roda DEPOIS do fundo de propósito: em 'title' a
+ * marca acompanha o título, e o título já pode ter virado escuro por
+ * causa do fundo escolhido.
+ */
+export function applyMarkColor(
+  brand: CardBrand,
+  mode: MarkMode | null | undefined,
+  color: string | null | undefined
+): CardBrand {
+  if (!mode || mode === "accent") return brand;
+  const markColor = mode === "title" ? brand.colorText : color || brand.colorAccent;
+  return { ...brand, markColor };
+}
+
 /** Campos do post que o resolver precisa ler. */
 export interface RenderSpecPostInput {
   format: PostFormat;
   bg_mode?: BackgroundMode | null;
   bg_color?: string | null;
+  mark_mode?: MarkMode | null;
+  mark_color?: string | null;
   template_applied?: boolean | null;
   video_shape?: VideoShape | null;
   tpl_keyword?: string | null;

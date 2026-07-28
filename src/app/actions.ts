@@ -123,6 +123,36 @@ export async function savePostBackground(
   revalidatePath("/");
 }
 
+/**
+ * Cor do WORDMARK deste post (migration 043): 'accent' é o realce do
+ * Brand Kit (padrão histórico), 'title' faz a marca acompanhar o título
+ * — inclusive quando o título virou escuro por causa do fundo — e
+ * 'custom' guarda o hex do seletor.
+ */
+export async function savePostMarkColor(
+  postId: string,
+  mode: "accent" | "title" | "custom",
+  color?: string | null
+) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const hex = typeof color === "string" && /^#[0-9a-fA-F]{6}$/.test(color) ? color : null;
+  if (mode === "custom" && !hex) throw new Error("Cor inválida");
+
+  const { error } = await supabase
+    .from("posts")
+    .update({ mark_mode: mode, mark_color: mode === "custom" ? hex : null })
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .eq("status", "pending_approval");
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+}
+
 /** Aprova um post → vai para a tela "post pronto" */
 export async function approvePost(postId: string) {
   const supabase = createClient();

@@ -676,7 +676,8 @@ export function buildReelsVideoOverlaySvg(
     y: dividerY + 6,
     width: zone.width,
     textColor,
-    accent,
+    // Wordmark pode ter cor própria (043); sem escolha, segue o realce.
+    accent: cardBrand.markColor || accent,
     labelFamily,
     fontSize: 20,
   });
@@ -768,7 +769,8 @@ export function feedVideoLayoutParts(
     y: dividerY + 8,
     width: WIDTH - FEED_FRAME_MARGIN_X * 2,
     textColor: text,
-    accent,
+    // Wordmark pode ter cor própria (043); sem escolha, segue o realce.
+    accent: cardBrand.markColor || accent,
     labelFamily,
     fontSize: 26,
   });
@@ -968,7 +970,8 @@ export function cardVideoLayoutParts(
       y: brandY,
       width: WIDTH - pad * 2,
       textColor: text,
-      accent,
+      // Wordmark pode ter cor própria (043); sem escolha, segue o realce.
+      accent: cardBrand.markColor || accent,
       labelFamily,
       fontSize: 24,
     });
@@ -1037,7 +1040,8 @@ export function cardVideoLayoutParts(
       width: WIDTH - pad * 2 - (idx && total ? 130 : 0),
       y: HEIGHT - 70,
       textColor: text,
-      accent,
+      // Wordmark pode ter cor própria (043); sem escolha, segue o realce.
+      accent: cardBrand.markColor || accent,
       labelFamily,
       fontSize: 24,
     }) +

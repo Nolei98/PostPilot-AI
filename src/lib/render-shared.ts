@@ -163,6 +163,9 @@ export interface CardBrand {
   handle?: string | null; // @ do perfil
   keywords?: string[] | null; // rótulo dos cards
   brandMark?: BrandMark; // tratamento de marca dos cards interiores
+  /** Cor do WORDMARK (migration 043). Ausente = cor de realce, que era o
+   * comportamento antes de existir escolha. */
+  markColor?: string | null;
   layoutPreset?: LayoutPreset; // preset de layout (Fase 3); default "editorial-noir"
   singlePostStyle?: SinglePostStyle; // variação da página 1 do post único; default "cover"
 }
