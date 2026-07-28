@@ -40,6 +40,31 @@ export function tmpPath(name: string): string {
   return path.join(os.tmpdir(), `postpilot-video-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${name}`);
 }
 
+/**
+ * Argumentos de ENCODE compartilhados pelos três compositores.
+ *
+ * `veryfast` no lugar do preset padrão (`medium`) dá folga no orçamento
+ * da função: o job roda em serverless com teto de 300s (vercel.json), e
+ * estourar esse teto deixa o post em "processando" pra sempre. Medido
+ * aqui com um 1080×1920 de 30s: 18,1s no `medium` contra 9,6s no
+ * `veryfast` — e a CPU do serverless é mais lenta que a local, então a
+ * margem importa mais lá. O arquivo final ficou do mesmo tamanho.
+ *
+ * `-crf 23` é o default explicitado (qualidade constante — não fixa
+ * bitrate, então vídeo parado não desperdiça bits) e `+faststart` põe o
+ * índice no começo do arquivo, exigência de quem faz streaming
+ * progressivo, incluindo a Graph API na hora de publicar.
+ */
+const ENCODE_ARGS = [
+  "-c:v", "libx264",
+  "-preset", "veryfast",
+  "-crf", "23",
+  "-pix_fmt", "yuv420p",
+  "-c:a", "aac",
+  "-b:a", "128k",
+  "-movflags", "+faststart",
+];
+
 /** Roda o binário do ffmpeg (ffmpeg-static, sem depender do sistema). */
 export async function runFfmpeg(args: string[]): Promise<void> {
   if (!ffmpegPath) throw new Error("Binário do ffmpeg (ffmpeg-static) não encontrado");
@@ -99,10 +124,7 @@ export async function composeReelsVideo(videoBuffer: Buffer, overlayPng: Buffer)
       "-filter_complex", filter,
       "-map", "[outv]",
       "-map", "0:a?",
-      "-c:v", "libx264",
-      "-pix_fmt", "yuv420p",
-      "-c:a", "aac",
-      "-movflags", "+faststart",
+      ...ENCODE_ARGS,
       outPath,
     ]);
 
@@ -150,10 +172,7 @@ export async function composeFeedVideo(
       "-filter_complex", filter,
       "-map", "[outv]",
       "-map", "0:a?",
-      "-c:v", "libx264",
-      "-pix_fmt", "yuv420p",
-      "-c:a", "aac",
-      "-movflags", "+faststart",
+      ...ENCODE_ARGS,
       outPath,
     ]);
 
@@ -209,10 +228,7 @@ export async function composeFeedVideoBlurBg(
       "-filter_complex", filter,
       "-map", "[outv]",
       "-map", "0:a?",
-      "-c:v", "libx264",
-      "-pix_fmt", "yuv420p",
-      "-c:a", "aac",
-      "-movflags", "+faststart",
+      ...ENCODE_ARGS,
       outPath,
     ]);
 
