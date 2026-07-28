@@ -116,6 +116,12 @@ background de minutos, com spinner" pra instantâneo.
       formato (single, carrossel, Reels, vídeo feed) e conferir
       `render_status='ready'` + arte igual ao preview.
 
+> **Correção de §0-A.7 (conferido em 28/07):** o cliente ativo
+> (`9618ce4a…`, o do Instagram conectado) **não está mais em
+> Pollinations** — hoje é `text_provider=claude` / `image_provider=stock`.
+> O bloqueio do 402 vale só pra `GetKoda` (`191a7460…`) e `TesteVIVO`
+> (`933d1644…`), que seguem em `pollinations` nos dois campos.
+
 ---
 
 ## 0-A. Sessão 2026-07-27 — merge na `main`, Sprint C endurecido, produção sincronizada
