@@ -285,6 +285,11 @@ export interface CardLayoutOverride {
   /** card INTERIOR: foto ocupa metade do quadro (topo ou base), texto na
    * outra metade — em vez do full-bleed padrão. null/ausente = padrão. */
   imagePosition?: "top" | "bottom" | null;
+  /** Fundo DESTE card, sobrepondo o do post (migration 042 vale pro post
+   * inteiro). Mora no jsonb `layout` junto dos outros overrides de card —
+   * não precisa de coluna nova. Ausente = herda o fundo do post. */
+  bgMode?: BackgroundMode | null;
+  bgColor?: string | null;
 }
 
 /** Card de um post do tipo carrossel (ver carousel_cards) */

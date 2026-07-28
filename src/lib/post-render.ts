@@ -13,6 +13,7 @@
 // se precisar de um dado novo, ele entra no RenderSpec.
 // ============================================================
 import { createAdminClient } from "@/lib/supabase/admin";
+import { applyBackground } from "@/lib/render-spec";
 import type { CardLayoutOverride, RenderSpec, Surface, TemplateSpec } from "@/lib/types";
 
 const BUCKET = "post-images";
@@ -152,6 +153,9 @@ export async function renderCarouselPost(
     // Override manual do card (migration 035): esconder o rótulo de marca
     // ou forçar a cor do texto vale por card e sobrevive a re-render.
     const override = (card.layout as CardLayoutOverride | null) ?? {};
+    // Fundo por card (override no jsonb `layout`) — a mesma função que o
+    // preview usa, senão prévia e arte final divergiriam justo na cor.
+    const cardBrand = applyBackground(spec.cardBrand, override.bgMode, override.bgColor);
     const chosen: TemplateSpec | undefined = spec.templates[surfaceForCard(card.idx, total)]?.spec;
 
     try {
@@ -159,7 +163,7 @@ export async function renderCarouselPost(
       if (chosen) {
         const png = await renderTemplateCardPng(
           chosen,
-          spec.cardBrand,
+          cardBrand,
           { headline: card.headline ?? undefined, body: card.body ?? undefined },
           bg,
           { showLabel: override.showLabel, textColor: override.textColor }
@@ -174,7 +178,7 @@ export async function renderCarouselPost(
             headline: card.headline ?? "",
             body: card.body ?? "",
           },
-          spec.cardBrand,
+          cardBrand,
           kind,
           bg,
           spec.profile,
@@ -267,7 +271,7 @@ export async function renderCardVideo(
   const supabase = createAdminClient();
   const { data: card } = await supabase
     .from("carousel_cards")
-    .select("id, post_id, idx, headline, body")
+    .select("id, post_id, idx, headline, body, layout")
     .eq("id", cardId)
     .maybeSingle();
   if (!card) throw new Error(`card ${cardId} não encontrado`);
@@ -282,9 +286,10 @@ export async function renderCardVideo(
   const { composeFeedVideo } = await import("@/lib/video");
   const { buildCardVideoOverlay } = await import("@/lib/image");
 
+  const override = (card.layout as CardLayoutOverride | null) ?? {};
   const { overlayPng, frame } = buildCardVideoOverlay(
     { headline: card.headline, body: card.body },
-    spec.cardBrand,
+    applyBackground(spec.cardBrand, override.bgMode, override.bgColor),
     { pageKind: pageKindForCard(card.idx, total), index: card.idx, total }
   );
   const finalVideo = await composeFeedVideo(source, overlayPng, frame);

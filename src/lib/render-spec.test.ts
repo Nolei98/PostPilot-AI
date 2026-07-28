@@ -20,9 +20,8 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/subscription", () => ({ getUserPlan: async () => "pro" }));
 
-const { resolveRenderSpec, withPost, cardBrandFromKit, resolveBackground } = await import(
-  "@/lib/render-spec"
-);
+const { resolveRenderSpec, withPost, cardBrandFromKit, resolveBackground, applyBackground } =
+  await import("@/lib/render-spec");
 
 const KIT = {
   color_background: "#101018",
@@ -230,5 +229,31 @@ describe("resolveBackground (fundo por post, migration 042)", () => {
     // a spec base não é contaminada — outros posts da mesma resolução
     // continuam na cor da marca
     expect(base.cardBrand.colorBackground).toBe("#101018");
+  });
+});
+
+describe("applyBackground (fundo por CARD do carrossel)", () => {
+  const brand = cardBrandFromKit(KIT);
+
+  it("sem override o card herda o fundo que veio do post", () => {
+    // 'brand' no card significa "herda", não "volta pro Brand Kit": a
+    // marca recebida aqui já é a do post, que pode ter trocado.
+    const doPost = resolveBackground(brand, { format: "carousel", bg_mode: "light" });
+    expect(applyBackground(doPost, "brand", null)).toBe(doPost);
+    expect(applyBackground(doPost, null, null)).toBe(doPost);
+  });
+
+  it("card escuro no meio de um carrossel claro mantém contraste", () => {
+    const doPost = resolveBackground(brand, { format: "carousel", bg_mode: "light" });
+    expect(doPost.colorText).toBe("#0A0A0A");
+    const card = applyBackground(doPost, "dark", null);
+    expect(card.colorBackground).toBe("#0B0B12");
+    expect(card.colorText).toBe("#FFFFFF");
+  });
+
+  it("cor livre do card decide o texto pela luminância dela", () => {
+    const card = applyBackground(brand, "custom", "#FFE44D");
+    expect(card.colorBackground).toBe("#FFE44D");
+    expect(card.colorText).toBe("#0A0A0A");
   });
 });

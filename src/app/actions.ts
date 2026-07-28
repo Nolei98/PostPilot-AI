@@ -1048,6 +1048,9 @@ export async function updateCarouselCard(
     showLabel?: boolean;
     textColor?: "auto" | "light" | "dark";
     imagePosition?: "top" | "bottom" | null;
+    /** Fundo só DESTE card, sobrepondo o do post (ver CardLayoutOverride). */
+    bgMode?: "brand" | "light" | "dark" | "custom" | null;
+    bgColor?: string | null;
   }
 ) {
   const supabase = createClient();
@@ -1118,6 +1121,8 @@ export async function updateCarouselCard(
     ...(fields.showLabel !== undefined ? { showLabel: fields.showLabel } : {}),
     ...(fields.textColor !== undefined ? { textColor: fields.textColor } : {}),
     ...(fields.imagePosition !== undefined ? { imagePosition: fields.imagePosition } : {}),
+    ...(fields.bgMode !== undefined ? { bgMode: fields.bgMode } : {}),
+    ...(fields.bgColor !== undefined ? { bgColor: fields.bgColor } : {}),
   };
 
   // Template Studio (B15): se o cliente escolheu um modelo pra essa

@@ -21,6 +21,7 @@ import { luminanceOfRegion, pickTheme, textColorForTheme, overlayAlphaFor } from
 import { buildProfileChipSvg } from "@/lib/profile-chip";
 import { buildPageOneCoverSvg, buildClosingCoverSvg, buildWatermarkSvg } from "@/lib/cover-svg";
 import { buildCardSvgPlan, CARD_W, CARD_H } from "@/lib/carousel-render";
+import { applyBackground } from "@/lib/render-spec";
 import {
   buildCardVideoOverlaySvg,
   buildFeedVideoOverlaySvg,
@@ -262,6 +263,9 @@ async function buildCard(
   const surface: Surface = isCover ? "cover_image" : isClosing ? "carousel_last" : "carousel_page";
   const chosen = spec.templates[surface]?.spec;
   const override = (card.layout as CardLayoutOverride | null) ?? {};
+  // Fundo por CARD sobrepõe o do post — página escura no meio de um
+  // carrossel claro é decisão de ritmo, não de identidade.
+  const cardBrand = applyBackground(spec.cardBrand, override.bgMode, override.bgColor);
   const photoUrl = card.bg_url ?? null;
   const grid = card.bg_luminance;
 
@@ -280,7 +284,7 @@ async function buildCard(
     const textColor = forced ? (forced === "light" ? "#FFFFFF" : "#111111") : whole.textColor;
     svg = renderFromSpec(
       override.showLabel === false ? hideMarks(chosen) : chosen,
-      { ...spec.cardBrand, colorText: textColor },
+      { ...cardBrand, colorText: textColor },
       { headline: card.headline ?? undefined, body: card.body ?? undefined },
       undefined,
       photoUrl
@@ -295,7 +299,7 @@ async function buildCard(
     // luminância: aqui da grade guardada, lá do sharp.
     const plan = await buildCardSvgPlan(
       { idx: card.idx, role: card.role, headline: card.headline ?? "", body: card.body ?? "" },
-      spec.cardBrand,
+      cardBrand,
       pageKind,
       !!photoUrl,
       total,
@@ -361,9 +365,10 @@ function buildCardWithVideo(
 ): PreviewPage {
   const canvas = { w: CARD_W, h: CARD_H };
   const pageKind = card.idx === 0 ? "cover" : card.idx === total - 1 ? "closing" : "interior";
+  const override = (card.layout as CardLayoutOverride | null) ?? {};
   const { svg, frame } = buildCardVideoOverlaySvg(
     { headline: card.headline, body: card.body },
-    spec.cardBrand,
+    applyBackground(spec.cardBrand, override.bgMode, override.bgColor),
     { pageKind, index: card.idx, total }
   );
   const url = card.video_url ?? sourceVideoUrl(postId, card.idx);

@@ -89,6 +89,12 @@ function CardRow({
   const [imagePosition, setImagePosition] = useState<"top" | "bottom" | "">(
     card.layout?.imagePosition ?? ""
   );
+  // Fundo DESTE card. 'brand' aqui significa "herda o fundo do post" — o
+  // post já pode ter trocado o dele (migration 042).
+  const [bgMode, setBgMode] = useState<"brand" | "light" | "dark" | "custom">(
+    card.layout?.bgMode ?? "brand"
+  );
+  const [bgColor, setBgColor] = useState(card.layout?.bgColor ?? "#FFFFFF");
   const [pending, start] = useTransition();
   const [videoError, setVideoError] = useState<string | null>(null);
   const [uploadingVideo, startVideoUpload] = useTransition();
@@ -100,7 +106,9 @@ function CardRow({
     body !== (card.body ?? "") ||
     showLabel !== (card.layout?.showLabel ?? true) ||
     textColor !== (card.layout?.textColor ?? "auto") ||
-    imagePosition !== (card.layout?.imagePosition ?? "");
+    imagePosition !== (card.layout?.imagePosition ?? "") ||
+    bgMode !== (card.layout?.bgMode ?? "brand") ||
+    (bgMode === "custom" && bgColor !== (card.layout?.bgColor ?? "#FFFFFF"));
 
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -195,6 +203,45 @@ function CardRow({
           </div>
         )}
         {imageError && <p className="text-micro text-error">{imageError}</p>}
+        {/* Fundo deste card — sobrepõe o do post. Útil pra dar ritmo ao
+            carrossel (uma página escura no meio de páginas claras). */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-caption text-muted">Fundo</span>
+          {(
+            [
+              ["brand", "Do post"],
+              ["light", "Claro"],
+              ["dark", "Escuro"],
+              ["custom", "Outra"],
+            ] as ["brand" | "light" | "dark" | "custom", string][]
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={bgMode === mode}
+              onClick={() => setBgMode(mode)}
+              className={`rounded-full px-2.5 py-1 text-micro transition-colors ${
+                bgMode === mode
+                  ? "bg-content text-surface"
+                  : "bg-surface-2 text-muted hover:text-content"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          {bgMode === "custom" && (
+            <label className="flex items-center gap-1.5 rounded-full bg-surface-2 px-2 py-1">
+              <input
+                type="color"
+                value={bgColor}
+                onChange={(e) => setBgColor(e.target.value)}
+                aria-label={`Cor de fundo do card ${card.idx + 1}`}
+                className="h-5 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
+              />
+              <span className="text-micro text-muted">{bgColor.toUpperCase()}</span>
+            </label>
+          )}
+        </div>
         {isInterior && (
           <div className="flex items-center gap-2">
             <label htmlFor={`imgpos-${card.id}`} className="text-caption text-muted">
@@ -308,6 +355,8 @@ function CardRow({
               showLabel,
               textColor,
               imagePosition: imagePosition || null,
+              bgMode,
+              bgColor: bgMode === "custom" ? bgColor : null,
             });
             onSaved();
           })

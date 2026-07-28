@@ -110,10 +110,22 @@ const SYSTEM_BACKGROUNDS = { light: "#FFFFFF", dark: "#0B0B12" } as const;
  * luminância vem da própria cor, não de uma medição.
  */
 export function resolveBackground(brand: CardBrand, post: RenderSpecPostInput): CardBrand {
-  const mode = post.bg_mode ?? "brand";
-  if (mode === "brand") return brand;
-  const colorBackground =
-    mode === "custom" ? post.bg_color || brand.colorBackground : SYSTEM_BACKGROUNDS[mode];
+  return applyBackground(brand, post.bg_mode, post.bg_color);
+}
+
+/**
+ * A mesma decisão, por MODO+COR soltos — é o que o card do carrossel usa,
+ * já que o override dele mora no jsonb `layout` e não em colunas do post.
+ * `mode` nulo/'brand' devolve a marca recebida, que no caso do card já é
+ * o fundo do post: o card só sobrepõe se quiser.
+ */
+export function applyBackground(
+  brand: CardBrand,
+  mode: BackgroundMode | null | undefined,
+  color: string | null | undefined
+): CardBrand {
+  if (!mode || mode === "brand") return brand;
+  const colorBackground = mode === "custom" ? color || brand.colorBackground : SYSTEM_BACKGROUNDS[mode];
   const theme = pickTheme(relativeLuminanceOfHex(colorBackground));
   return { ...brand, colorBackground, colorText: textColorForTheme(theme) };
 }

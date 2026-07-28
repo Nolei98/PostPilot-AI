@@ -90,6 +90,22 @@
 }
 
 /* ---------- BASE ------------------------------------------ */
+/* O app é escuro, mas nada dizia isso ao navegador: o popup nativo do
+   <select> abria com fundo CLARO do sistema enquanto as <option> herdavam
+   o texto quase branco da página — texto claro em fundo claro, ilegível
+   (relatado em 2026-07-28). `color-scheme` faz o Chrome/Safari desenhar
+   os controles nativos na versão escura; as regras de <option> cobrem o
+   caso do Firefox/Windows, que ignora parte disso. */
+:root {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  background-color: rgb(var(--color-surface-2));
+  color: rgb(var(--color-text));
+}
+
 body {
   background: radial-gradient(130% 100% at 50% 0%, #1A0B2E 0%, #150726 55%, #0D0418 100%) fixed #150726;
   color: rgb(var(--color-text));
