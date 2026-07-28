@@ -39,6 +39,53 @@ export function textColorForTheme(theme: Theme): string {
   return theme === "dark" ? "#FFFFFF" : "#0A0A0A";
 }
 
+/**
+ * Contraste mínimo que o REALCE precisa ter contra o fundo pra ler como
+ * destaque.
+ *
+ * Usa a meta de TEXTO (4.5:1), não a de texto grande (3:1): o wordmark é
+ * pequeno (26px num quadro de 1080) e fica entre dois filetes, então
+ * 3:1 ainda saía apagado. Foi o caso relatado em 2026-07-28 — o magenta
+ * da marca sobre fundo branco dá 2.97:1 e não realçava nada.
+ */
+export const MIN_ACCENT_CONTRAST = MIN_CONTRAST;
+
+/** Mistura duas cores hex (t=0 devolve `a`, t=1 devolve `b`). */
+function mixHex(a: string, b: string, t: number): string {
+  const [ar, ag, ab] = hexToRgb(a);
+  const [br, bg, bb] = hexToRgb(b);
+  const ch = (x: number, y: number) => Math.round(x + (y - x) * t);
+  return (
+    "#" +
+    [ch(ar, br), ch(ag, bg), ch(ab, bb)]
+      .map((v) => v.toString(16).padStart(2, "0"))
+      .join("")
+      .toUpperCase()
+  );
+}
+
+/**
+ * Empurra a cor de realce até ela SALTAR do fundo, mantendo o matiz.
+ *
+ * Clareia em fundo escuro, escurece em fundo claro, de 10% em 10% em
+ * direção ao branco/preto — o mínimo necessário pra bater
+ * MIN_ACCENT_CONTRAST. Cor que já contrasta volta intacta, então marca
+ * bem escolhida não é alterada.
+ */
+export function boostAccent(
+  accentHex: string,
+  bgLuminance: number,
+  minRatio = MIN_ACCENT_CONTRAST
+): string {
+  if (contrastRatio(accentHex, bgLuminance) >= minRatio) return accentHex;
+  const alvo = bgLuminance >= LUMINANCE_THRESHOLD ? "#000000" : "#FFFFFF";
+  for (let t = 0.1; t <= 1; t += 0.1) {
+    const candidato = mixHex(accentHex, alvo, t);
+    if (contrastRatio(candidato, bgLuminance) >= minRatio) return candidato;
+  }
+  return alvo;
+}
+
 /** Razão de contraste WCAG entre uma cor de texto (hex) e a luminância (0–1) do fundo. */
 export function contrastRatio(textHex: string, bgLuminance: number): number {
   const textLum = relLuminance(hexToRgb(textHex));

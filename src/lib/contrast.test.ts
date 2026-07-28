@@ -8,6 +8,8 @@ import {
   overlayAlphaFor,
   measureImageLuminance,
   relativeLuminanceOfHex,
+  boostAccent,
+  MIN_ACCENT_CONTRAST,
   buildLuminanceGrid,
   gridAverage,
   luminanceOfRegion,
@@ -173,5 +175,39 @@ describe("LumGrid (amostra de luminância persistível)", () => {
     expect(gridAverage(roundTrip)).toBe(gridAverage(grid));
     // ~3,8 KB — cabe numa coluna por post sem pesar
     expect(JSON.stringify(grid).length).toBeLessThan(5000);
+  });
+});
+
+describe("boostAccent — o realce tem que realçar", () => {
+  const branco = relativeLuminanceOfHex("#FFFFFF");
+  const escuro = relativeLuminanceOfHex("#0B0B12");
+
+  it("cor que já salta do fundo volta INTACTA", () => {
+    // magenta da marca sobre fundo escuro: 6.6:1, não precisa de ajuda
+    expect(boostAccent("#FF5C7A", escuro)).toBe("#FF5C7A");
+  });
+
+  it("a MESMA cor sobre fundo branco é escurecida até realçar", () => {
+    // 2.97:1 antes — passava despercebida (relatado em 2026-07-28)
+    expect(contrastRatio("#FF5C7A", branco)).toBeLessThan(3);
+    const ajustada = boostAccent("#FF5C7A", branco);
+    expect(ajustada).not.toBe("#FF5C7A");
+    expect(contrastRatio(ajustada, branco)).toBeGreaterThanOrEqual(MIN_ACCENT_CONTRAST);
+  });
+
+  it("clareia em fundo escuro em vez de escurecer", () => {
+    const quaseInvisivel = "#101014";
+    const ajustada = boostAccent(quaseInvisivel, escuro);
+    expect(relativeLuminanceOfHex(ajustada)).toBeGreaterThan(
+      relativeLuminanceOfHex(quaseInvisivel)
+    );
+    expect(contrastRatio(ajustada, escuro)).toBeGreaterThanOrEqual(MIN_ACCENT_CONTRAST);
+  });
+
+  it("mantém o matiz — não vira cinza nem preto puro", () => {
+    const ajustada = boostAccent("#46E5B7", branco);
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(ajustada.slice(i, i + 2), 16));
+    expect(g).toBeGreaterThan(r); // continua verde
+    expect(b).toBeGreaterThan(r);
   });
 });

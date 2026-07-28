@@ -18,7 +18,7 @@
 // diferentes dependendo de quem renderizou.
 // ============================================================
 import { createAdminClient } from "@/lib/supabase/admin";
-import { pickTheme, relativeLuminanceOfHex, textColorForTheme } from "@/lib/contrast";
+import { boostAccent, pickTheme, relativeLuminanceOfHex, textColorForTheme } from "@/lib/contrast";
 import { resolvePostFontFamily } from "@/lib/font-data";
 import { resolveTemplateSpecs } from "@/lib/template-selection";
 import type { CardBrand } from "@/lib/render-shared";
@@ -145,9 +145,20 @@ export function applyMarkColor(
   mode: MarkMode | null | undefined,
   color: string | null | undefined
 ): CardBrand {
-  if (!mode || mode === "accent") return brand;
+  // 'accent' não é "deixa como está": é a promessa de DESTAQUE. A cor da
+  // marca costuma ser escolhida contra o fundo padrão do kit, e some
+  // quando o post troca de fundo (042) — aí o wordmark deixava de
+  // realçar. boostAccent só mexe quando o contraste é insuficiente.
+  if (!mode || mode === "accent") {
+    return { ...brand, markColor: boostedAccent(brand) };
+  }
   const markColor = mode === "title" ? brand.colorText : color || brand.colorAccent;
   return { ...brand, markColor };
+}
+
+/** Realce da marca já garantido contra o fundo resolvido do post. */
+function boostedAccent(brand: CardBrand): string {
+  return boostAccent(brand.colorAccent, relativeLuminanceOfHex(brand.colorBackground));
 }
 
 /** Campos do post que o resolver precisa ler. */

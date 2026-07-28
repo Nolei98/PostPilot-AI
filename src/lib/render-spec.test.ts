@@ -166,7 +166,13 @@ describe("withPost", () => {
   });
 
   it("troca o formato e o quadro do vídeo", () => {
-    const base = { ...({} as RenderSpec), format: "single", identity: {}, videoShape: undefined } as RenderSpec;
+    const base = {
+      ...({} as RenderSpec),
+      format: "single",
+      identity: {},
+      videoShape: undefined,
+      cardBrand: cardBrandFromKit(KIT),
+    } as RenderSpec;
     const video = withPost(base, { format: "video", video_shape: "feed-blur" });
     expect(video.format).toBe("video");
     expect(video.videoShape).toBe("feed-blur");
@@ -185,10 +191,13 @@ describe("cardBrandFromKit", () => {
 describe("resolveBackground (fundo por post, migration 042)", () => {
   const brand = cardBrandFromKit(KIT);
 
-  it("'brand' devolve a marca intacta", () => {
-    expect(resolveBackground(brand, { format: "single", bg_mode: "brand" })).toBe(brand);
+  it("'brand' mantém as cores do kit (só o realce da marca é garantido)", () => {
+    const igual = resolveBackground(brand, { format: "single", bg_mode: "brand" });
+    expect(igual.colorBackground).toBe(brand.colorBackground);
+    expect(igual.colorText).toBe(brand.colorText);
     // ausente = mesma coisa (posts anteriores à 042)
-    expect(resolveBackground(brand, { format: "single" })).toBe(brand);
+    const semCampo = resolveBackground(brand, { format: "single" });
+    expect(semCampo.colorBackground).toBe(brand.colorBackground);
   });
 
   it("fundo claro força texto escuro, mesmo com marca de texto branco", () => {
@@ -267,9 +276,15 @@ describe("applyBackground (fundo por CARD do carrossel)", () => {
 describe("applyMarkColor (cor do wordmark, migration 043)", () => {
   const brand = cardBrandFromKit(KIT);
 
-  it("'accent' não mexe em nada — é o comportamento histórico", () => {
-    expect(applyMarkColor(brand, "accent", null)).toBe(brand);
-    expect(applyMarkColor(brand, null, null)).toBe(brand);
+  it("'accent' garante que o realce SALTE do fundo", () => {
+    // sobre o fundo escuro do kit o magenta já contrasta: fica igual
+    expect(applyMarkColor(brand, "accent", null).markColor).toBe(brand.colorAccent);
+    expect(applyMarkColor(brand, null, null).markColor).toBe(brand.colorAccent);
+
+    // sobre fundo branco o MESMO magenta dá 2.97:1 e some — aí é
+    // escurecido até realçar de verdade (relatado em 2026-07-28)
+    const claro = resolveBackground(brand, { format: "single", bg_mode: "light" });
+    expect(claro.markColor).not.toBe(brand.colorAccent);
   });
 
   it("'title' acompanha o título DEPOIS do fundo ter sido resolvido", () => {
