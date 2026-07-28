@@ -63,6 +63,38 @@ function Layer({ layer }: { layer: PreviewLayer }) {
     );
   }
 
+  if (layer.kind === "video") {
+    // Sem moldura = o vídeo É o fundo do quadro (Reels, feed-blur).
+    // Com moldura = ele mora num retângulo 16:9 e o SVG desenha o resto
+    // com um buraco exatamente aí — mesmo encaixe do ffmpeg no render.
+    const style = layer.frame
+      ? {
+          left: `${layer.frame.xFrac * 100}%`,
+          top: `${layer.frame.yFrac * 100}%`,
+          width: `${layer.frame.wFrac * 100}%`,
+          height: `${layer.frame.hFrac * 100}%`,
+          borderRadius: `${layer.frame.radiusFrac * 100}cqw`,
+        }
+      : { inset: 0, width: "100%", height: "100%" };
+    return (
+      // eslint-disable-next-line jsx-a11y/media-has-caption
+      <video
+        src={layer.url}
+        poster={layer.poster ?? undefined}
+        muted
+        loop
+        playsInline
+        autoPlay
+        aria-hidden
+        className="absolute object-cover"
+        style={{
+          ...style,
+          ...(layer.blurredBackdrop ? { filter: "blur(2.5cqw)", transform: "scale(1.1)" } : {}),
+        }}
+      />
+    );
+  }
+
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
@@ -107,7 +139,11 @@ export function PreviewFrame({
     );
   }
 
-  const photos = page.layers.filter((l) => l.kind === "photo" || l.kind === "blur");
+  // Vídeo entra junto do fundo: o SVG do layout vem por cima e é ele que
+  // recorta a moldura (buraco transparente) ou desenha o véu de leitura.
+  const photos = page.layers.filter(
+    (l) => l.kind === "photo" || l.kind === "blur" || l.kind === "video"
+  );
   const marks = page.layers.filter((l) => l.kind === "logo" || l.kind === "avatar");
 
   return (

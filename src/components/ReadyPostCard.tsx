@@ -27,15 +27,23 @@ export function ReadyPostCard({
 }) {
   const toast = useToast();
   const router = useRouter();
-  const pages = [post.image_url, post.closing_image_url].filter(
-    (u): u is string => !!u
-  );
+  // Carrossel: as páginas são os CARDS, em ordem. Antes esta tela lia só
+  // post.image_url + closing, então um carrossel de N páginas aparecia
+  // como 1 (a capa) e o .zip saía com uma imagem só (2026-07-28).
+  const cards = (post.carousel_cards ?? []).slice().sort((a, b) => a.idx - b.idx);
+  const isCarousel = post.format === "carousel";
+  const pages = isCarousel
+    ? cards.map((c) => c.image_url).filter((u): u is string => !!u)
+    : [post.image_url, post.closing_image_url].filter((u): u is string => !!u);
+  /** Vídeo por página, na mesma ordem — card sem vídeo fica `null`. */
+  const cardVideos = isCarousel ? cards.map((c) => c.video_url ?? null) : [];
+  const cardPosters = isCarousel ? cards.map((c) => c.video_poster_url ?? null) : [];
+  const hasCardVideo = cardVideos.some(Boolean);
   // Render-on-approval (migration 040): entre aprovar e a arte existir há
   // uma janela de segundos. Baixar/postar nessa janela pegaria a arte
   // vazia (ou a anterior), então o card mostra o estado e trava as ações.
   const isRendering = post.render_status === "pending" || post.render_status === "rendering";
   const renderFailed = post.render_status === "error";
-  const isCarousel = pages.length > 1;
   const isVideo = (post.format === "video" || post.format === "video_feed") && !!post.video_url;
   const isFeedVideo = post.format === "video_feed";
   const isScheduled = post.status === "scheduled";
@@ -128,6 +136,16 @@ export function ReadyPostCard({
           zip.file(`post-${post.id}-${i + 1}.jpg`, await res.blob());
         })
       );
+      // Card que virou vídeo vai como .mp4 junto — só a imagem seria a
+      // arte estática do card, sem o vídeo que o usuário anexou.
+      await Promise.all(
+        cardVideos.map(async (url, i) => {
+          if (!url) return;
+          const res = await fetch(url);
+          if (!res.ok) return;
+          zip.file(`post-${post.id}-${i + 1}.mp4`, await res.blob());
+        })
+      );
       const blob = await zip.generateAsync({ type: "blob" });
       triggerDownload(blob, `post-${post.id}-carrossel.zip`);
       toast("↓ Arte baixada em .zip.");
@@ -202,6 +220,8 @@ export function ReadyPostCard({
         ) : (
           <CarouselPreview
             images={pages}
+            videos={isCarousel ? cardVideos : undefined}
+            posters={isCarousel ? cardPosters : undefined}
             alt={post.hook}
             className="h-28 w-[89.6px] shrink-0 rounded-control"
           />
@@ -240,7 +260,8 @@ export function ReadyPostCard({
           )}
           {!isVideo && isCarousel && (
             <span className="mt-1 inline-block text-micro text-subtle">
-              🖼 carrossel · 2 páginas
+              🖼 carrossel · {pages.length} página{pages.length === 1 ? "" : "s"}
+              {hasCardVideo ? " · com vídeo" : ""}
             </span>
           )}
           {isPosted && reach !== null && (

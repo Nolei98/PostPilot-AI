@@ -45,9 +45,10 @@ export const attachVideo = inngest.createFunction(
         const { extractPosterFrame } = await import("@/lib/video");
         const { buildLuminanceGrid } = await import("@/lib/contrast");
 
-        // Pôster CRU: é o que a Fila mostra no preview (com o overlay
-        // desenhado por cima no browser) e a base da medição de contraste.
-        // O pôster COM a arte só existe depois da aprovação.
+        // Pôster CRU: no Reels e no feed-blur o vídeo É o fundo, então
+        // este frame vira a base do preview. No feed 4:5 sólido não —
+        // lá o vídeo mora numa moldura 16:9 e o fundo é a cor da marca
+        // (ver o update abaixo).
         const poster = await extractPosterFrame(videoBuffer, 0.5);
         const grid = await buildLuminanceGrid(poster);
 
@@ -74,9 +75,13 @@ export const attachVideo = inngest.createFunction(
         await supabase
           .from("posts")
           .update({
-            // video_url continua nulo: o vídeo composto nasce na aprovação
-            base_image_url: result.posterUrl,
-            base_luminance: result.grid,
+            // video_url continua nulo: o vídeo composto nasce na aprovação.
+            // base_* só quando o vídeo é REALMENTE o fundo do quadro; no
+            // feed sólido isso faria a prévia cobrir o card inteiro com o
+            // pôster, em vez de encaixá-lo na moldura (bug de 2026-07-28).
+            ...(videoShape === "feed"
+              ? {}
+              : { base_image_url: result.posterUrl, base_luminance: result.grid }),
             video_poster_url: result.posterUrl,
             video_status: "ready",
             video_error: null,

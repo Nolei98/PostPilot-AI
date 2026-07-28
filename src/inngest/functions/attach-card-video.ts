@@ -42,9 +42,11 @@ export const attachCardVideo = inngest.createFunction(
         const { extractPosterFrame } = await import("@/lib/video");
         const { buildLuminanceGrid } = await import("@/lib/contrast");
 
-        // Pôster CRU: é o fundo do preview ao vivo na Fila e a base da
-        // medição de contraste. O pôster COM a moldura só existe depois
-        // da aprovação.
+        // Pôster CRU: é o que a Fila mostra DENTRO da moldura do vídeo
+        // enquanto o preview não está tocando. NÃO é o fundo do card: o
+        // card com vídeo tem fundo sólido da marca e uma moldura 16:9 no
+        // meio — gravar o pôster em bg_url fazia o vídeo virar fundo
+        // inteiro na prévia (bug de 2026-07-28).
         const poster = await extractPosterFrame(videoBuffer, 0.5);
         const grid = await buildLuminanceGrid(poster);
 
@@ -71,9 +73,9 @@ export const attachCardVideo = inngest.createFunction(
         await supabase
           .from("carousel_cards")
           .update({
-            // video_url continua nulo: o vídeo composto nasce na aprovação
-            bg_url: result.posterUrl,
-            bg_luminance: result.grid,
+            // video_url continua nulo: o vídeo composto nasce na aprovação.
+            // bg_url/bg_luminance NÃO são tocados — são a foto de fundo do
+            // card, e o card com vídeo não usa foto de fundo.
             video_poster_url: result.posterUrl,
             video_status: "ready",
             video_error: null,

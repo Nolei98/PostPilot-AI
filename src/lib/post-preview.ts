@@ -21,6 +21,11 @@ import { luminanceOfRegion, pickTheme, textColorForTheme, overlayAlphaFor } from
 import { buildProfileChipSvg } from "@/lib/profile-chip";
 import { buildPageOneCoverSvg, buildClosingCoverSvg, buildWatermarkSvg } from "@/lib/cover-svg";
 import { buildCardSvgPlan, CARD_W, CARD_H } from "@/lib/carousel-render";
+import {
+  buildCardVideoOverlaySvg,
+  buildFeedVideoOverlaySvg,
+  buildReelsVideoOverlaySvg,
+} from "@/lib/image";
 import { renderFromSpec } from "@/lib/template-render";
 import type { LumGrid } from "@/lib/contrast";
 import type {
@@ -47,7 +52,23 @@ export type PreviewLayer =
   /** Selo circular da logo da marca, canto superior direito. */
   | { kind: "logo"; url: string; sizeFrac: number; marginFrac: number }
   /** Avatar do chip de perfil (o resto do chip já está no SVG). */
-  | { kind: "avatar"; url: string; xFrac: number; yFrac: number; sizeFrac: number };
+  | { kind: "avatar"; url: string; xFrac: number; yFrac: number; sizeFrac: number }
+  /**
+   * Vídeo já anexado ao post/card. Vai ATRÁS do SVG: os overlays de
+   * vídeo desenham o fundo com um buraco arredondado exatamente na
+   * moldura, então o vídeo só aparece através dele — mesmo encaixe que o
+   * ffmpeg faz no render final. `frac` é o retângulo da moldura em
+   * fração do quadro; ausente = vídeo cobre o quadro inteiro (Reels e
+   * feed-blur, onde o fundo É o vídeo).
+   */
+  | {
+      kind: "video";
+      url: string;
+      poster: string | null;
+      frame: { xFrac: number; yFrac: number; wFrac: number; hFrac: number; radiusFrac: number } | null;
+      /** Cópia borrada cobrindo o quadro (fundo do feed-blur). */
+      blurredBackdrop?: boolean;
+    };
 
 export interface PreviewPage {
   /** SVG completo da página, pronto pra injetar (largura/altura em 100%). */
@@ -68,6 +89,10 @@ export interface PreviewPostInput {
   image_url?: string | null;
   closing_image_url?: string | null;
   video_poster_url?: string | null;
+  /** Vídeo COMPOSTO (só existe depois de aprovar). */
+  video_url?: string | null;
+  video_status?: "none" | "processing" | "ready" | "error" | null;
+  video_shape?: "reels" | "feed" | "feed-blur" | null;
 }
 
 /** Escala o SVG pro container (mesmo truque de layout-preview.ts). */
@@ -292,6 +317,103 @@ async function buildCard(
   return { svg: fill(stack(canvas, svg, ...extra.parts)), layers, aspect: "1080 / 1350" };
 }
 
+const REELS_H = 1920;
+
+/**
+ * URL pública do vídeo BRUTO que o usuário anexou. O caminho é derivado
+ * (bucket público, nome determinístico gravado por uploadPostVideo /
+ * uploadCarouselCardVideo) — não existe coluna pra ele porque o vídeo
+ * COMPOSTO, esse sim gravado em video_url, só nasce na aprovação.
+ */
+function sourceVideoUrl(postId: string, cardIdx?: number): string | null {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return null;
+  const name =
+    cardIdx == null ? `${postId}-video-source.mp4` : `${postId}-card-${cardIdx}-video-source.mp4`;
+  return `${base}/storage/v1/object/public/post-images/${name}`;
+}
+
+/** Moldura do render (px no quadro) → fração, que é o que o preview usa. */
+function frameToFrac(
+  frame: { x: number; y: number; w: number; h: number; radius: number },
+  canvas: { w: number; h: number }
+) {
+  return {
+    xFrac: frame.x / canvas.w,
+    yFrac: frame.y / canvas.h,
+    wFrac: frame.w / canvas.w,
+    hFrac: frame.h / canvas.h,
+    radiusFrac: frame.radius / canvas.w,
+  };
+}
+
+/**
+ * Card de carrossel COM vídeo: mesmo overlay do render (título → moldura
+ * 16:9 → corpo → rótulo), com o vídeo encaixado atrás do buraco. Só o
+ * card que tem vídeo passa por aqui — antes a prévia pintava o vídeo em
+ * todos os interiores e ainda por cima em tela cheia.
+ */
+function buildCardWithVideo(
+  card: EmbeddedCarouselCard,
+  postId: string,
+  total: number,
+  spec: RenderSpec
+): PreviewPage {
+  const canvas = { w: CARD_W, h: CARD_H };
+  const pageKind = card.idx === 0 ? "cover" : card.idx === total - 1 ? "closing" : "interior";
+  const { svg, frame } = buildCardVideoOverlaySvg(
+    { headline: card.headline, body: card.body },
+    spec.cardBrand,
+    { pageKind, index: card.idx, total }
+  );
+  const url = card.video_url ?? sourceVideoUrl(postId, card.idx);
+  const layers: PreviewLayer[] = url
+    ? [{ kind: "video", url, poster: card.video_poster_url, frame: frameToFrac(frame, canvas) }]
+    : [];
+  return { svg: fill(svg), layers, aspect: "1080 / 1350" };
+}
+
+/**
+ * Post de vídeo. Três enquadramentos, os mesmos do render:
+ *  - reels: 9:16, o vídeo cobre o quadro e o texto vive na zona segura;
+ *  - feed: 4:5 de fundo sólido, vídeo numa moldura 16:9;
+ *  - feed-blur: 4:5 com o próprio vídeo borrado como fundo + moldura.
+ */
+function buildVideoPage(post: PreviewPostInput, spec: RenderSpec): PreviewPage | null {
+  const url = post.video_url ?? sourceVideoUrl(post.id);
+  if (!url) return null;
+  const shape = post.video_shape ?? (post.format === "video_feed" ? "feed" : "reels");
+  const poster = post.video_poster_url ?? null;
+  const headline = post.hook ?? "";
+
+  if (shape === "reels") {
+    const canvas = { w: 1080, h: REELS_H };
+    // Mesmo piso de véu do render: a luminância medida vale só pro frame
+    // de pôster, e o texto não pode sumir quando o vídeo clareia.
+    const zone = { top: Math.round(REELS_H * 0.55), height: Math.round(REELS_H * 0.45) };
+    const c = contrastFor(post.base_luminance, zone, canvas);
+    const svg = buildReelsVideoOverlaySvg(headline, spec.cardBrand, {
+      theme: c.theme,
+      textColor: c.textColor,
+      alpha: Math.max(0.32, c.alpha),
+    });
+    return {
+      svg: fill(svg),
+      layers: [{ kind: "video", url, poster, frame: null }],
+      aspect: "1080 / 1920",
+    };
+  }
+
+  const canvas = { w: WIDTH, h: HEIGHT };
+  const { svg, frame } = buildFeedVideoOverlaySvg(headline, spec.cardBrand);
+  const layers: PreviewLayer[] = [];
+  if (shape === "feed-blur") {
+    layers.push({ kind: "video", url, poster, frame: null, blurredBackdrop: true });
+  }
+  layers.push({ kind: "video", url, poster, frame: frameToFrac(frame, canvas) });
+  return { svg: fill(svg), layers, aspect: "1080 / 1350" };
+}
+
 /** Esconde wordmark/divisor/rótulo — mesmo efeito do override showLabel:false. */
 function hideMarks<T extends { elements: { type: string }[] }>(spec: T): T {
   const MARKS = ["wordmark", "divider", "handleLabel"];
@@ -317,13 +439,25 @@ export async function buildPostPreview(
     if (cards.length === 0) return [];
     const total = cards.length;
     return Promise.all(
-      cards.map((card) =>
+      cards.map((card) => {
+        // Vídeo é POR CARD: quem não tem segue como card normal.
+        if (card.video_status === "ready") {
+          return buildCardWithVideo(card, post.id, total, spec);
+        }
         // card já renderizado e sem fundo guardado = anterior à 040
-        !card.bg_url && !card.bg_luminance && card.image_url
+        return !card.bg_url && !card.bg_luminance && card.image_url
           ? legacy(card.image_url)
-          : buildCard(card, total, spec)
-      )
+          : buildCard(card, total, spec);
+      })
     );
+  }
+
+  if (post.format === "video" || post.format === "video_feed") {
+    if (post.video_status === "ready") {
+      const page = buildVideoPage(post, spec);
+      if (page) return [page];
+    }
+    // Sem vídeo pronto ainda: cai no caminho normal (base/arte antiga).
   }
 
   const photo = post.base_image_url ?? null;

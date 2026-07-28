@@ -36,7 +36,11 @@ export function CarouselPreview({
   const [index, setIndex] = useState(0);
   const count = pages?.length ?? images.length;
   const hasMultiple = count > 1;
-  const currentVideo = videos?.[index];
+  // `videos` é o caminho ANTIGO (arte já composta, vídeo cobrindo o
+  // slide). Com preview ao vivo o vídeo entra como camada da própria
+  // página, no lugar certo do layout — usar os dois ao mesmo tempo
+  // pintava o vídeo em tela cheia por cima do card (2026-07-28).
+  const currentVideo = pages ? null : videos?.[index];
 
   function prev(e: React.MouseEvent) {
     e.stopPropagation();
@@ -55,7 +59,12 @@ export function CarouselPreview({
   const livePage = pages?.[index];
 
   return (
-    <div className={`relative overflow-hidden bg-surface-2 ${className}`}>
+    <div
+      className={`relative overflow-hidden bg-surface-2 ${className}`}
+      // O Reels é 9:16, não 4:5 — sem isso a prévia dele saía esmagada
+      // dentro do quadro do feed.
+      style={livePage?.aspect ? { aspectRatio: livePage.aspect.replace(" / ", "/") } : undefined}
+    >
       {currentVideo ? (
         /* eslint-disable-next-line jsx-a11y/media-has-caption */
         <video

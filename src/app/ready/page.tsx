@@ -19,7 +19,11 @@ export default async function ReadyPage() {
   // (histórico) — a aba filtra client-side.
   const { data } = await supabase
     .from("posts")
-    .select("*, news_items(title, url, viral_score)")
+    // carousel_cards entram aqui porque a arte do carrossel mora nos
+    // CARDS, não no post: sem eles a tela mostrava (e baixava) só a capa.
+    .select(
+      "*, news_items(title, url, viral_score), carousel_cards(id, idx, role, headline, body, image_url, bg_url, bg_luminance, layout, video_url, video_poster_url, video_status, video_error)"
+    )
     .in("status", ["approved", "scheduled", "published"])
     .eq("client_id", shell.activeClientId ?? "")
     .order("approved_at", { ascending: false });

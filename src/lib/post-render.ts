@@ -139,9 +139,15 @@ export async function renderCarouselPost(
 
   for (const card of cards) {
     const kind = pageKindForCard(card.idx, total);
-    const bgUrl =
-      (card.bg_url as string | null) ??
-      (kind === "cover" || kind === "closing" ? opts.fallbackBgUrl ?? null : null);
+    // Card com vídeo não tem foto de fundo: o fundo é a cor sólida da
+    // marca e o vídeo mora numa moldura 16:9 no meio. Até 2026-07-28 o
+    // attach-card-video gravava o PÔSTER do vídeo em bg_url, então a arte
+    // saía com o frame do vídeo esticado no card inteiro.
+    const isVideoCard = card.video_status === "ready";
+    const bgUrl = isVideoCard
+      ? null
+      : (card.bg_url as string | null) ??
+        (kind === "cover" || kind === "closing" ? opts.fallbackBgUrl ?? null : null);
     const bg = await fetchBg(bgUrl);
     // Override manual do card (migration 035): esconder o rótulo de marca
     // ou forçar a cor do texto vale por card e sobrevive a re-render.
