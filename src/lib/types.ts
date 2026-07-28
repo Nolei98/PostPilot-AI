@@ -206,6 +206,9 @@ export type RenderStatus = "none" | "pending" | "rendering" | "ready" | "error";
  * a migration 040 persistir em posts.video_shape. */
 export type VideoShape = "reels" | "feed" | "feed-blur";
 
+/** Fundo escolhido por post (migration 042). */
+export type BackgroundMode = "brand" | "light" | "dark" | "custom";
+
 /**
  * SNAPSHOT do que decidiu a arte, congelado no momento da aprovação
  * (posts.render_spec, migration 040). É o contrato central do modelo
@@ -373,6 +376,12 @@ export interface Post {
   base_luminance: LumGrid | null;
   /** Quadro do vídeo; até a 040 só existia no evento do attach-video. */
   video_shape: VideoShape | null;
+
+  // ---- fundo por post (migration 042) ----
+  /** 'brand' usa o Brand Kit; 'custom' usa bg_color. A cor do TEXTO não
+   * é gravada — sai da luminância do fundo (ver resolveBackground). */
+  bg_mode: BackgroundMode;
+  bg_color: string | null;
 
   created_at: string;
 }

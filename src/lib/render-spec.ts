@@ -18,10 +18,12 @@
 // diferentes dependendo de quem renderizou.
 // ============================================================
 import { createAdminClient } from "@/lib/supabase/admin";
+import { pickTheme, relativeLuminanceOfHex, textColorForTheme } from "@/lib/contrast";
 import { resolvePostFontFamily } from "@/lib/font-data";
 import { resolveTemplateSpecs } from "@/lib/template-selection";
 import type { CardBrand } from "@/lib/render-shared";
 import type {
+  BackgroundMode,
   BrandTemplate,
   IgProfile,
   PostFormat,
@@ -96,9 +98,31 @@ export function identityFromKit(bk: BrandKitRow): VisualIdentity {
   };
 }
 
+/** Fundos do sistema pros modos 'light'/'dark' (migration 042). */
+const SYSTEM_BACKGROUNDS = { light: "#FFFFFF", dark: "#0B0B12" } as const;
+
+/**
+ * Aplica o fundo escolhido no post sobre a marca do Brand Kit.
+ *
+ * A cor de TEXTO é derivada, nunca herdada: um cliente com texto branco
+ * que escolhe fundo branco ficaria com arte ilegível. Mesma régua do
+ * contraste sobre foto (pickTheme/textColorForTheme), só que aqui a
+ * luminância vem da própria cor, não de uma medição.
+ */
+export function resolveBackground(brand: CardBrand, post: RenderSpecPostInput): CardBrand {
+  const mode = post.bg_mode ?? "brand";
+  if (mode === "brand") return brand;
+  const colorBackground =
+    mode === "custom" ? post.bg_color || brand.colorBackground : SYSTEM_BACKGROUNDS[mode];
+  const theme = pickTheme(relativeLuminanceOfHex(colorBackground));
+  return { ...brand, colorBackground, colorText: textColorForTheme(theme) };
+}
+
 /** Campos do post que o resolver precisa ler. */
 export interface RenderSpecPostInput {
   format: PostFormat;
+  bg_mode?: BackgroundMode | null;
+  bg_color?: string | null;
   template_applied?: boolean | null;
   video_shape?: VideoShape | null;
   tpl_keyword?: string | null;
@@ -144,6 +168,9 @@ export function identityFromPost(post: RenderSpecPostInput, bk: BrandKitRow): Vi
 export function withPost(base: RenderSpec, post: RenderSpecPostInput): RenderSpec {
   return {
     ...base,
+    // O fundo é POR POST (042): a spec base traz o do Brand Kit, e cada
+    // post pode trocar sem afetar os outros da mesma resolução.
+    cardBrand: resolveBackground(base.cardBrand, post),
     format: post.format,
     videoShape: post.video_shape ?? base.videoShape,
     closingPage: post.template_applied ?? false,
@@ -204,7 +231,7 @@ export async function resolveRenderSpec(input: {
   const { getUserPlan } = await import("@/lib/subscription");
   const watermark = (await getUserPlan(input.userId)) === "free";
 
-  const cardBrand = cardBrandFromKit(bk);
+  const cardBrand = resolveBackground(cardBrandFromKit(bk), input.post);
   return {
     v: 1,
     frozenAt: new Date().toISOString(),

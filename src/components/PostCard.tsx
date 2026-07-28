@@ -22,6 +22,7 @@ import {
   uploadPostImage,
   attachUploadedPostVideo,
   createVideoUploadTicket,
+  savePostBackground,
 } from "@/app/actions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardActions } from "@/components/ui/Card";
@@ -138,6 +139,25 @@ export function PostCard({
       } catch {
         setUploadError("Falha ao subir imagem. Tente um arquivo menor.");
       }
+    });
+  }
+
+  // ---- Fundo deste post (migration 042) ----
+  // A cor do TEXTO não entra aqui de propósito: ela é derivada da
+  // luminância do fundo no resolveRenderSpec, senão dava pra escolher
+  // texto branco em fundo branco.
+  const [bgMode, setBgMode] = useState(post.bg_mode ?? "brand");
+  const [bgColor, setBgColor] = useState(post.bg_color ?? "#FFFFFF");
+  const [bgPending, startBgSave] = useTransition();
+
+  function applyBackground(mode: "brand" | "light" | "dark" | "custom", color?: string) {
+    setBgMode(mode);
+    if (color) setBgColor(color);
+    startBgSave(async () => {
+      await savePostBackground(post.id, mode, color ?? bgColor);
+      // O preview é montado no servidor com o Brand Kit + os campos do
+      // post, então precisa de um refresh pra redesenhar com a cor nova.
+      router.refresh();
     });
   }
 
@@ -368,6 +388,53 @@ export function PostCard({
             />
           </label>
           {uploadError && <p className="text-micro text-error">{uploadError}</p>}
+
+          {/* Fundo da arte (migration 042) — vale só pra ESTE post e
+              congela na aprovação. "Marca" é o Brand Kit; o seletor RGB
+              só aparece quando o usuário sai do padrão dele. */}
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <span className="text-micro text-subtle">🎨 Fundo</span>
+            {bgPending && <span className="text-micro text-subtle">salvando…</span>}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(
+              [
+                ["brand", "Marca"],
+                ["light", "Claro"],
+                ["dark", "Escuro"],
+                ["custom", "Outra"],
+              ] as ["brand" | "light" | "dark" | "custom", string][]
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={bgMode === mode}
+                onClick={() => applyBackground(mode)}
+                className={`rounded-full px-2.5 py-1 text-micro transition-colors ${
+                  bgMode === mode
+                    ? "bg-content text-surface"
+                    : "bg-surface-2 text-muted hover:text-content"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            {bgMode === "custom" && (
+              <label className="flex items-center gap-1.5 rounded-full bg-surface-2 px-2 py-1">
+                <input
+                  type="color"
+                  value={bgColor}
+                  onChange={(e) => applyBackground("custom", e.target.value)}
+                  aria-label="Cor de fundo personalizada"
+                  className="h-5 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
+                />
+                <span className="text-micro text-muted">{bgColor.toUpperCase()}</span>
+              </label>
+            )}
+          </div>
+          <p className="text-micro text-subtle">
+            A cor do texto se ajusta sozinha ao fundo escolhido.
+          </p>
 
           {/* Vídeo anexado (Fase 4, kit v2 §3; feed 4:5 = migration 036) —
               upload manual, composto em background (Inngest + ffmpeg).

@@ -20,7 +20,9 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 vi.mock("@/lib/subscription", () => ({ getUserPlan: async () => "pro" }));
 
-const { resolveRenderSpec, withPost, cardBrandFromKit } = await import("@/lib/render-spec");
+const { resolveRenderSpec, withPost, cardBrandFromKit, resolveBackground } = await import(
+  "@/lib/render-spec"
+);
 
 const KIT = {
   color_background: "#101018",
@@ -172,5 +174,61 @@ describe("cardBrandFromKit", () => {
     expect(brand.wordmark).toBeNull();
     expect(brand.brandName).toBeNull();
     expect(brand.colorAccent).toBe("#7C5CFF");
+  });
+});
+
+describe("resolveBackground (fundo por post, migration 042)", () => {
+  const brand = cardBrandFromKit(KIT);
+
+  it("'brand' devolve a marca intacta", () => {
+    expect(resolveBackground(brand, { format: "single", bg_mode: "brand" })).toBe(brand);
+    // ausente = mesma coisa (posts anteriores à 042)
+    expect(resolveBackground(brand, { format: "single" })).toBe(brand);
+  });
+
+  it("fundo claro força texto escuro, mesmo com marca de texto branco", () => {
+    const light = resolveBackground(brand, { format: "single", bg_mode: "light" });
+    expect(light.colorBackground).toBe("#FFFFFF");
+    // o Brand Kit pede #FFFFFF no texto — seria invisível
+    expect(brand.colorText).toBe("#FFFFFF");
+    expect(light.colorText).not.toBe("#FFFFFF");
+  });
+
+  it("fundo escuro força texto claro", () => {
+    const dark = resolveBackground(brand, { format: "single", bg_mode: "dark" });
+    expect(dark.colorBackground).toBe("#0B0B12");
+    expect(dark.colorText).toBe("#FFFFFF");
+  });
+
+  it("'custom' usa o hex escolhido e decide o texto pela luminância dele", () => {
+    const amarelo = resolveBackground(brand, {
+      format: "single",
+      bg_mode: "custom",
+      bg_color: "#FFE44D",
+    });
+    expect(amarelo.colorBackground).toBe("#FFE44D");
+    expect(amarelo.colorText).not.toBe("#FFFFFF");
+
+    const vinho = resolveBackground(brand, {
+      format: "single",
+      bg_mode: "custom",
+      bg_color: "#2A0A12",
+    });
+    expect(vinho.colorText).toBe("#FFFFFF");
+  });
+
+  it("'custom' sem cor cai na marca em vez de quebrar a arte", () => {
+    const semCor = resolveBackground(brand, { format: "single", bg_mode: "custom", bg_color: null });
+    expect(semCor.colorBackground).toBe(brand.colorBackground);
+  });
+
+  it("withPost aplica o fundo do post sobre uma spec já resolvida", async () => {
+    brandKitRow = KIT;
+    const base = await resolveRenderSpec({ clientId: "c", userId: "u", post: { format: "single" } });
+    const claro = withPost(base, { format: "single", bg_mode: "light" });
+    expect(claro.cardBrand.colorBackground).toBe("#FFFFFF");
+    // a spec base não é contaminada — outros posts da mesma resolução
+    // continuam na cor da marca
+    expect(base.cardBrand.colorBackground).toBe("#101018");
   });
 });

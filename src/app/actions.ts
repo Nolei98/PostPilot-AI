@@ -89,6 +89,40 @@ export async function retryRender(postId: string) {
   revalidatePath("/ready");
 }
 
+/**
+ * Fundo DESTE post (migration 042) — 'brand' volta pro Brand Kit,
+ * 'light'/'dark' usam os fundos do sistema e 'custom' guarda o hex do
+ * seletor RGB. Só vale enquanto o post está na fila: depois de aprovado
+ * a arte está congelada em render_spec e não deve mudar sozinha.
+ *
+ * Não re-renderiza nada: a Fila desenha o preview ao vivo, então a troca
+ * aparece no próximo load. A cor do texto sai da luminância do fundo, no
+ * resolveRenderSpec — não é escolhida aqui.
+ */
+export async function savePostBackground(
+  postId: string,
+  mode: "brand" | "light" | "dark" | "custom",
+  color?: string | null
+) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const hex = typeof color === "string" && /^#[0-9a-fA-F]{6}$/.test(color) ? color : null;
+  if (mode === "custom" && !hex) throw new Error("Cor inválida");
+
+  const { error } = await supabase
+    .from("posts")
+    .update({ bg_mode: mode, bg_color: mode === "custom" ? hex : null })
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .eq("status", "pending_approval");
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+}
+
 /** Aprova um post → vai para a tela "post pronto" */
 export async function approvePost(postId: string) {
   const supabase = createClient();
