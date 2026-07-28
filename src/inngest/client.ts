@@ -24,6 +24,13 @@ type Events = {
   "post/ready.notify": {
     data: { postId: string; userId: string };
   };
+  // Cliente trocou o formato do post na fila (migration 044) — único
+  // vira carrossel (gera a estrutura dos cards) ou carrossel vira único
+  // (a capa vira imagem base). Roda em background: a chamada de IA e o
+  // download da base estouram o orçamento de um Server Action.
+  "post/convert-format.requested": {
+    data: { postId: string; target: "single" | "carousel" };
+  };
   // Post aprovado/agendado → monta a arte final UMA vez e congela o
   // RenderSpec usado (migration 040). `token` é o posts.render_token
   // gravado pela ação: o job descarta o próprio trabalho se ele mudou,

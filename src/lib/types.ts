@@ -393,6 +393,9 @@ export interface Post {
   /** Cor do wordmark (migration 043) — 'title' acompanha o título. */
   mark_mode: MarkMode;
   mark_color: string | null;
+  /** Troca de formato em andamento (migration 044) — só sinal de UI. */
+  convert_status: "idle" | "pending";
+  convert_error: string | null;
 
   created_at: string;
 }

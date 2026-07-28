@@ -22,6 +22,7 @@ import {
   uploadPostImage,
   attachUploadedPostVideo,
   createVideoUploadTicket,
+  convertPostFormat,
   savePostBackground,
   savePostMarkColor,
 } from "@/app/actions";
@@ -41,6 +42,46 @@ import type { PreviewPage } from "@/lib/post-preview";
 import type { IgProfile, PostWithNews, Surface, VisualIdentity } from "@/lib/types";
 
 type ExitDirection = "right" | "left" | null;
+
+/** Os três enquadramentos de vídeo, como ÍCONE — o nome longo de cada um
+ * virava três linhas de texto empilhadas na fila. O rótulo continua no
+ * title/aria pra quem precisa ler. */
+const VIDEO_SHAPES: {
+  shape: "reels" | "feed" | "feed-blur";
+  label: string;
+  icon: React.ReactNode;
+}[] = [
+  {
+    shape: "reels",
+    label: "Reels (vertical, 9:16)",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <rect x="6" y="2" width="12" height="20" rx="2.5" />
+        <path d="m10.5 9.5 4 2.5-4 2.5z" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+  },
+  {
+    shape: "feed",
+    label: "Feed (4:5, fundo da marca)",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <rect x="3" y="4" width="18" height="16" rx="2.5" />
+        <path d="m10.5 9.5 4 2.5-4 2.5z" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+  },
+  {
+    shape: "feed-blur",
+    label: "Feed (4:5, fundo borrado do vídeo)",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <rect x="3" y="4" width="18" height="16" rx="2.5" strokeDasharray="3 2.5" />
+        <path d="m10.5 9.5 4 2.5-4 2.5z" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+  },
+];
 
 /** Cor do badge de score: verde ≥85, âmbar ≥70, neutro abaixo */
 function scoreColor(score: number | null) {
@@ -102,10 +143,11 @@ export function PostCard({
   // router.refresh() busca o post de novo no servidor; quando o job
   // termina, video_status muda e o efeito abaixo para sozinho.
   useEffect(() => {
-    if (post.video_status !== "processing") return;
+    const trabalhando = post.video_status === "processing" || post.convert_status === "pending";
+    if (!trabalhando) return;
     const id = setInterval(() => router.refresh(), 4000);
     return () => clearInterval(id);
-  }, [post.video_status, router]);
+  }, [post.video_status, post.convert_status, router]);
 
   function handleToggleTemplate(checked: boolean) {
     if (checked) {
@@ -171,6 +213,22 @@ export function PostCard({
     if (color) setMarkColor(color);
     startBgSave(async () => {
       await savePostMarkColor(post.id, mode, color ?? markColor);
+      router.refresh();
+    });
+  }
+
+  const [advanced, setAdvanced] = useState(false);
+  const isVideoPost = post.format === "video" || post.format === "video_feed";
+  const videoPronto = post.video_status === "ready";
+  /** Enquadramento em uso — só marca o ícone quando o vídeo está pronto. */
+  const videoAtivo =
+    videoPronto && isVideoPost ? post.video_shape ?? (post.format === "video_feed" ? "feed" : "reels") : null;
+  const videoOcupado = uploadingVideo || post.video_status === "processing";
+  const convertendo = post.convert_status === "pending";
+
+  function convertFormat(target: "single" | "carousel") {
+    startTransition(async () => {
+      await convertPostFormat(post.id, target);
       router.refresh();
     });
   }
@@ -363,216 +421,82 @@ export function PostCard({
           </div>
         )}
 
-        {/* Single: prompt de imagem + upload manual (carrossel não usa). */}
-        {!isCarousel && (
-        <div className="space-y-1.5 border-b border-line px-4 py-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-micro text-subtle">🎨 Prompt de imagem</span>
-            <div className="flex items-center gap-2">
-              <a
-                href="https://gemini.google.com/app"
-                target="_blank"
-                rel="noreferrer"
-                className="text-micro text-muted transition-colors hover:text-content"
-              >
-                Abrir Gemini ↗
-              </a>
-              <button
-                type="button"
-                onClick={copyImagePrompt}
-                className="rounded-full bg-surface-2 px-2 py-0.5 text-micro text-muted transition-colors hover:text-content"
-              >
-                {promptCopied ? "✓ Copiado" : "Copiar"}
-              </button>
-            </div>
-          </div>
-          <p className="line-clamp-2 text-micro text-subtle">
-            {post.image_prompt}
-          </p>
-          <label className="flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content">
-            <span>
-              {uploading ? "Enviando…" : "Subir imagem gerada (nano banana)"}
-            </span>
-            <input
-              type="file"
-              accept="image/jpeg,image/png"
-              className="hidden"
-              disabled={uploading}
-              onChange={handleImageUpload}
-            />
-          </label>
-          {uploadError && <p className="text-micro text-error">{uploadError}</p>}
-
-          {/* Fundo da arte (migration 042) — vale só pra ESTE post e
-              congela na aprovação. "Marca" é o Brand Kit; o seletor RGB
-              só aparece quando o usuário sai do padrão dele. */}
-          <div className="flex items-center justify-between gap-2 pt-1">
-            <span className="text-micro text-subtle">🎨 Fundo</span>
-            {bgPending && <span className="text-micro text-subtle">salvando…</span>}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {(
-              [
-                ["brand", "Marca"],
-                ["light", "Claro"],
-                ["dark", "Escuro"],
-                ["custom", "Outra"],
-              ] as ["brand" | "light" | "dark" | "custom", string][]
-            ).map(([mode, label]) => (
-              <button
-                key={mode}
-                type="button"
-                aria-pressed={bgMode === mode}
-                onClick={() => applyBackground(mode)}
-                className={`rounded-full px-2.5 py-1 text-micro transition-colors ${
-                  bgMode === mode
-                    ? "bg-content text-surface"
-                    : "bg-surface-2 text-muted hover:text-content"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-            {bgMode === "custom" && (
-              <label className="flex items-center gap-1.5 rounded-full bg-surface-2 px-2 py-1">
-                <input
-                  type="color"
-                  value={bgColor}
-                  onChange={(e) => applyBackground("custom", e.target.value)}
-                  aria-label="Cor de fundo personalizada"
-                  className="h-5 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
-                />
-                <span className="text-micro text-muted">{bgColor.toUpperCase()}</span>
-              </label>
+        {/* ===== Barra de decisão =====
+            A fila é onde o cliente OLHA o conteúdo e decide o que fazer
+            com ele. Então só o que é decisão fica aqui: virar vídeo,
+            trocar de formato, ou abrir os ajustes finos. Tudo o que é
+            acabamento (prompt, fundo, wordmark, imagem manual) foi pro
+            painel "Ajustes avançados" — a tela é usada por gente que não
+            é de tecnologia, e antes tinha 8 controles empilhados. */}
+        <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
+          <div className="flex items-center gap-1.5">
+            {VIDEO_SHAPES.map(({ shape, label, icon }) => {
+              const ativo = videoAtivo === shape;
+              return (
+                <label
+                  key={shape}
+                  title={label}
+                  aria-label={label}
+                  className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors ${
+                    ativo
+                      ? "bg-content text-surface"
+                      : "bg-surface-2 text-muted hover:text-content"
+                  } ${videoOcupado ? "pointer-events-none opacity-50" : ""}`}
+                >
+                  {icon}
+                  <input
+                    type="file"
+                    accept="video/mp4,video/quicktime"
+                    className="hidden"
+                    disabled={videoOcupado}
+                    onChange={handleVideoUpload(shape)}
+                  />
+                </label>
+              );
+            })}
+            {videoAtivo && (
+              <span className="ml-1 text-micro text-subtle">
+                {VIDEO_SHAPES.find((v) => v.shape === videoAtivo)?.label}
+              </span>
             )}
-          </div>
-          <p className="text-micro text-subtle">
-            A cor do texto se ajusta sozinha ao fundo escolhido.
-          </p>
-
-          {/* Cor do wordmark (migration 043) — a marca pode acompanhar o
-              título em vez de puxar sempre o realce. */}
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            <span className="mr-1 text-micro text-subtle">✒️ Wordmark</span>
-            {(
-              [
-                ["accent", "Realce"],
-                ["title", "Igual ao título"],
-                ["custom", "Outra"],
-              ] as ["accent" | "title" | "custom", string][]
-            ).map(([mode, label]) => (
-              <button
-                key={mode}
-                type="button"
-                aria-pressed={markMode === mode}
-                onClick={() => applyMark(mode)}
-                className={`rounded-full px-2.5 py-1 text-micro transition-colors ${
-                  markMode === mode
-                    ? "bg-content text-surface"
-                    : "bg-surface-2 text-muted hover:text-content"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-            {markMode === "custom" && (
-              <label className="flex items-center gap-1.5 rounded-full bg-surface-2 px-2 py-1">
-                <input
-                  type="color"
-                  value={markColor}
-                  onChange={(e) => applyMark("custom", e.target.value)}
-                  aria-label="Cor do wordmark"
-                  className="h-5 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
-                />
-                <span className="text-micro text-muted">{markColor.toUpperCase()}</span>
-              </label>
+            {videoOcupado && (
+              <span className="ml-1 text-micro text-warning">
+                {uploadingVideo ? "enviando…" : "processando…"}
+              </span>
             )}
           </div>
 
-          {/* Vídeo anexado (Fase 4, kit v2 §3; feed 4:5 = migration 036) —
-              upload manual, composto em background (Inngest + ffmpeg).
-              Um post só guarda 1 vídeo por vez — anexar no outro formato
-              troca (reprocessa) o que já tinha. */}
-          <div className="flex items-center justify-between gap-2 pt-1">
-            <span className="text-micro text-subtle">🎬 Vídeo</span>
-            {post.video_status === "processing" && (
-              <span className="text-micro text-warning">Processando…</span>
-            )}
+          <div className="flex items-center gap-1.5">
+            {/* Trocar de formato (migration 044): o formato foi decidido
+                antes do cliente ver o conteúdo, aqui ele corrige. */}
+            <button
+              type="button"
+              onClick={() => convertFormat(isCarousel ? "single" : "carousel")}
+              disabled={convertendo || isVideoPost}
+              title={
+                isVideoPost
+                  ? "Post de vídeo não vira carrossel"
+                  : isCarousel
+                    ? "Transformar em post único"
+                    : "Transformar em carrossel"
+              }
+              className="rounded-full bg-surface-2 px-2.5 py-1 text-micro text-muted transition-colors hover:text-content disabled:opacity-40"
+            >
+              {convertendo ? "convertendo…" : isCarousel ? "→ Post único" : "→ Carrossel"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAdvanced(true)}
+              className="rounded-full bg-surface-2 px-2.5 py-1 text-micro text-muted transition-colors hover:text-content"
+            >
+              ⚙ Ajustes avançados
+            </button>
           </div>
-          <label
-            className={`flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content ${
-              post.video_status === "processing" ? "opacity-50" : ""
-            }`}
-          >
-            <span>
-              {uploadingVideo
-                ? "Enviando…"
-                : post.video_status === "processing"
-                  ? "Vídeo em processamento…"
-                  : post.format === "video" && post.video_status === "ready"
-                    ? "Reels (9:16) ✓ — trocar vídeo"
-                    : "Anexar Reels (9:16)"}
-            </span>
-            <input
-              type="file"
-              accept="video/mp4,video/quicktime"
-              className="hidden"
-              disabled={uploadingVideo || post.video_status === "processing"}
-              onChange={handleVideoUpload("reels")}
-            />
-          </label>
-          <label
-            className={`flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content ${
-              post.video_status === "processing" ? "opacity-50" : ""
-            }`}
-          >
-            <span>
-              {uploadingVideo
-                ? "Enviando…"
-                : post.video_status === "processing"
-                  ? "Vídeo em processamento…"
-                  : post.format === "video_feed" && post.video_status === "ready"
-                    ? "Feed (4:5) ✓ — trocar vídeo"
-                    : "Anexar Feed (4:5, sem letterbox)"}
-            </span>
-            <input
-              type="file"
-              accept="video/mp4,video/quicktime"
-              className="hidden"
-              disabled={uploadingVideo || post.video_status === "processing"}
-              onChange={handleVideoUpload("feed")}
-            />
-          </label>
-          {/* Feed com fundo borrado (2026-07-23, em teste) — mesmo
-              upload, o vídeo vira o próprio fundo (borrado) atrás da
-              moldura nítida, em vez de cor sólida. */}
-          <label
-            className={`flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content ${
-              post.video_status === "processing" ? "opacity-50" : ""
-            }`}
-          >
-            <span>
-              {uploadingVideo
-                ? "Enviando…"
-                : post.video_status === "processing"
-                  ? "Vídeo em processamento…"
-                  : "Anexar Feed (fundo borrado)"}
-            </span>
-            <input
-              type="file"
-              accept="video/mp4,video/quicktime"
-              className="hidden"
-              disabled={uploadingVideo || post.video_status === "processing"}
-              onChange={handleVideoUpload("feed-blur")}
-            />
-          </label>
-          {videoError && <p className="text-micro text-error">{videoError}</p>}
-          {post.video_status === "error" && !videoError && (
-            <p className="text-micro text-error">
-              Falha ao processar o vídeo{post.video_error ? `: ${post.video_error}` : "."} Tente de novo.
-            </p>
-          )}
         </div>
+        {(videoError || post.convert_error) && (
+          <p className="border-b border-line px-4 pb-2 text-micro text-error">
+            {videoError ?? post.convert_error}
+          </p>
         )}
 
         {/* ===== Preview fiel ao Instagram ===== */}
@@ -733,6 +657,149 @@ export function PostCard({
           </Button>
         </CardActions>
       </Card>
+
+      {/* ===== Ajustes avançados =====
+          Tudo o que é ACABAMENTO mora aqui: prompt, imagem manual, fundo
+          e cor do wordmark. Na fila ficam só as decisões. */}
+      <Drawer open={advanced} onClose={() => setAdvanced(false)} title="Ajustes avançados">
+        <div className="space-y-5">
+          {/* Prompt: de VÍDEO quando o post é vídeo. Antes mostrava
+              sempre o prompt de imagem, que num Reels não descreve nada
+              do que se vê. */}
+          <section className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-caption text-muted">
+                {isVideoPost ? "🎬 O que gravar/buscar" : "🎨 Prompt de imagem"}
+              </span>
+              {!isVideoPost && (
+                <div className="flex items-center gap-2">
+                  <a
+                    href="https://gemini.google.com/app"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-micro text-muted transition-colors hover:text-content"
+                  >
+                    Abrir Gemini ↗
+                  </a>
+                  <button
+                    type="button"
+                    onClick={copyImagePrompt}
+                    className="rounded-full bg-surface-2 px-2 py-0.5 text-micro text-muted transition-colors hover:text-content"
+                  >
+                    {promptCopied ? "✓ Copiado" : "Copiar"}
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="text-micro text-subtle">
+              {isVideoPost
+                ? "Grave (ou baixe) um clipe que mostre o assunto do título. Vertical vira Reels; deitado encaixa melhor no feed 4:5."
+                : post.image_prompt}
+            </p>
+            {!isVideoPost && (
+              <label className="flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content">
+                <span>{uploading ? "Enviando…" : "Subir imagem gerada"}</span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={handleImageUpload}
+                />
+              </label>
+            )}
+            {uploadError && <p className="text-micro text-error">{uploadError}</p>}
+          </section>
+
+          {/* Fundo da arte (migration 042) — vale só pra ESTE post e
+              congela na aprovação. */}
+          <section className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-caption text-muted">🎨 Fundo da arte</span>
+              {bgPending && <span className="text-micro text-subtle">salvando…</span>}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(
+                [
+                  ["brand", "Marca"],
+                  ["light", "Claro"],
+                  ["dark", "Escuro"],
+                  ["custom", "Outra"],
+                ] as ["brand" | "light" | "dark" | "custom", string][]
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={bgMode === mode}
+                  onClick={() => applyBackground(mode)}
+                  className={`rounded-full px-2.5 py-1 text-micro transition-colors ${
+                    bgMode === mode
+                      ? "bg-content text-surface"
+                      : "bg-surface-2 text-muted hover:text-content"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              {bgMode === "custom" && (
+                <label className="flex items-center gap-1.5 rounded-full bg-surface-2 px-2 py-1">
+                  <input
+                    type="color"
+                    value={bgColor}
+                    onChange={(e) => applyBackground("custom", e.target.value)}
+                    aria-label="Cor de fundo personalizada"
+                    className="h-5 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
+                  />
+                  <span className="text-micro text-muted">{bgColor.toUpperCase()}</span>
+                </label>
+              )}
+            </div>
+            <p className="text-micro text-subtle">
+              A cor do texto se ajusta sozinha ao fundo escolhido.
+            </p>
+          </section>
+
+          {/* Cor do wordmark (migration 043). */}
+          <section className="space-y-1.5">
+            <span className="text-caption text-muted">✒️ Cor da marca na arte</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(
+                [
+                  ["accent", "Realce"],
+                  ["title", "Igual ao título"],
+                  ["custom", "Outra"],
+                ] as ["accent" | "title" | "custom", string][]
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={markMode === mode}
+                  onClick={() => applyMark(mode)}
+                  className={`rounded-full px-2.5 py-1 text-micro transition-colors ${
+                    markMode === mode
+                      ? "bg-content text-surface"
+                      : "bg-surface-2 text-muted hover:text-content"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              {markMode === "custom" && (
+                <label className="flex items-center gap-1.5 rounded-full bg-surface-2 px-2 py-1">
+                  <input
+                    type="color"
+                    value={markColor}
+                    onChange={(e) => applyMark("custom", e.target.value)}
+                    aria-label="Cor do wordmark"
+                    className="h-5 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
+                  />
+                  <span className="text-micro text-muted">{markColor.toUpperCase()}</span>
+                </label>
+              )}
+            </div>
+          </section>
+        </div>
+      </Drawer>
 
       {/* ===== Drawer de edição (desliza da direita) ===== */}
       <Drawer open={editing} onClose={() => setEditing(false)} title="Editar post">

@@ -153,6 +153,35 @@ export async function savePostMarkColor(
   revalidatePath("/");
 }
 
+/**
+ * Troca o formato do post na fila: único ⇄ carrossel (migration 044).
+ *
+ * Marca 'pending' e delega pro job — único→carrossel precisa de uma
+ * chamada de IA pra estrutura dos cards, o que não cabe num Server
+ * Action. A Fila mostra o estado e destrava sozinha quando o job termina.
+ */
+export async function convertPostFormat(postId: string, target: "single" | "carousel") {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { error } = await supabase
+    .from("posts")
+    .update({ convert_status: "pending", convert_error: null })
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .eq("status", "pending_approval");
+  if (error) throw new Error(error.message);
+
+  await enqueue("convertPostFormat", {
+    name: "post/convert-format.requested",
+    data: { postId, target },
+  });
+  revalidatePath("/");
+}
+
 /** Aprova um post → vai para a tela "post pronto" */
 export async function approvePost(postId: string) {
   const supabase = createClient();
