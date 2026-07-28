@@ -29,7 +29,13 @@ type Events = {
   // (a capa vira imagem base). Roda em background: a chamada de IA e o
   // download da base estouram o orçamento de um Server Action.
   "post/convert-format.requested": {
-    data: { postId: string; target: "single" | "carousel" };
+    data: {
+      postId: string;
+      target: "single" | "carousel";
+      /** Post de VÍDEO virando carrossel: onde o vídeo já anexado vai
+       * parar — capa ou primeiro card do miolo. */
+      videoOn?: "cover" | "interior";
+    };
   };
   // Post aprovado/agendado → monta a arte final UMA vez e congela o
   // RenderSpec usado (migration 040). `token` é o posts.render_token

@@ -23,13 +23,19 @@ export const convertPostFormat = inngest.createFunction(
   { id: "convert-post-format", retries: 1, concurrency: { limit: 3 } },
   { event: "post/convert-format.requested" },
   async ({ event, step }) => {
-    const { postId, target } = event.data as { postId: string; target: "single" | "carousel" };
+    const { postId, target, videoOn } = event.data as {
+      postId: string;
+      target: "single" | "carousel";
+      videoOn?: "cover" | "interior";
+    };
     const supabase = createAdminClient();
 
     const post = await step.run("fetch-post", async () => {
       const { data } = await supabase
         .from("posts")
-        .select("id, client_id, news_item_id, format, hook, caption, hashtags, base_image_url, status")
+        .select(
+          "id, client_id, news_item_id, format, hook, caption, hashtags, base_image_url, status, video_status, video_poster_url"
+        )
         .eq("id", postId)
         .maybeSingle();
       return data;
@@ -131,17 +137,72 @@ export const convertPostFormat = inngest.createFunction(
           return { cards: pkg.cards.length };
         });
 
+        // Post de VÍDEO virando carrossel: o vídeo não se perde, vira o
+        // vídeo de UM card. Capa ou miolo é escolha do cliente — na capa
+        // ele puxa o dedo pra parar, no miolo ele explica um ponto.
+        const videoMovido = await step.run("move-video-to-card", async () => {
+          if (post.video_status !== "ready") return { moved: false as const };
+          const alvoIdx = videoOn === "interior" && pkg.cards.length > 2 ? 1 : 0;
+
+          const { data: file, error: dlErr } = await supabase.storage
+            .from(BUCKET)
+            .download(`${postId}-video-source.mp4`);
+          if (dlErr || !file) {
+            console.warn(`[convert-post-format] vídeo fonte do post ${postId} não encontrado`);
+            return { moved: false as const };
+          }
+          const buf = Buffer.from(await file.arrayBuffer());
+          const { error: upErr } = await supabase.storage
+            .from(BUCKET)
+            .upload(`${postId}-card-${alvoIdx}-video-source.mp4`, buf, {
+              contentType: "video/mp4",
+              upsert: true,
+            });
+          if (upErr) throw new Error(`vídeo do card: ${upErr.message}`);
+
+          await supabase
+            .from("carousel_cards")
+            .update({
+              video_poster_url: post.video_poster_url,
+              video_status: "ready",
+              video_error: null,
+              // Card com vídeo tem fundo sólido da marca — a moldura 16:9
+              // é que mostra o vídeo (ver post-render).
+              bg_url: null,
+              bg_luminance: null,
+            })
+            .eq("post_id", postId)
+            .eq("idx", alvoIdx);
+          return { moved: true as const, idx: alvoIdx };
+        });
+
         await step.run("switch-format", () =>
           finish({
             format: "carousel",
             hook: pkg.cards[0].headline,
+            // O vídeo agora pertence a um card, não ao post: deixar os
+            // campos preenchidos faria a tela de Prontos tratar o
+            // carrossel como post de vídeo.
+            ...(videoMovido.moved
+              ? {
+                  video_url: null,
+                  video_poster_url: null,
+                  video_status: "none",
+                  video_shape: null,
+                }
+              : {}),
             // A contra-capa é peça do post único; no carrossel o último
             // card já cumpre esse papel.
             template_applied: false,
             closing_image_url: null,
           })
         );
-        return { converted: postId, to: "carousel", cards: pkg.cards.length };
+        return {
+          converted: postId,
+          to: "carousel",
+          cards: pkg.cards.length,
+          videoNoCard: videoMovido.moved ? videoMovido.idx : null,
+        };
       }
 
       // ---- carrossel → post único ----

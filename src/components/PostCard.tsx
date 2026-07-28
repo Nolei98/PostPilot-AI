@@ -226,11 +226,22 @@ export function PostCard({
   const videoOcupado = uploadingVideo || post.video_status === "processing";
   const convertendo = post.convert_status === "pending";
 
-  function convertFormat(target: "single" | "carousel") {
+  /** Post de vídeo virando carrossel: o vídeo tem que ir pra ALGUM card,
+   * e só o cliente sabe se ele é o gancho (capa) ou a explicação (miolo). */
+  const [videoDestino, setVideoDestino] = useState(false);
+
+  function convertFormat(target: "single" | "carousel", videoOn?: "cover" | "interior") {
+    setVideoDestino(false);
     startTransition(async () => {
-      await convertPostFormat(post.id, target);
+      await convertPostFormat(post.id, target, videoOn);
       router.refresh();
     });
+  }
+
+  function pedirConversao() {
+    // Vídeo pronto + virando carrossel = pergunta onde ele fica.
+    if (!isCarousel && videoPronto) setVideoDestino(true);
+    else convertFormat(isCarousel ? "single" : "carousel");
   }
 
   function handleVideoUpload(shape: "reels" | "feed" | "feed-blur") {
@@ -365,7 +376,8 @@ export function PostCard({
           ${exit === "right" ? "animate-exit-right" : ""}
           ${exit === "left" ? "animate-exit-left" : ""}`}
       >
-        {/* Contexto da notícia de origem */}
+        {/* Contexto da notícia de origem + código do post (045), que é o
+            que a pessoa cita no suporte — o id é UUID. */}
         <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
           <a
             href={post.news_items.url}
@@ -376,12 +388,20 @@ export function PostCard({
           >
             {post.news_items.title}
           </a>
-          <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-micro ${scoreColor(score)}`}
-            title="Score viral (0-100)"
-          >
-            🔥 {score}
-          </span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span
+              className="font-mono text-micro text-subtle"
+              title="Código deste post — use ele pra falar do post no suporte"
+            >
+              #{String(post.ref ?? 0).padStart(4, "0")}
+            </span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-micro ${scoreColor(score)}`}
+              title="Score viral (0-100)"
+            >
+              🔥 {score}
+            </span>
+          </div>
         </div>
 
         {/* Imagem original da matéria (se a arte usou ela como base) —
@@ -471,13 +491,13 @@ export function PostCard({
                 antes do cliente ver o conteúdo, aqui ele corrige. */}
             <button
               type="button"
-              onClick={() => convertFormat(isCarousel ? "single" : "carousel")}
-              disabled={convertendo || isVideoPost}
+              onClick={pedirConversao}
+              disabled={convertendo}
               title={
-                isVideoPost
-                  ? "Post de vídeo não vira carrossel"
-                  : isCarousel
-                    ? "Transformar em post único"
+                isCarousel
+                  ? "Transformar em post único"
+                  : videoPronto
+                    ? "Transformar em carrossel (o vídeo vira um card)"
                     : "Transformar em carrossel"
               }
               className="rounded-full bg-surface-2 px-2.5 py-1 text-micro text-muted transition-colors hover:text-content disabled:opacity-40"
@@ -658,11 +678,66 @@ export function PostCard({
         </CardActions>
       </Card>
 
+      {/* Onde o vídeo fica quando o post vira carrossel */}
+      <Modal
+        open={videoDestino}
+        onClose={() => setVideoDestino(false)}
+        title="Onde entra o vídeo?"
+      >
+        <p className="mb-4 text-body text-muted">
+          O carrossel vai ter várias páginas. O vídeo que você anexou fica
+          em uma delas — as outras viram cards de texto.
+        </p>
+        <div className="flex flex-col gap-2">
+          <Button onClick={() => convertFormat("carousel", "cover")}>
+            Na capa — o vídeo é o gancho
+          </Button>
+          <Button variant="secondary" onClick={() => convertFormat("carousel", "interior")}>
+            No meio — o vídeo explica um ponto
+          </Button>
+          <Button variant="ghost" onClick={() => setVideoDestino(false)}>
+            Cancelar
+          </Button>
+        </div>
+      </Modal>
+
       {/* ===== Ajustes avançados =====
           Tudo o que é ACABAMENTO mora aqui: prompt, imagem manual, fundo
           e cor do wordmark. Na fila ficam só as decisões. */}
       <Drawer open={advanced} onClose={() => setAdvanced(false)} title="Ajustes avançados">
         <div className="space-y-5">
+          {/* O básico primeiro: o que a pessoa procura quando abre o
+              painel sem saber o que quer mexer. Código do post pra citar
+              no suporte, formato atual e a contra-capa, que é a única
+              escolha simples que vale por post. */}
+          <section className="space-y-2 rounded-control bg-surface-2 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-caption text-muted">Este post</span>
+              <span className="font-mono text-micro text-subtle">
+                #{String(post.ref ?? 0).padStart(4, "0")}
+              </span>
+            </div>
+            <p className="text-micro text-subtle">
+              {isCarousel
+                ? `Carrossel · ${post.carousel_cards?.length ?? 0} páginas`
+                : isVideoPost
+                  ? `Vídeo · ${post.video_shape === "reels" ? "Reels 9:16" : "feed 4:5"}`
+                  : "Post único · 1 página"}
+            </p>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={post.template_applied}
+                disabled={isCarousel || removingTpl}
+                onChange={(e) => handleToggleTemplate(e.target.checked)}
+                className="h-4 w-4 accent-[rgb(var(--color-primary))]"
+              />
+              <span className="text-micro text-muted">
+                Página final com a identidade da marca
+                {isCarousel ? " (só em post único)" : ""}
+              </span>
+            </label>
+          </section>
           {/* Prompt: de VÍDEO quando o post é vídeo. Antes mostrava
               sempre o prompt de imagem, que num Reels não descreve nada
               do que se vê. */}

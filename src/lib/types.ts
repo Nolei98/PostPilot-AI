@@ -396,6 +396,9 @@ export interface Post {
   /** Troca de formato em andamento (migration 044) — só sinal de UI. */
   convert_status: "idle" | "pending";
   convert_error: string | null;
+  /** Código curto do post (migration 045) — o que a pessoa cita no
+   * suporte, já que o id é UUID. Único e global. */
+  ref: number;
 
   created_at: string;
 }

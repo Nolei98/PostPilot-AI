@@ -147,6 +147,56 @@ describe("migration 038: renovação de token + erro de métricas", () => {
     ).rejects.toThrow();
   });
 
+  it("migration 045: todo post nasce com um código curto e único", async () => {
+    // posts exige news_item_id (NOT NULL + FK), então monta a cadeia real:
+    // usuário → client → fonte → notícia.
+    const uid = await signup(db, { email: "ref@x.com" });
+    const clientId = await clientOf(uid);
+    const { rows: src } = await db.query<{ id: string }>(
+      "select id from source_configs where client_id = $1 limit 1",
+      [clientId]
+    );
+    const novaNoticia = async (slug: string) => {
+      const { rows } = await db.query<{ id: string }>(
+        `insert into news_items (source_id, client_id, url, title, summary, published_at)
+         values ($1, $2, $3, 'T', 'S', now()) returning id`,
+        [src[0].id, clientId, `https://x.test/${slug}`]
+      );
+      return rows[0].id;
+    };
+    const novoPost = async (newsId: string) =>
+      db.query<{ ref: string }>(
+        `insert into posts (user_id, client_id, news_item_id, hook, caption, hashtags, image_prompt)
+         values ($1, $2, $3, 'h', 'c', '#a', 'p') returning ref`,
+        [uid, clientId, newsId]
+      );
+
+    const a = await novoPost(await novaNoticia("a"));
+    const b = await novoPost(await novaNoticia("b"));
+    expect(Number(a.rows[0].ref)).toBeGreaterThan(0);
+    // sequência: o segundo post nunca repete o código do primeiro
+    expect(Number(b.rows[0].ref)).toBeGreaterThan(Number(a.rows[0].ref));
+
+    // gravar um código já usado à mão tem que falhar — é identificação
+    const noticiaC = await novaNoticia("c");
+    await expect(
+      db.query(
+        `insert into posts (user_id, client_id, news_item_id, hook, caption, hashtags, image_prompt, ref)
+         values ($1, $2, $3, 'h', 'c', '#a', 'p', $4)`,
+        [uid, clientId, noticiaC, a.rows[0].ref]
+      )
+    ).rejects.toThrow();
+  });
+
+  it("migration 044: convert_status só aceita idle/pending", async () => {
+    await expect(
+      db.query(
+        `insert into posts (user_id, client_id, news_item_id, hook, caption, hashtags, image_prompt, convert_status)
+         values (gen_random_uuid(), gen_random_uuid(), null, 'h', 'c', '#a', 'p', 'convertendo')`
+      )
+    ).rejects.toThrow();
+  });
+
   it("posts tem metrics_error (falha de coleta deixa de ser invisível)", async () => {
     const { rows } = await db.query<{ column_name: string }>(
       "select column_name from information_schema.columns where table_name = 'posts'"

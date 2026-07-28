@@ -160,7 +160,11 @@ export async function savePostMarkColor(
  * chamada de IA pra estrutura dos cards, o que não cabe num Server
  * Action. A Fila mostra o estado e destrava sozinha quando o job termina.
  */
-export async function convertPostFormat(postId: string, target: "single" | "carousel") {
+export async function convertPostFormat(
+  postId: string,
+  target: "single" | "carousel",
+  videoOn?: "cover" | "interior"
+) {
   const supabase = createClient();
   const {
     data: { user },
@@ -177,7 +181,7 @@ export async function convertPostFormat(postId: string, target: "single" | "caro
 
   await enqueue("convertPostFormat", {
     name: "post/convert-format.requested",
-    data: { postId, target },
+    data: { postId, target, videoOn },
   });
   revalidatePath("/");
 }
