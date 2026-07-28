@@ -1,19 +1,20 @@
 // ============================================================
-// Job: compõe o card INTERIOR "com vídeo" do carrossel (migration 037)
-// — título + moldura de vídeo (16:9) + corpo, fundo sólido preto (ver
-// buildCardVideoOverlay, image.ts). Disparado por uploadCarouselCardVideo
-// (actions.ts) — o upload em si é síncrono (só sobe o arquivo bruto),
-// o processamento pesado (ffmpeg) roda aqui, em background.
+// Job: prepara o vídeo anexado a um card INTERIOR do carrossel
+// (migration 037). Disparado por uploadCarouselCardVideo (actions.ts),
+// que sobe o arquivo bruto de forma síncrona.
 //
-// Mesmo padrão de attach-video.ts: um único step faz o trabalho pesado
-// e NUNCA deixa exceção escapar — captura o erro e retorna {ok:false,
-// error} em vez de lançar, pro segundo step sempre conseguir gravar o
-// estado final no card (sucesso OU erro), mesmo que o encode falhe.
+// A COMPOSIÇÃO (ffmpeg) não acontece mais aqui (migration 040) — mesma
+// mudança de attach-video.ts. Este job só extrai o pôster CRU e mede a
+// luminância dele; a moldura + texto são montados na aprovação
+// (render-approved-post → renderCardVideo), uma vez só, com a spec
+// congelada. Antes, cada troca de layout em Ajustes re-encodava o vídeo
+// de todo card do carrossel.
+//
+// O step pesado NUNCA deixa exceção escapar — retorna {ok:false, error}
+// em vez de lançar, pro segundo step sempre gravar o estado final.
 // ============================================================
 import { inngest } from "@/inngest/client";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resolvePostFontFamily } from "@/lib/font-data";
-import type { CardBrand } from "@/lib/carousel-render";
 
 export const attachCardVideo = inngest.createFunction(
   { id: "attach-card-video", retries: 1, concurrency: { limit: 2 } },
@@ -22,39 +23,14 @@ export const attachCardVideo = inngest.createFunction(
     const { cardId } = event.data as { cardId: string };
     const supabase = createAdminClient();
 
-    const result = await step.run("process-video", async () => {
+    const result = await step.run("prepare-video", async () => {
       try {
         const { data: card, error: cardErr } = await supabase
           .from("carousel_cards")
-          .select("post_id, idx, headline, body")
+          .select("post_id, idx")
           .eq("id", cardId)
           .maybeSingle();
         if (cardErr || !card) throw new Error("Card não encontrado");
-
-        const { data: post, error: postErr } = await supabase
-          .from("posts")
-          .select("client_id")
-          .eq("id", card.post_id)
-          .maybeSingle();
-        if (postErr || !post) throw new Error("Post do card não encontrado");
-
-        const { data: bk } = await supabase
-          .from("brand_kits")
-          .select("*")
-          .eq("client_id", post.client_id)
-          .maybeSingle();
-        const cardBrand: CardBrand = {
-          colorBackground: bk?.color_background ?? "#0A0A0A",
-          colorAccent: bk?.color_accent ?? "#7C5CFF",
-          colorText: bk?.color_text ?? "#FFFFFF",
-          fontFamily: resolvePostFontFamily(bk?.post_font_family),
-          brandName: bk?.brand_name ?? null,
-          wordmark: bk?.wordmark ?? null,
-          handle: bk?.ig_handle ?? null,
-          keywords: bk?.keywords ?? null,
-          brandMark: bk?.brand_mark ?? "auto",
-          layoutPreset: bk?.layout_preset ?? "editorial-noir",
-        };
 
         const sourcePath = `${card.post_id}-card-${card.idx}-video-source.mp4`;
         const { data: srcFile, error: dlErr } = await supabase.storage
@@ -63,52 +39,29 @@ export const attachCardVideo = inngest.createFunction(
         if (dlErr || !srcFile) throw new Error("Vídeo fonte não encontrado no Storage");
         const videoBuffer = Buffer.from(await srcFile.arrayBuffer());
 
-        const { extractPosterFrame, composeFeedVideo } = await import("@/lib/video");
-        const { buildCardVideoOverlay } = await import("@/lib/image");
+        const { extractPosterFrame } = await import("@/lib/video");
+        const { buildLuminanceGrid } = await import("@/lib/contrast");
 
-        // Quantos cards o carrossel tem — define se este é a capa (0),
-        // o fechamento (último) ou um interior, e alimenta o contador
-        // "04/10" do rodapé. "Capa é capa, ainda com vídeo".
-        const { count: totalCards } = await supabase
-          .from("carousel_cards")
-          .select("*", { count: "exact", head: true })
-          .eq("post_id", card.post_id);
-        const total = totalCards ?? 0;
-        const pageKind =
-          card.idx === 0 ? "cover" : total > 0 && card.idx === total - 1 ? "closing" : "interior";
+        // Pôster CRU: é o fundo do preview ao vivo na Fila e a base da
+        // medição de contraste. O pôster COM a moldura só existe depois
+        // da aprovação.
+        const poster = await extractPosterFrame(videoBuffer, 0.5);
+        const grid = await buildLuminanceGrid(poster);
 
-        const { overlayPng, frame } = buildCardVideoOverlay(
-          { headline: card.headline, body: card.body },
-          cardBrand,
-          { pageKind, index: card.idx, total }
-        );
-        const finalVideo = await composeFeedVideo(videoBuffer, overlayPng, frame);
-
-        // Pôster precisa ser um frame do vídeo FINAL (já com moldura +
-        // texto), não do vídeo cru — mesmo bug/fix de attach-video.ts.
-        const finalPoster = await extractPosterFrame(finalVideo, 0.5);
-
-        const videoPath = `${card.post_id}-card-${card.idx}-video.mp4`;
-        const posterPath = `${card.post_id}-card-${card.idx}-video-poster.jpg`;
-        const { error: videoUpErr } = await supabase.storage
+        const posterPath = `${card.post_id}-card-${card.idx}-video-poster-raw.jpg`;
+        const { error: upErr } = await supabase.storage
           .from("post-images")
-          .upload(videoPath, finalVideo, { contentType: "video/mp4", upsert: true });
-        if (videoUpErr) throw new Error(`Erro no upload do vídeo: ${videoUpErr.message}`);
-        const { error: posterUpErr } = await supabase.storage
-          .from("post-images")
-          .upload(posterPath, finalPoster, { contentType: "image/jpeg", upsert: true });
-        if (posterUpErr) throw new Error(`Erro no upload do pôster: ${posterUpErr.message}`);
+          .upload(posterPath, poster, { contentType: "image/jpeg", upsert: true });
+        if (upErr) throw new Error(`Erro no upload do pôster: ${upErr.message}`);
 
-        const { data: videoUrlData } = supabase.storage.from("post-images").getPublicUrl(videoPath);
-        const { data: posterUrlData } = supabase.storage.from("post-images").getPublicUrl(posterPath);
-
+        const { data: url } = supabase.storage.from("post-images").getPublicUrl(posterPath);
         return {
           ok: true as const,
-          videoUrl: `${videoUrlData.publicUrl}?v=${Date.now()}`,
-          posterUrl: `${posterUrlData.publicUrl}?v=${Date.now()}`,
+          posterUrl: `${url.publicUrl}?v=${Date.now()}`,
+          grid,
         };
       } catch (err) {
-        console.error(`[attach-card-video] falha ao processar o card ${cardId}:`, err);
+        console.error(`[attach-card-video] falha ao preparar o card ${cardId}:`, err);
         return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
       }
     });
@@ -118,7 +71,9 @@ export const attachCardVideo = inngest.createFunction(
         await supabase
           .from("carousel_cards")
           .update({
-            video_url: result.videoUrl,
+            // video_url continua nulo: o vídeo composto nasce na aprovação
+            bg_url: result.posterUrl,
+            bg_luminance: result.grid,
             video_poster_url: result.posterUrl,
             video_status: "ready",
             video_error: null,

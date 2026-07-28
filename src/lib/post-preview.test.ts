@@ -1,0 +1,288 @@
+import { describe, it, expect } from "vitest";
+import { buildPostPreview, type PreviewPostInput } from "@/lib/post-preview";
+import { buildLuminanceGrid } from "@/lib/contrast";
+import sharp from "sharp";
+import type { EmbeddedCarouselCard, RenderSpec } from "@/lib/types";
+
+async function grid(shade: number) {
+  const buf = await sharp({
+    create: { width: 24, height: 30, channels: 3, background: { r: shade, g: shade, b: shade } },
+  })
+    .png()
+    .toBuffer();
+  return buildLuminanceGrid(buf);
+}
+
+function spec(over: Partial<RenderSpec> = {}): RenderSpec {
+  return {
+    v: 1,
+    frozenAt: "2026-07-27T00:00:00.000Z",
+    format: "single",
+    layoutPreset: "editorial-noir",
+    singlePostStyle: "cover",
+    cardBrand: {
+      colorBackground: "#0B0B12",
+      colorAccent: "#7C5CFF",
+      colorText: "#FFFFFF",
+      fontFamily: "Inter",
+      brandName: "Overlens",
+      wordmark: "OVERLENS",
+      handle: "overlens",
+      keywords: null,
+      brandMark: "wordmark",
+      layoutPreset: "editorial-noir",
+      singlePostStyle: "cover",
+    },
+    brandTemplate: { fontFamily: "Inter", logoUrl: null, showLogo: false },
+    profile: {
+      handle: "overlens",
+      displayName: "Overlens",
+      avatarUrl: null,
+      verified: false,
+      showProfileChip: true,
+    },
+    identity: {
+      colorBackground: "#0B0B12",
+      colorAccent: "#7C5CFF",
+      colorText: "#FFFFFF",
+      colorKeywordBox: "#7C5CFF",
+      keyword: "IA",
+      topText: "A NOVIDADE DE",
+      bottomText: "QUE MUDA TUDO",
+      ctaEnabled: false,
+    },
+    closingPage: false,
+    templates: {},
+    watermark: false,
+    ...over,
+  };
+}
+
+const HOOK = "Um titulo forte que prende a atencao";
+
+const post: PreviewPostInput = {
+  id: "p1",
+  format: "single",
+  hook: HOOK,
+  base_image_url: "https://exemplo.test/p1-base.jpg",
+};
+
+describe("buildPostPreview — post único", () => {
+  it("empilha foto, banda borrada e SVG sobre a base", async () => {
+    const [page] = await buildPostPreview({ ...post, base_luminance: await grid(20) }, spec());
+    expect(page.layers.find((l) => l.kind === "photo")).toEqual({
+      kind: "photo",
+      url: "https://exemplo.test/p1-base.jpg",
+    });
+    const blur = page.layers.find((l) => l.kind === "blur");
+    expect(blur).toBeDefined();
+    if (blur?.kind === "blur") {
+      expect(blur.topFrac).toBeGreaterThan(0);
+      expect(blur.topFrac).toBeLessThan(1);
+      expect(blur.featherFrac).toBeGreaterThan(0);
+    }
+    expect(page.svg).toContain(HOOK.slice(0, 12));
+    expect(page.svg).toContain('width="100%"');
+  });
+
+  it.each([
+    ["editorial-noir", "Inter"],
+    ["brutalism", "Anton"],
+    ["serif-luxe", "DM Serif Display"],
+    ["swiss-mono", "IBM Plex Mono"],
+  ])("preset %s desenha na tipografia %s", async (preset, family) => {
+    const s = spec();
+    const [page] = await buildPostPreview(
+      post,
+      spec({ cardBrand: { ...s.cardBrand, layoutPreset: preset as never } })
+    );
+    expect(page.svg).toContain(`font-family="${family}"`);
+  });
+
+  it("fundo escuro pede texto claro; fundo claro pede texto escuro", async () => {
+    const [escuro] = await buildPostPreview({ ...post, base_luminance: await grid(10) }, spec());
+    const [claro] = await buildPostPreview({ ...post, base_luminance: await grid(245) }, spec());
+    expect(escuro.svg).toContain("#FFFFFF");
+    expect(claro.svg).toContain("#0A0A0A");
+  });
+
+  it("contra-capa entra como 2ª página quando o post tem uma", async () => {
+    const semContraCapa = await buildPostPreview(post, spec({ closingPage: false }));
+    const comContraCapa = await buildPostPreview(post, spec({ closingPage: true }));
+    expect(semContraCapa).toHaveLength(1);
+    expect(comContraCapa).toHaveLength(2);
+    // a contra-capa é 100% sintética: sem foto de fundo
+    expect(comContraCapa[1].layers.some((l) => l.kind === "photo")).toBe(false);
+    expect(comContraCapa[1].svg).toContain("IA"); // a palavra-chave vira headline
+  });
+
+  it("marca d'água do plano free entra no SVG (não é camada raster)", async () => {
+    const [comMarca] = await buildPostPreview(post, spec({ watermark: true }));
+    const [semMarca] = await buildPostPreview(post, spec({ watermark: false }));
+    expect(comMarca.svg).toContain("feito com PostPilot");
+    expect(semMarca.svg).not.toContain("feito com PostPilot");
+  });
+
+  it("logo vira camada raster com geometria em fração do quadro", async () => {
+    const s = spec();
+    const [page] = await buildPostPreview(
+      post,
+      spec({ brandTemplate: { ...s.brandTemplate, showLogo: true, logoUrl: "https://x.test/l.png" } })
+    );
+    const logo = page.layers.find((l) => l.kind === "logo");
+    expect(logo).toMatchObject({ url: "https://x.test/l.png" });
+    if (logo?.kind === "logo") {
+      expect(logo.sizeFrac).toBeCloseTo(64 / 1080, 5);
+      expect(logo.marginFrac).toBeCloseTo(40 / 1080, 5);
+    }
+  });
+
+  it("mudar o Brand Kit muda o preview — é o que a Fila reflete sem job", async () => {
+    const s = spec();
+    const [antes] = await buildPostPreview(post, spec());
+    const [depois] = await buildPostPreview(
+      post,
+      spec({ cardBrand: { ...s.cardBrand, colorAccent: "#00FF88" } })
+    );
+    expect(antes.svg).not.toEqual(depois.svg);
+    expect(depois.svg).toContain("#00FF88");
+  });
+});
+
+describe("buildPostPreview — compatibilidade com posts anteriores à 040", () => {
+  it("sem base_image_url devolve a arte já composta, marcada como legado", async () => {
+    const pages = await buildPostPreview(
+      {
+        id: "old",
+        format: "single",
+        hook: HOOK,
+        base_image_url: null,
+        image_url: "https://exemplo.test/old.jpg",
+        closing_image_url: "https://exemplo.test/old-closing.jpg",
+      },
+      spec()
+    );
+    expect(pages).toHaveLength(2);
+    expect(pages[0].legacyImageUrl).toBe("https://exemplo.test/old.jpg");
+    expect(pages[0].svg).toBe("");
+  });
+
+  it("post sem base E sem arte não devolve página nenhuma", async () => {
+    const pages = await buildPostPreview(
+      { id: "vazio", format: "single", hook: HOOK, base_image_url: null },
+      spec()
+    );
+    expect(pages).toEqual([]);
+  });
+
+  it("sem grade de luminância assume fundo escuro (texto claro é o caso seguro)", async () => {
+    const [page] = await buildPostPreview({ ...post, base_luminance: null }, spec());
+    expect(page.svg).toContain("#FFFFFF");
+  });
+});
+
+describe("buildPostPreview — carrossel", () => {
+  function card(idx: number, over: Partial<EmbeddedCarouselCard> = {}): EmbeddedCarouselCard {
+    return {
+      id: `c${idx}`,
+      idx,
+      role: idx === 0 ? "hook" : "value",
+      headline: `Card ${idx}`,
+      body: "corpo do card",
+      image_url: null,
+      bg_url: `https://exemplo.test/bg-${idx}.jpg`,
+      bg_luminance: null,
+      layout: null,
+      video_url: null,
+      video_poster_url: null,
+      video_status: "none",
+      video_error: null,
+      ...over,
+    };
+  }
+
+  it("uma página por card, cada uma com o próprio fundo", async () => {
+    const cards = [card(0), card(1), card(2)];
+    const pages = await buildPostPreview({ ...post, format: "carousel" }, spec(), cards);
+    expect(pages).toHaveLength(3);
+    pages.forEach((p, i) => {
+      expect(p.layers.find((l) => l.kind === "photo")).toMatchObject({
+        url: `https://exemplo.test/bg-${i}.jpg`,
+      });
+      expect(p.svg).toContain(`Card ${i}`);
+    });
+  });
+
+  it("card já renderizado e sem fundo guardado cai no legado", async () => {
+    const pages = await buildPostPreview(
+      { ...post, format: "carousel" },
+      spec(),
+      [card(0, { bg_url: null, image_url: "https://exemplo.test/pronto.png" })]
+    );
+    expect(pages[0].legacyImageUrl).toBe("https://exemplo.test/pronto.png");
+  });
+
+  // O override por card (migration 035) só tem efeito quando a superfície
+  // usa um MODELO do Template Studio — renderAndUploadCard, o motor
+  // antigo, nunca recebeu textColor/showLabel. O preview espelha isso.
+  const CAPA_SPEC = {
+    surface: "cover_image" as const,
+    canvas: { w: 1080, h: 1350 },
+    elements: [
+      {
+        id: "h",
+        type: "headline" as const,
+        anchor: "bottom-left" as const,
+        offset: { x: 0.08, y: 0.7 },
+        size: { fontSize: 72 },
+        style: { color: "auto" },
+        bind: "content.headline",
+      },
+    ],
+  };
+
+  it("override de cor do card vence o contraste automático (card com modelo)", async () => {
+    const comModelo = spec({ templates: { cover_image: { id: "t1", spec: CAPA_SPEC } } });
+    const [escuro] = await buildPostPreview({ ...post, format: "carousel" }, comModelo, [
+      card(0, { bg_luminance: null, layout: { textColor: "dark" } }),
+    ]);
+    const [claro] = await buildPostPreview({ ...post, format: "carousel" }, comModelo, [
+      card(0, { bg_luminance: null, layout: { textColor: "light" } }),
+    ]);
+    expect(escuro.svg).toContain("#111111");
+    expect(claro.svg).toContain("#FFFFFF");
+  });
+
+  it("showLabel:false esconde a marca só naquele card", async () => {
+    const comModelo = spec({
+      templates: {
+        cover_image: {
+          id: "t1",
+          spec: {
+            ...CAPA_SPEC,
+            elements: [
+              ...CAPA_SPEC.elements,
+              {
+                id: "w",
+                type: "wordmark" as const,
+                anchor: "top-left" as const,
+                offset: { x: 0.08, y: 0.1 },
+                bind: "brand.wordmark",
+              },
+            ],
+          },
+        },
+      },
+    });
+    const [com] = await buildPostPreview({ ...post, format: "carousel" }, comModelo, [card(0)]);
+    const [sem] = await buildPostPreview({ ...post, format: "carousel" }, comModelo, [
+      card(0, { layout: { showLabel: false } }),
+    ]);
+    expect(com.svg).toContain("OVERLENS");
+    expect(sem.svg).not.toContain("OVERLENS");
+  });
+
+  it("carrossel sem cards não devolve página", async () => {
+    expect(await buildPostPreview({ ...post, format: "carousel" }, spec(), [])).toEqual([]);
+  });
+});

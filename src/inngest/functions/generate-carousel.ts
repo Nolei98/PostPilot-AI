@@ -2,9 +2,14 @@
 // Job: gera um CARROSSEL (7–10 cards) a partir de uma notícia.
 //
 // Fluxo: carrega notícia + brand_kit do cliente → Sonnet/Gemini gera a
-// estrutura (carousel.ts) → cria o post (format='carousel') → renderiza
-// e insere cada card (carousel_cards) → post vira pending_approval →
-// notifica. Cada card é um step (retry independente). Roda em mock ($0).
+// estrutura (carousel.ts) → cria o post (format='carousel') → resolve o
+// FUNDO de cada card e insere as linhas em carousel_cards → post vira
+// pending_approval → notifica. Roda em mock ($0).
+//
+// A ARTE dos cards não é renderizada aqui (migration 040). Um carrossel
+// de 10 páginas gerava 10 PNGs neste job, todos jogados fora se o usuário
+// trocasse o template ou descartasse o post. Agora o PNG nasce na
+// aprovação; até lá a Fila desenha o preview ao vivo sobre bg_url.
 //
 // Disparo: evento post/generate-carousel.requested. Fluxo SEPARADO do
 // generate-post (single) — não é chamado pelo cron ainda; a decisão de
@@ -13,11 +18,9 @@
 import { inngest } from "@/inngest/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateCarouselPackage } from "@/lib/ai/carousel";
-import { renderAndUploadCard, type CardBrand } from "@/lib/carousel-render";
-import { renderTemplateCardPng } from "@/lib/template-render";
-import { resolveTemplateSpecs } from "@/lib/template-selection";
+import { type CardBrand } from "@/lib/carousel-render";
 import { resolvePostFontFamily } from "@/lib/font-data";
-import type { IgProfile, NewsItem, Surface, TemplateSpec } from "@/lib/types";
+import type { IgProfile, NewsItem, Surface } from "@/lib/types";
 
 export const generateCarousel = inngest.createFunction(
   { id: "generate-carousel", retries: 2, concurrency: { limit: 2 } },
@@ -90,17 +93,6 @@ export const generateCarousel = inngest.createFunction(
       };
     });
 
-    // Template Studio (Sprint B+, B15): só busca specs pras superfícies que
-    // o cliente escolheu de propósito. Sem seleção → objeto vazio → cai no
-    // motor antigo (renderAndUploadCard), zero mudança pra quem não escolheu.
-    const templateSpecs = await step.run("fetch-templates", async () => {
-      return resolveTemplateSpecs(prefs.templateSelection, [
-        "cover_image",
-        "carousel_page",
-        "carousel_last",
-      ]);
-    });
-
     const pkg = await step.run("generate-structure", async () => {
       return generateCarouselPackage(
         {
@@ -157,88 +149,51 @@ export const generateCarousel = inngest.createFunction(
       return out;
     });
 
-    // Renderiza e grava cada card (step por card = retry independente).
-    const cardUrls: string[] = [];
-    for (const card of pkg.cards) {
-      const url = await step.run(`card-${card.idx}`, async () => {
+    // Grava os cards com o TEXTO e o FUNDO — sem renderizar arte
+    // (migration 040). Um carrossel de 10 páginas renderizava 10 PNGs
+    // aqui, todos jogados fora se o usuário trocasse o template ou
+    // descartasse o post. Agora o PNG só nasce na aprovação; até lá a
+    // Fila desenha o preview ao vivo por cima de bg_url.
+    //
+    // A luminância de cada fundo é medida UMA vez, agora, porque exige
+    // sharp — o preview no browser não tem como medir, e precisa do
+    // mesmo número que o render final vai usar.
+    await step.run("insert-cards", async () => {
+      const { buildLuminanceGrid } = await import("@/lib/contrast");
+      for (const card of pkg.cards) {
         const bgUrl = bgUrls[card.idx] ?? null;
-        let bgBuf: Buffer | null = null;
+        let bgLuminance: unknown = null;
         if (bgUrl) {
           try {
             const r = await fetch(bgUrl);
-            if (r.ok) bgBuf = Buffer.from(await r.arrayBuffer());
-          } catch {
-            /* sem foto → fundo sólido */
+            if (r.ok) bgLuminance = await buildLuminanceGrid(Buffer.from(await r.arrayBuffer()));
+          } catch (err) {
+            // sem amostra o preview cai num tema escuro seguro e o job
+            // de aprovação mede na hora — não vale derrubar o carrossel
+            console.warn(`[generate-carousel] luminância do card ${card.idx} não medida:`, err);
           }
         }
-        // card 0 = capa; último = fechamento (mesmo tratamento @0verlens da
-        // capa, sem "deslize p/ ver"); demais = card interior.
-        const pageKind = card.idx === 0 ? "cover" : card.idx === lastIdx ? "closing" : "interior";
-        const surface: Surface =
-          pageKind === "cover" ? "cover_image" : pageKind === "closing" ? "carousel_last" : "carousel_page";
-        const chosenSpec: TemplateSpec | undefined = templateSpecs[surface];
-
-        let imageUrl: string;
-        if (chosenSpec) {
-          // Template Studio (B15): cliente escolheu um modelo pra essa
-          // superfície — renderiza pela spec em vez do motor antigo.
-          const png = await renderTemplateCardPng(
-            chosenSpec,
-            prefs.card,
-            { headline: card.headline ?? undefined, body: card.body ?? undefined },
-            bgBuf
-          );
-          const path = `${postId}-card-${card.idx}.png`;
-          const { error: uploadError } = await supabase.storage
-            .from("post-images")
-            .upload(path, png, { contentType: "image/png", upsert: true });
-          if (uploadError) throw new Error(`upload do card falhou: ${uploadError.message}`);
-          const { data: pub } = supabase.storage.from("post-images").getPublicUrl(path);
-          imageUrl = `${pub.publicUrl}?v=${Date.now()}`;
-        } else {
-          imageUrl = await renderAndUploadCard(
-            postId,
-            card,
-            prefs.card,
-            pageKind,
-            bgBuf,
-            prefs.profile,
-            pkg.cards.length
-          );
-        }
-        const { data: inserted, error } = await supabase
-          .from("carousel_cards")
-          .insert({
-            post_id: postId,
-            idx: card.idx,
-            role: card.role,
-            headline: card.headline,
-            body: card.body,
-            image_url: imageUrl,
-          })
-          .select("id")
-          .single();
+        const { error } = await supabase.from("carousel_cards").insert({
+          post_id: postId,
+          idx: card.idx,
+          role: card.role,
+          headline: card.headline,
+          body: card.body,
+          image_url: null,
+          bg_url: bgUrl,
+          bg_luminance: bgLuminance,
+        });
         if (error) throw new Error(`Erro ao gravar card ${card.idx}: ${error.message}`);
-        // bg_url best-effort (migration 029): permite o resync reusar a foto.
-        if (bgUrl && inserted) {
-          const { error: bgErr } = await supabase
-            .from("carousel_cards")
-            .update({ bg_url: bgUrl })
-            .eq("id", inserted.id);
-          if (bgErr) console.warn("[generate-carousel] bg_url não salvo (migration 029?):", bgErr.message);
-        }
-        return imageUrl;
-      });
-      cardUrls.push(url);
-    }
+      }
+      return { cards: pkg.cards.length };
+    });
 
     await step.run("mark-ready", async () => {
       const { error } = await supabase
         .from("posts")
-        // image_url = card do gancho: faz o carrossel aparecer como
-        // thumbnail nos lugares que mostram uma imagem só (Prontos,
-        // Telegram). A galeria completa vem de carousel_cards.
-        .update({ status: "pending_approval", image_url: cardUrls[0] ?? null })
+        // image_url segue nulo: a arte nasce na aprovação. O thumbnail da
+        // fila vem do preview ao vivo sobre o bg_url do card 0.
+        .update({ status: "pending_approval", render_status: "none" })
         .eq("id", postId);
       if (error) throw new Error(`Erro ao finalizar carrossel: ${error.message}`);
     });

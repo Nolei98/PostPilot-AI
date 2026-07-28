@@ -12,6 +12,7 @@ import { generatePost } from "@/inngest/functions/generate-post";
 import { generateCarousel } from "@/inngest/functions/generate-carousel";
 import { notifyPostReady } from "@/inngest/functions/notify";
 import { resyncLayoutPreset } from "@/inngest/functions/resync-layout-preset";
+import { renderApprovedPost } from "@/inngest/functions/render-approved-post";
 import { attachVideo } from "@/inngest/functions/attach-video";
 import { attachCardVideo } from "@/inngest/functions/attach-card-video";
 import { publishScheduledPosts } from "@/inngest/functions/publish-scheduled-posts";
@@ -26,6 +27,7 @@ export const { GET, POST, PUT } = serve({
     generateCarousel,
     notifyPostReady,
     resyncLayoutPreset,
+    renderApprovedPost,
     attachVideo,
     attachCardVideo,
     publishScheduledPosts,

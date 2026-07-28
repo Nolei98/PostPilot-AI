@@ -33,6 +33,7 @@ import { CarouselDownload } from "@/components/CarouselDownload";
 import { CarouselEditor } from "@/components/CarouselEditor";
 import { resizeImageForUpload } from "@/lib/resizeImageClient";
 import { useToast } from "@/components/ui/Toast";
+import type { PreviewPage } from "@/lib/post-preview";
 import type { IgProfile, PostWithNews, Surface, VisualIdentity } from "@/lib/types";
 
 type ExitDirection = "right" | "left" | null;
@@ -50,6 +51,7 @@ export function PostCard({
   identityDefaults,
   hasInstagramConnected = false,
   templateSelection = {},
+  previewPages,
 }: {
   post: PostWithNews;
   profile: IgProfile;
@@ -58,6 +60,10 @@ export function PostCard({
   hasInstagramConnected?: boolean;
   /** Template Studio (B9) — modelo escolhido por superfície do cliente ativo. */
   templateSelection?: Partial<Record<Surface, string>>;
+  /** Preview AO VIVO (migration 040): post na fila não tem arte gravada —
+   * estas páginas são desenhadas na hora, com o Brand Kit atual. Ausente
+   * só se a montagem do preview falhou (cai na arte antiga). */
+  previewPages?: PreviewPage[];
 }) {
   const HANDLE = profile.handle;
   const toast = useToast();
@@ -463,6 +469,7 @@ export function PostCard({
             <div className="relative">
               <CarouselPreview
                 images={previewImages}
+                pages={previewPages}
                 videos={previewVideos}
                 posters={previewPosters}
                 alt={post.hook}

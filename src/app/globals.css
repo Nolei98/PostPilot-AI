@@ -1,5 +1,39 @@
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap');
 
+/* ============================================================
+   FONTES DAS ARTES — as MESMAS TTFs que o resvg usa no render final
+   (src/lib/font-data.ts, servidas por /api/fonts). Sem isto o preview
+   ao vivo da fila desenha Anton/DM Serif/IBM Plex/Varela com fallback
+   do sistema e não bate com a arte gerada.
+
+   Os pesos que também existem no @import acima (Inter 400/500/600,
+   Sora 600/800) são declarados de novo de propósito: a última regra
+   casada vence, então a arte usa nossa cópia. Os pesos que o Google
+   serve e não temos (Inter 300, Sora 400/700) continuam vindo de lá,
+   pro chrome da UI não regredir.
+   ============================================================ */
+@font-face { font-family: 'Inter'; src: url('/api/fonts/inter-400.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Inter'; src: url('/api/fonts/inter-500.ttf') format('truetype'); font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Inter'; src: url('/api/fonts/inter-600.ttf') format('truetype'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Inter'; src: url('/api/fonts/inter-800.ttf') format('truetype'); font-weight: 800; font-display: swap; }
+@font-face { font-family: 'Inter'; src: url('/api/fonts/inter-900.ttf') format('truetype'); font-weight: 900; font-display: swap; }
+
+@font-face { font-family: 'Sora'; src: url('/api/fonts/sora-500.ttf') format('truetype'); font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Sora'; src: url('/api/fonts/sora-600.ttf') format('truetype'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Sora'; src: url('/api/fonts/sora-800.ttf') format('truetype'); font-weight: 800; font-display: swap; }
+@font-face { font-family: 'Sora'; src: url('/api/fonts/sora-900.ttf') format('truetype'); font-weight: 900; font-display: swap; }
+
+@font-face { font-family: 'Space Grotesk'; src: url('/api/fonts/space-grotesk-500.ttf') format('truetype'); font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Space Grotesk'; src: url('/api/fonts/space-grotesk-600.ttf') format('truetype'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Space Grotesk'; src: url('/api/fonts/space-grotesk-800.ttf') format('truetype'); font-weight: 800; font-display: swap; }
+@font-face { font-family: 'Space Grotesk'; src: url('/api/fonts/space-grotesk-900.ttf') format('truetype'); font-weight: 900; font-display: swap; }
+
+@font-face { font-family: 'Anton'; src: url('/api/fonts/anton-400.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'IBM Plex Mono'; src: url('/api/fonts/ibm-plex-mono-400.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'IBM Plex Mono'; src: url('/api/fonts/ibm-plex-mono-700.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'DM Serif Display'; src: url('/api/fonts/dm-serif-display-400.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Varela Round'; src: url('/api/fonts/varela-round-400.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

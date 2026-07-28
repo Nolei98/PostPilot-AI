@@ -29,6 +29,13 @@ type Events = {
   "post/resync-layout.requested": {
     data: { clientId: string; userId: string };
   };
+  // Post aprovado/agendado → monta a arte final UMA vez e congela o
+  // RenderSpec usado (migration 040). `token` é o posts.render_token
+  // gravado pela ação: o job descarta o próprio trabalho se ele mudou,
+  // pra um render superado não sobrescrever um mais recente.
+  "post/render.requested": {
+    data: { postId: string; userId: string; token: string };
+  };
   // Usuário anexou um vídeo a um post pendente (Fase 4, kit v2 §3) →
   // compõe o quadro em background (ffmpeg). shape decide Reels (9:16,
   // vídeo cobre o quadro inteiro), feed (4:5, moldura 16:9 sobre fundo

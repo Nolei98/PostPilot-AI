@@ -115,22 +115,132 @@ export function buildOverlayGradientSvg(
   <rect x="0" y="${bandY}" width="${width}" height="${bandH}" fill="url(#${gradientId})"/>`;
 }
 
+/** Resolução da amostra de luminância — 48x60 (mesma proporção 4:5 da
+ * arte) é o bastante pra decidir tema e calibrar overlay, e é MUITO mais
+ * barato que processar a foto inteira. */
+export const LUM_GRID_W = 48;
+export const LUM_GRID_H = 60;
+
 /**
- * Luminância relativa média de uma imagem (0=preto, 1=branco). Amostra
- * pequena (48x60) — suficiente pra decidir tema, muito mais barato que
- * processar a foto inteira.
+ * Amostra de luminância de uma imagem, guardável no banco. `data` é a
+ * grade `w`x`h` em row-major, cada célula a luminância relativa (0–1)
+ * quantizada em um byte, serializada em base64 — ~3,8 KB pra 48x60, ordens
+ * de grandeza menor que um JSON de floats.
+ *
+ * Existe pra que o PREVIEW (browser, sem sharp) e o RENDER FINAL leiam o
+ * mesmo número: a luminância é medida uma vez, quando a imagem base é
+ * buscada, e daí em diante qualquer região é derivada por aritmética pura
+ * (luminanceOfRegion). O erro de quantização é ~0,004, duas ordens de
+ * grandeza abaixo do passo de 0,1 do overlayAlphaFor — não muda decisão.
  */
-export async function measureImageLuminance(photo: Buffer): Promise<number> {
+export interface LumGrid {
+  w: number;
+  h: number;
+  /** base64 de w*h bytes, row-major; byte/255 = luminância relativa. */
+  data: string;
+}
+
+/** Retângulo em coordenadas do CANVAS já redimensionado (ex: 1080x1350). */
+export interface LumRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Constrói a grade de luminância de uma imagem. Único ponto que ainda
+ * precisa do sharp — roda uma vez, na geração, e o resultado é persistido.
+ */
+export async function buildLuminanceGrid(photo: Buffer): Promise<LumGrid> {
   const { data, info } = await sharp(photo)
-    .resize(48, 60, { fit: "cover" })
+    .resize(LUM_GRID_W, LUM_GRID_H, { fit: "cover" })
     .removeAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
   const channels = info.channels;
-  let sum = 0;
-  const n = data.length / channels;
-  for (let i = 0; i < data.length; i += channels) {
-    sum += relLuminance([data[i], data[i + 1], data[i + 2]]);
+  const cells = Buffer.allocUnsafe(info.width * info.height);
+  for (let i = 0, c = 0; i < data.length; i += channels, c++) {
+    cells[c] = Math.round(relLuminance([data[i], data[i + 1], data[i + 2]]) * 255);
   }
-  return n ? sum / n : 0;
+  return { w: info.width, h: info.height, data: cells.toString("base64") };
+}
+
+/** Decodifica as células da grade (0–1). */
+function gridCells(grid: LumGrid): Buffer {
+  return Buffer.from(grid.data, "base64");
+}
+
+/** Luminância média da grade inteira — equivalente a medir a imagem toda. */
+export function gridAverage(grid: LumGrid): number {
+  const cells = gridCells(grid);
+  if (!cells.length) return 0;
+  let sum = 0;
+  for (let i = 0; i < cells.length; i++) sum += cells[i];
+  return sum / cells.length / 255;
+}
+
+/**
+ * Luminância média de uma REGIÃO do canvas, derivada da grade — substitui
+ * o `sharp(covered).extract(rect)` + `measureImageLuminance(band)` que os
+ * builders de layout faziam, sem tocar em bytes de imagem.
+ *
+ * Reproduz de propósito o recorte do `fit: "cover"` que o measure fazia ao
+ * reduzir a banda pra 48x60: uma banda mais larga que 4:5 era cortada nas
+ * laterais antes de ser medida, então a média era a do MIOLO da banda, não
+ * a dela inteira. Manter esse recorte é o que garante que trocar as
+ * chamadas antigas por esta não muda nenhuma arte já gerada.
+ */
+export function luminanceOfRegion(
+  grid: LumGrid,
+  rect: LumRect,
+  canvas: { width: number; height: number }
+): number {
+  const cells = gridCells(grid);
+  if (!cells.length || canvas.width <= 0 || canvas.height <= 0) return 0;
+
+  // Região em coordenadas de grade (contínuas).
+  const rx = (rect.left / canvas.width) * grid.w;
+  const ry = (rect.top / canvas.height) * grid.h;
+  const rw = (rect.width / canvas.width) * grid.w;
+  const rh = (rect.height / canvas.height) * grid.h;
+  if (rw <= 0 || rh <= 0) return 0;
+
+  // Recorte "cover" pro aspecto da amostra, centralizado na região.
+  const aspect = grid.w / grid.h;
+  let kw = rw;
+  let kh = rh;
+  if (rw / rh > aspect) kw = rh * aspect;
+  else kh = rw / aspect;
+  const kx = rx + (rw - kw) / 2;
+  const ky = ry + (rh - kh) / 2;
+
+  // Média ponderada por área das células cobertas pelo recorte.
+  const x0 = Math.max(0, Math.floor(kx));
+  const y0 = Math.max(0, Math.floor(ky));
+  const x1 = Math.min(grid.w, Math.ceil(kx + kw));
+  const y1 = Math.min(grid.h, Math.ceil(ky + kh));
+  let sum = 0;
+  let weight = 0;
+  for (let y = y0; y < y1; y++) {
+    const wy = Math.min(y + 1, ky + kh) - Math.max(y, ky);
+    if (wy <= 0) continue;
+    for (let x = x0; x < x1; x++) {
+      const wx = Math.min(x + 1, kx + kw) - Math.max(x, kx);
+      if (wx <= 0) continue;
+      const w = wx * wy;
+      sum += cells[y * grid.w + x] * w;
+      weight += w;
+    }
+  }
+  return weight ? sum / weight / 255 : 0;
+}
+
+/**
+ * Luminância relativa média de uma imagem (0=preto, 1=branco). Mesma
+ * amostra 48x60 da grade — é literalmente a média dela, pra medida direta
+ * e medida derivada nunca divergirem.
+ */
+export async function measureImageLuminance(photo: Buffer): Promise<number> {
+  return gridAverage(await buildLuminanceGrid(photo));
 }

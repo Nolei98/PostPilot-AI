@@ -45,8 +45,13 @@ export const notifyPostReady = inngest.createFunction(
         process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
       const caption = `🔥 <b>Novo post na fila!</b>\n\n${post.hook}\n\n👉 Aprovar: ${appUrl}`;
 
-      if (post.image_url) {
-        await sendTelegramPhoto(config.telegram_chat_id!, post.image_url, caption);
+      // Post na fila não tem arte ainda (migration 040) — ela só é montada
+      // na aprovação. Manda a foto BASE (sem marca nenhuma): dá pra
+      // reconhecer a pauta pelo celular, que é pra isso que a notificação
+      // serve. `image_url` cobre os posts anteriores à 040.
+      const preview = post.image_url ?? post.base_image_url;
+      if (preview) {
+        await sendTelegramPhoto(config.telegram_chat_id!, preview, caption);
       } else {
         await sendTelegramMessage(config.telegram_chat_id!, caption);
       }

@@ -71,11 +71,21 @@ export const publishScheduledPosts = inngest.createFunction(
   async ({ step }) => {
     const supabase = createAdminClient();
 
+    // GUARD do render-on-approval (migration 040): a arte só existe depois
+    // que o render da aprovação termina. Publicar um post com
+    // render_status ainda 'pending'/'rendering' mandaria image_url nulo (ou
+    // a arte da geração anterior) pro Instagram. Post que ficou em 'error'
+    // também não passa daqui — falha visível na tela é melhor que post
+    // publicado errado, que não dá pra despublicar direito.
+    //
+    // Tudo que já estava agendado antes da 040 foi marcado 'ready' pela
+    // própria migration, então nada existente fica preso.
     const duePosts = await step.run("fetch-due-posts", async () => {
       const { data } = await supabase
         .from("posts")
         .select("id, client_id, format, caption, hashtags, image_url, video_url")
         .eq("status", "scheduled")
+        .eq("render_status", "ready")
         .lte("scheduled_for", new Date().toISOString());
       return (data ?? []) as DuePost[];
     });

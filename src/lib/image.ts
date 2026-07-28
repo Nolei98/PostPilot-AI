@@ -17,7 +17,7 @@ import { fal } from "@fal-ai/client";
 import sharp from "sharp";
 import { GoogleGenAI } from "@google/genai";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { BrandTemplate, IgProfile, VisualIdentity } from "@/lib/types";
+import type { BrandTemplate, IgProfile, RenderSpec, VisualIdentity } from "@/lib/types";
 import { FONT_FAMILY } from "@/lib/font-data";
 import { rasterizeSvg } from "@/lib/svg-render";
 import {
@@ -28,72 +28,25 @@ import {
 } from "@/lib/render-shared";
 import { searchStockPhoto, fetchStockPhotoBuffer } from "@/lib/stock-photos";
 import { buildProfileChipLayers } from "@/lib/profile-chip";
-import { buildCoverSvg, composePhotoBg, coverHeadlineSize, stripEmoji, wrapText, brandLabelText, type CardBrand } from "@/lib/carousel-render";
-import { buildBrutalismCoverSvg } from "@/lib/layout-brutalism";
-import { buildSerifLuxeCoverSvg } from "@/lib/layout-serif-luxe";
-import { buildSwissMonoCoverSvg } from "@/lib/layout-swiss-mono";
-import { buildPopCreatorCoverSvg } from "@/lib/layout-pop-creator";
-import { buildCenteredPhraseSvg } from "@/lib/layout-centered";
+import { composePhotoBg, coverHeadlineSize, stripEmoji, wrapText, brandLabelText, type CardBrand } from "@/lib/carousel-render";
 
-/** Construtor de capa/fechamento de cada preset de layout ALTERNATIVO
- * (Fase 3) — mesma assinatura (headline, brand, transparent, opts) →
- * {svg, blurBandTop}, despachado por tabela a partir de layout_preset. */
-const ALT_COVER_BUILDERS: Partial<Record<NonNullable<CardBrand["layoutPreset"]>, typeof buildBrutalismCoverSvg>> = {
-  brutalism: buildBrutalismCoverSvg,
-  "serif-luxe": buildSerifLuxeCoverSvg,
-  "swiss-mono": buildSwissMonoCoverSvg,
-  "pop-creator": buildPopCreatorCoverSvg,
-};
-
-/** Dispatcher único da PÁGINA 1 do post único — 2 variações (kit v2 §3),
- * ortogonais ao layoutPreset (que decide a tipografia):
- * - "centered" (fonte no meio): frase curta centralizada, minimalista,
- *   sem wordmark/marca — mesmo em qualquer preset de layout.
- * - "cover" (estilo capa, default): mesma função usada pela contra-capa
- *   (fetchIdentityLabel já existia) — wordmark + título display, herda
- *   os 5 layouts (Editorial Noir OU um dos 4 alternativos), sem chip
- *   (decisão do usuário — igual à capa do carrossel). */
-function buildPageOneCoverSvg(
-  headline: string,
-  cardBrand: CardBrand,
-  transparent: boolean,
-  opts: {
-    showSwipeHint?: boolean;
-    overlay?: { theme: "light" | "dark"; alpha: number };
-    /** Placa da meta-linha do topo dos 4 layouts alternativos — ver
-     * carousel-render.ts (renderAltLayoutCard) pra mesma lógica. */
-    topOverlay?: { theme: "light" | "dark"; alpha: number };
-  }
-): { svg: string; blurBandTop: number } {
-  if (cardBrand.singlePostStyle === "centered") {
-    return buildCenteredPhraseSvg(headline, cardBrand, transparent, { overlay: opts.overlay });
-  }
-  const alt = cardBrand.layoutPreset ? ALT_COVER_BUILDERS[cardBrand.layoutPreset] : undefined;
-  // showActionIcons: false explícito — sem essa força, a heurística padrão
-  // dos 4 layouts alternativos (overlay presente + sem swipe hint) confunde
-  // a página 1 com a CONTRA-CAPA (mesma condição, papel diferente) e
-  // desenha os ícones de ação indevidamente.
-  if (alt) return alt(headline, cardBrand, transparent, { ...opts, showActionIcons: false });
-  // align NÃO é forçado aqui de propósito — herda o default de buildCoverSvg
-  // ("bottom"), pra ficar EXATAMENTE igual à capa do carrossel (post único
-  // e vídeo/Reels usam este mesmo builder). Estava fixo em "center" antes,
-  // contradizendo o próprio comentário da função ("igual à capa do
-  // carrossel") — bug real, não decisão de design.
-  return buildCoverSvg({ idx: 0, role: "hook", headline, body: "" }, cardBrand, transparent, {
-    showSwipeHint: opts.showSwipeHint,
-    overlay: opts.overlay,
-    showActionIcons: false,
-  });
-}
+// Os construtores de SVG puros (página 1, contra-capa, marca d'água)
+// vivem em cover-svg.ts — o preview ao vivo da Fila precisa deles sem
+// arrastar sharp e os SDKs de provider que este módulo carrega.
+import {
+  buildPageOneCoverSvg,
+  buildClosingCoverSvg,
+  buildWatermarkSvg,
+} from "@/lib/cover-svg";
 
 import {
   pickTheme,
   textColorForTheme,
-  needsOverlay,
-  relativeLuminanceOfHex,
   measureImageLuminance,
   overlayAlphaFor,
   buildOverlayGradientSvg,
+  buildLuminanceGrid,
+  type LumGrid,
 } from "@/lib/contrast";
 
 /** Template de marca default (posts antigos / config ausente) */
@@ -262,20 +215,6 @@ async function mockGenerateImage(): Promise<Buffer> {
 // latinos) — sem filtrar, o resvg desenha uma caixa "NO GLYPH" no
 // lugar, pior que não ter nada. Cobre os blocos Unicode de emoji
 // mais comuns (símbolos, pictogramas, transporte, bandeiras, dingbats).
-const EMOJI_RE =
-  /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu;
-
-/** Remove emoji (sem glifo na fonte) e escapa caracteres especiais de XML */
-function escapeXml(s: string): string {
-  return s
-    .replace(EMOJI_RE, "")
-    .trim()
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 type CompositeLayer = { input: Buffer; top: number; left: number };
 
 /** Baixa e recorta uma imagem em círculo (avatar do chip, logo da marca). */
@@ -356,38 +295,8 @@ export async function __testPageOneCover(
 // automaticamente no upgrade (o resync re-renderiza sem a marca).
 // ------------------------------------------------------------
 
-const WATERMARK_TEXT = "feito com PostPilot";
-
 function buildWatermarkLayer(width: number, height: number): CompositeLayer {
-  const s = width / 1080;
-  const fontSize = Math.round(26 * s);
-  const padX = Math.round(18 * s);
-  const padY = Math.round(10 * s);
-  const bolt = Math.round(18 * s); // ícone raio (mesmo do logo)
-  const gap = Math.round(8 * s);
-
-  const textW = Math.ceil(WATERMARK_TEXT.length * fontSize * 0.5);
-  const w = padX * 2 + bolt + gap + textW;
-  const h = fontSize + padY * 2;
-  const x = Math.round((width - w) / 2);
-  const y = height - h - Math.round(22 * s);
-
-  const boltX = x + padX;
-  const boltY = y + Math.round((h - bolt) / 2);
-  const textX = boltX + bolt + gap;
-  const textY = y + h - padY - Math.round(fontSize * 0.16);
-
-  const svg = `
-    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${Math.round(h / 2)}"
-            fill="rgba(0,0,0,0.5)" stroke="rgba(255,255,255,0.22)" stroke-width="${Math.max(1, Math.round(s))}"/>
-      <g transform="translate(${boltX}, ${boltY}) scale(${(bolt / 24).toFixed(3)})">
-        <path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2z" fill="#A78BFA"/>
-      </g>
-      <text x="${textX}" y="${textY}" font-family="${FONT_FAMILY}" font-size="${fontSize}"
-            font-weight="600" fill="rgba(255,255,255,0.92)">${escapeXml(WATERMARK_TEXT)}</text>
-    </svg>`;
-  return { input: rasterizeSvg(svg), top: 0, left: 0 };
+  return { input: rasterizeSvg(buildWatermarkSvg(width, height)), top: 0, left: 0 };
 }
 
 /**
@@ -454,55 +363,25 @@ export async function renderTemplateSlide(
 ): Promise<Buffer> {
   const fontFamily = brand.fontFamily;
 
-  // Contraste automático (contrast.ts): a cor de texto configurada em
-  // Ajustes só é respeitada se já tiver contraste suficiente contra o
-  // fundo; senão troca pra cor segura do tema — nunca entrega um slide
-  // ilegível, mesmo que o usuário tenha escolhido uma combinação ruim.
-  const bgLuminance = relativeLuminanceOfHex(identity.colorBackground);
-  const theme = pickTheme(bgLuminance);
-  const textColor = needsOverlay(identity.colorText, bgLuminance)
-    ? textColorForTheme(theme)
-    : identity.colorText;
-
-  // Palavra-chave era o elemento mais forte (caixa colorida, fonte
-  // gigante) — vira a headline grande do novo layout. Texto-cima +
-  // texto-baixo (+ o CTA "COMENTE:", sem equivalente visual direto)
-  // viram o corpo de apoio.
-  const headline = identity.keyword || identity.topText || "";
-  const ctaLine = identity.ctaEnabled ? "Comente aqui embaixo" : null;
-  const bodyParts = identity.keyword
-    ? [identity.topText, ctaLine, identity.bottomText].filter(Boolean)
-    : [ctaLine, identity.bottomText].filter(Boolean);
-  const body = bodyParts.length ? bodyParts.join(" — ") : null;
-
-  const cardBrand: CardBrand = {
-    colorBackground: identity.colorBackground,
-    colorAccent: identity.colorAccent,
-    colorText: textColor,
-    fontFamily,
-    brandName: null,
-    wordmark: label?.wordmark ?? null,
-    handle: label?.handle ?? null,
-    keywords: null,
-    brandMark: "wordmark",
-  };
-
-  // Preset de layout (Fase 3): mesmo motor de contraste acima, só troca
-  // qual construtor de SVG desenha a contra-capa.
-  const altCoverBuilder = label?.layoutPreset ? ALT_COVER_BUILDERS[label.layoutPreset] : undefined;
-  const svg = altCoverBuilder
-    ? altCoverBuilder(headline, cardBrand, false, {
-        showSwipeHint: false,
-        body,
-        eyebrowRight: "OBRIGADO",
-        overlay: { theme, alpha: 0 }, // sinaliza "fechamento" → mostra os ícones
-      }).svg
-    : buildCoverSvg(
-        { idx: 0, role: "hook", headline, body: body ?? "" },
-        cardBrand,
-        false,
-        { showSwipeHint: false, body, align: "center", showActionIcons: true }
-      ).svg;
+  // O desenho em si (contraste automático + mapeamento dos campos antigos
+  // de Ajustes pro layout atual) vive em cover-svg.ts, compartilhado com o
+  // preview ao vivo da Fila. Aqui ficam só as camadas raster.
+  const svg = buildClosingCoverSvg(
+    identity,
+    {
+      colorBackground: identity.colorBackground,
+      colorAccent: identity.colorAccent,
+      colorText: identity.colorText,
+      fontFamily,
+      brandName: null,
+      wordmark: label?.wordmark ?? null,
+      handle: label?.handle ?? null,
+      keywords: null,
+      brandMark: "wordmark",
+      layoutPreset: label?.layoutPreset,
+    },
+    fontFamily
+  );
 
   // Chip de perfil no canto inferior esquerdo (mesma margem dos ícones).
   const layers: CompositeLayer[] = [];
@@ -1225,30 +1104,37 @@ export async function renderAndUploadTemplateArt(
   return `${data.publicUrl}?v=${Date.now()}`;
 }
 
+/** Foto de banco escolhida pela cascata, pra quem chamou gravar. */
+export interface ResolvedStockPhoto {
+  id: string;
+  credit: string;
+}
+
 /**
- * Pipeline completo: gera base (Flux ou mock) → salva a base à parte
- * (para re-render futuro sem custo) → aplica template → sobe no
- * Supabase Storage → retorna URL pública.
+ * CASCATA DE PROVIDERS — resolve só os BYTES da foto base, sem compor
+ * nada, sem tocar em banco nem Storage.
+ *
+ * Ordem: foto original da matéria (grátis e real) → provider escolhido em
+ * Ajustes (stock / Gemini / Pollinations / Fal) → MOCK se faltar key.
+ *
+ * É a metade CARA do pipeline (é onde tem chamada paga) e roda na
+ * GERAÇÃO. A metade barata — compor o layout por cima — foi separada e
+ * roda na aprovação, porque é ela que precisa mudar quando o usuário
+ * troca template ou cor.
+ *
+ * A gravação de `stock_photo_id`/`stock_photo_credit` saiu daqui e virou
+ * retorno: acoplar a cascata a um postId era o que impedia testá-la.
  */
-export async function generatePostImage(
-  imagePrompt: string,
-  hook: string,
-  postId: string,
-  profile: IgProfile = DEFAULT_PROFILE,
-  watermark = false,
-  sourceImageUrl: string | null = null,
-  imageProvider: "fal" | "gemini" | "pollinations" | "stock" = "stock",
-  userId: string | null = null,
-  brand: BrandTemplate = DEFAULT_BRAND
-): Promise<string> {
-  // 1. Imagem base — prioriza a imagem original da matéria (evita
-  //    custo de gerar do zero e mantém a foto real da notícia); cai
-  //    pro provider escolhido em Ajustes (fotos reais, Gemini, Fal.ai
-  //    ou Pollinations) se não tiver imagem-fonte ou o download falhar;
-  //    MOCK se faltar key (Fal).
-  let base: Buffer | null = sourceImageUrl
-    ? await fetchSourceImage(sourceImageUrl)
-    : null;
+export async function resolveBaseImage(opts: {
+  imagePrompt: string;
+  sourceImageUrl?: string | null;
+  imageProvider?: "fal" | "gemini" | "pollinations" | "stock";
+  /** ids de fotos já usadas pelo usuário — evita repetir a mesma foto. */
+  excludeStockIds?: Set<string>;
+}): Promise<{ buffer: Buffer; stock: ResolvedStockPhoto | null }> {
+  const { imagePrompt, sourceImageUrl = null, imageProvider = "stock" } = opts;
+  let base: Buffer | null = sourceImageUrl ? await fetchSourceImage(sourceImageUrl) : null;
+  let stock: ResolvedStockPhoto | null = null;
   const prompt = withRealismSuffix(imagePrompt);
 
   // 'stock': foto real de pessoa de verdade (Pexels → Unsplash), sem
@@ -1256,25 +1142,10 @@ export async function generatePostImage(
   // match), cai pra IA de ilustração SEM pessoas — nunca gera rosto.
   if (!base && imageProvider === "stock") {
     try {
-      const supabase = createAdminClient();
-      const excludeIds = new Set<string>();
-      if (userId) {
-        const { data } = await supabase
-          .from("posts")
-          .select("stock_photo_id")
-          .eq("user_id", userId)
-          .not("stock_photo_id", "is", null);
-        for (const row of data ?? []) {
-          if (row.stock_photo_id) excludeIds.add(row.stock_photo_id);
-        }
-      }
-      const photo = await searchStockPhoto(imagePrompt, excludeIds);
+      const photo = await searchStockPhoto(imagePrompt, opts.excludeStockIds ?? new Set());
       if (photo) {
         base = await fetchStockPhotoBuffer(photo);
-        await supabase
-          .from("posts")
-          .update({ stock_photo_id: photo.id, stock_photo_credit: photo.credit })
-          .eq("id", postId);
+        stock = { id: photo.id, credit: photo.credit };
       } else {
         console.warn(
           "[image] Nenhuma foto real encontrada (sem key ou sem match) — caindo pra IA (ilustração sem pessoas)"
@@ -1316,7 +1187,106 @@ export async function generatePostImage(
     }
   }
 
-  return composeAndUploadContentImage(base, hook, postId, profile, watermark, brand);
+  return { buffer: base, stock };
+}
+
+/**
+ * Normaliza a base pro quadro da arte, sobe em `{postId}-base.jpg` e mede
+ * a luminância.
+ *
+ * Normalizar AQUI, e não na hora de compor, é o que torna o preview da
+ * fila fiel: o recorte é `position: "attention"`, que depende do conteúdo
+ * e nenhum `object-fit` de browser reproduz. Gravando a base já recortada,
+ * o preview é só um `<img>` full-bleed — e a grade de luminância passa a
+ * descrever exatamente os pixels que a arte final vai usar.
+ *
+ * O bruto fica em `{postId}-base-raw.jpg` pra quem precisar de outro
+ * enquadramento depois (ex: o mesmo post virar Reels 9:16).
+ */
+export async function persistBaseImage(
+  postId: string,
+  raw: Buffer
+): Promise<{ baseUrl: string; grid: LumGrid }> {
+  const supabase = createAdminClient();
+
+  const normalized = await sharp(raw)
+    .resize(WIDTH, HEIGHT, { fit: "cover", position: "attention" })
+    .jpeg({ quality: 92 })
+    .toBuffer();
+
+  const { error } = await supabase.storage
+    .from("post-images")
+    .upload(`${postId}-base.jpg`, normalized, { contentType: "image/jpeg", upsert: true });
+  // Falha DURA de propósito: no modelo render-on-approval a base é o
+  // insumo do preview e de todo render futuro. Antes este upload era
+  // best-effort e um post sem base só dava problema meses depois, na
+  // primeira vez que alguém tentava re-renderizar.
+  if (error) throw new Error(`Erro no upload da imagem base: ${error.message}`);
+
+  // Bruto guardado à parte, best-effort: é conveniência, não insumo.
+  try {
+    const rawJpeg = await sharp(raw)
+      .resize(2000, 2000, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 88 })
+      .toBuffer();
+    await supabase.storage
+      .from("post-images")
+      .upload(`${postId}-base-raw.jpg`, rawJpeg, { contentType: "image/jpeg", upsert: true });
+  } catch (err) {
+    console.warn("[image] falha ao guardar a base bruta (não bloqueia)", err);
+  }
+
+  const { data } = supabase.storage.from("post-images").getPublicUrl(`${postId}-base.jpg`);
+  return {
+    baseUrl: `${data.publicUrl}?v=${Date.now()}`,
+    grid: await buildLuminanceGrid(normalized),
+  };
+}
+
+/**
+ * Pipeline antigo completo (cascata → base → compõe → sobe). Mantido para
+ * os caminhos que ainda compõem na hora (upload manual de imagem, edição
+ * de hook). O fluxo de geração usa `resolveBaseImage` + `persistBaseImage`
+ * e deixa a composição pra aprovação.
+ */
+export async function generatePostImage(
+  imagePrompt: string,
+  hook: string,
+  postId: string,
+  profile: IgProfile = DEFAULT_PROFILE,
+  watermark = false,
+  sourceImageUrl: string | null = null,
+  imageProvider: "fal" | "gemini" | "pollinations" | "stock" = "stock",
+  userId: string | null = null,
+  brand: BrandTemplate = DEFAULT_BRAND
+): Promise<string> {
+  const supabase = createAdminClient();
+  const excludeStockIds = new Set<string>();
+  if (userId) {
+    const { data } = await supabase
+      .from("posts")
+      .select("stock_photo_id")
+      .eq("user_id", userId)
+      .not("stock_photo_id", "is", null);
+    for (const row of data ?? []) {
+      if (row.stock_photo_id) excludeStockIds.add(row.stock_photo_id as string);
+    }
+  }
+
+  const { buffer, stock } = await resolveBaseImage({
+    imagePrompt,
+    sourceImageUrl,
+    imageProvider,
+    excludeStockIds,
+  });
+  if (stock) {
+    await supabase
+      .from("posts")
+      .update({ stock_photo_id: stock.id, stock_photo_credit: stock.credit })
+      .eq("id", postId);
+  }
+
+  return composeAndUploadContentImage(buffer, hook, postId, profile, watermark, brand);
 }
 
 /**
@@ -1326,14 +1296,21 @@ export async function generatePostImage(
  * composeAndUploadContentImage (geração nova) e regenerateContentImage
  * (re-render a partir da base salva).
  */
-async function composeAndUploadFinal(
+/**
+ * A composição em si da PÁGINA 1, sem tocar em banco nem Storage: layout
+ * do preset por cima da foto + logo/marca d'água (que independem do
+ * layout). Ponto único de composição — `composeAndUploadFinal` (caminho
+ * antigo, que ainda lê o brand_kit ao vivo) e `composeFromSpec` (modelo
+ * render-on-approval, que recebe tudo congelado) passam os dois por aqui,
+ * então não há como as duas rotas divergirem.
+ */
+async function composeCoverImage(
   base: Buffer,
   hook: string,
-  postId: string,
-  watermark: boolean,
-  brand: BrandTemplate
-): Promise<string> {
-  const cardBrand = await fetchCoverBrand(postId, brand.fontFamily);
+  cardBrand: CardBrand,
+  brand: BrandTemplate,
+  watermark: boolean
+): Promise<Buffer> {
   let final = await composeCoverStyleContent(base, hook, cardBrand);
 
   const layers: CompositeLayer[] = [];
@@ -1343,6 +1320,56 @@ async function composeAndUploadFinal(
   if (layers.length) {
     final = await sharp(final).composite(layers).jpeg({ quality: 90 }).toBuffer();
   }
+  return final;
+}
+
+/**
+ * Página 1 a partir de um [[RenderSpec]] congelado — nenhuma leitura de
+ * brand_kits. Devolve o buffer; quem chama decide o caminho no Storage
+ * (ver src/lib/post-render.ts).
+ */
+export async function composeFromSpec(
+  base: Buffer,
+  hook: string,
+  spec: RenderSpec
+): Promise<Buffer> {
+  return composeCoverImage(base, hook, spec.cardBrand, spec.brandTemplate, spec.watermark);
+}
+
+/**
+ * CONTRA-CAPA (página 2) a partir de um [[RenderSpec]] congelado. O
+ * rótulo de identidade (wordmark/@/preset) vem da spec em vez de uma
+ * consulta ao brand_kit — mesma informação, sem ida ao banco e sem risco
+ * de a arte mudar porque Ajustes mudou depois.
+ */
+export async function renderClosingFromSpec(
+  _postId: string,
+  spec: RenderSpec
+): Promise<Buffer> {
+  return renderTemplateSlide(
+    spec.identity,
+    spec.profile,
+    WIDTH,
+    HEIGHT,
+    spec.watermark,
+    spec.brandTemplate,
+    {
+      wordmark: spec.cardBrand.wordmark ?? null,
+      handle: spec.cardBrand.handle ?? null,
+      layoutPreset: spec.cardBrand.layoutPreset,
+    }
+  );
+}
+
+async function composeAndUploadFinal(
+  base: Buffer,
+  hook: string,
+  postId: string,
+  watermark: boolean,
+  brand: BrandTemplate
+): Promise<string> {
+  const cardBrand = await fetchCoverBrand(postId, brand.fontFamily);
+  const final = await composeCoverImage(base, hook, cardBrand, brand, watermark);
 
   const supabase = createAdminClient();
   const path = `${postId}.jpg`;

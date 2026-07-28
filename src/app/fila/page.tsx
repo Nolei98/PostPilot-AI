@@ -10,6 +10,8 @@ import { PostCard } from "@/components/PostCard";
 import { ScanButton } from "@/components/ScanButton";
 import { AppShell } from "@/components/ui/AppShell";
 import { getShellData } from "@/lib/shell";
+import { resolveRenderSpec, withPost } from "@/lib/render-spec";
+import { buildPostPreview, type PreviewPage } from "@/lib/post-preview";
 import type { IgProfile, PostWithNews, VisualIdentity } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +24,7 @@ export default async function DashboardPage() {
   const { data: queue } = await supabase
     .from("posts")
     .select(
-      "*, news_items(title, url, viral_score, image_url, image_license_hint), carousel_cards(id, idx, role, headline, body, image_url, layout, video_url, video_poster_url, video_status, video_error)"
+      "*, news_items(title, url, viral_score, image_url, image_license_hint), carousel_cards(id, idx, role, headline, body, image_url, bg_url, bg_luminance, layout, video_url, video_poster_url, video_status, video_error)"
     )
     .eq("status", "pending_approval")
     .eq("client_id", clientId ?? "")
@@ -73,6 +75,39 @@ export default async function DashboardPage() {
     .eq("status", "connected")
     .maybeSingle();
   const hasInstagramConnected = !!igConn;
+
+  // PREVIEW AO VIVO (migration 040): post na fila não tem arte — ela só é
+  // montada na aprovação. O que se vê aqui é desenhado agora, com o Brand
+  // Kit ATUAL, então trocar template/cor/layout em Ajustes aparece no
+  // próximo carregar desta página, sem nenhum job de re-render.
+  //
+  // A spec é resolvida UMA vez pro cliente (Brand Kit + modelos + plano) e
+  // derivada por post com withPost — não faz sentido reler tudo por card.
+  const previews = new Map<string, PreviewPage[]>();
+  if (posts.length > 0 && clientId && shell.userId) {
+    const baseSpec = await resolveRenderSpec({
+      clientId,
+      userId: shell.userId,
+      post: { format: "single" },
+      brandKit: config,
+    });
+    await Promise.all(
+      posts.map(async (post) => {
+        try {
+          const pages = await buildPostPreview(
+            post,
+            withPost(baseSpec, post),
+            (post.carousel_cards ?? []).slice().sort((a, b) => a.idx - b.idx)
+          );
+          previews.set(post.id, pages);
+        } catch (err) {
+          // Um preview quebrado não pode derrubar a fila inteira: o card
+          // cai no fallback (arte antiga ou esqueleto).
+          console.error(`[fila] preview do post ${post.id} falhou:`, err);
+        }
+      })
+    );
+  }
 
   return (
     <AppShell
@@ -133,6 +168,7 @@ export default async function DashboardPage() {
                 identityDefaults={identityDefaults}
                 hasInstagramConnected={hasInstagramConnected}
                 templateSelection={config?.template_selection ?? {}}
+                previewPages={previews.get(post.id)}
               />
             </div>
           ))}

@@ -18,11 +18,17 @@ export interface ShellData {
   brandName: string | null;
   logoUrl: string | null;
   readyCount: number;
+  /** Dono da sessão — o preview da fila precisa pra resolver o plano
+   * (marca d'água do free) na spec de render. */
+  userId: string | null;
 }
 
 export async function getShellData(): Promise<ShellData> {
   const supabase = createClient();
   const clients = await listClients();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const cookieId = cookies().get(ACTIVE_CLIENT_COOKIE)?.value;
   const activeClient =
@@ -58,5 +64,6 @@ export async function getShellData(): Promise<ShellData> {
     brandName,
     logoUrl,
     readyCount,
+    userId: user?.id ?? null,
   };
 }

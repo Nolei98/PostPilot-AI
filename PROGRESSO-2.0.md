@@ -5,7 +5,7 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga não recebe mais commits.
-**Última atualização:** 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Última atualização:** 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B; **migration 040 ainda não aplicada no Supabase**). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
 ### Bloqueio ativo: Pollinations.ai exige pagamento pra requests multi-mensagem
 Descoberto 2026-07-22 investigando por que a fila não recebia posts novos há dias
@@ -23,6 +23,72 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0-B. Sessão 2026-07-28 — a arte passa a ser montada na APROVAÇÃO (migration 040)
+
+Mudança de modelo, não feature: até aqui a arte final era composta na
+GERAÇÃO. Um carrossel de 10 páginas gastava 10 renders antes de alguém
+olhar o post, e toda troca de cor/template/layout em Ajustes deixava a
+fila dessincronizada — a saída era re-renderizar tudo em massa (resync,
+migration 039). Pior, o vínculo era incoerente: as CORES viravam snapshot
+em `tpl_*` na geração, mas o TEMPLATE era resolvido por referência em
+render time — duas verdades sobre o mesmo post.
+
+Modelo novo, em três tempos:
+- **geração** resolve só a imagem BASE (`base_image_url`) e mede a
+  luminância uma vez (`base_luminance` / `carousel_cards.bg_luminance`);
+- **fila** desenha um preview AO VIVO no browser a partir da base + do
+  Brand Kit atual — nenhum job, nenhuma arte gravada; mudou em Ajustes,
+  aparece no próximo load;
+- **aprovar/agendar** dispara o render, que CONGELA em `render_spec`
+  tudo que decidiu a arte. Post aprovado nunca mais herda mudança de
+  Ajustes.
+
+Peças (todas nesta sessão, `main`):
+- `supabase/migrations/040_render_on_approval.sql` — `render_status`
+  (`none|pending|rendering|ready|error`), `render_error`, `render_spec`,
+  `render_token`, `base_image_url`, `base_luminance`, `video_shape`,
+  `carousel_cards.bg_luminance`. Marca tudo que já passou da fila como
+  `ready` (senão o guard novo congelaria todo agendamento existente).
+- `src/lib/render-spec.ts` — `resolveRenderSpec`, a fonte ÚNICA de "o que
+  decide a arte". Chamada dos DOIS lados (preview e render final), que é
+  o que garante que o preview não é decorativo. Também matou os quatro
+  construtores de `CardBrand` que divergiam (dois esqueciam
+  `singlePostStyle`).
+- `src/lib/post-render.ts` — render a partir de uma spec congelada, sem
+  ler `brand_kits`/templates/`tpl_*`. Extraído do resync.
+- `src/lib/post-preview.ts` + `src/components/PreviewFrame.tsx` — preview
+  ao vivo na Fila.
+- `src/inngest/functions/render-approved-post.ts` — o job da aprovação.
+  Todo write é guardado por `render_token`: aprovar → desistir → aprovar
+  de novo gera token novo, e o run antigo vira no-op em vez de gravar
+  arte velha por cima da nova.
+- `publish-scheduled-posts` só pega post com `render_status='ready'` —
+  sem isso um agendado publicaria com `image_url` nulo na janela entre
+  aprovar e a arte existir.
+- Tela Prontos mostra "montando a arte" (com polling de 3s), trava
+  baixar/postar nessa janela e oferece "tentar de novo" em `error`
+  (`retryRender`).
+- Voltar pra fila (`cancelSchedule`/`revertApproval`) zera
+  `render_status`/`render_spec`/`render_token` — a arte descongela e o
+  token nulo mata qualquer render ainda em voo.
+
+**Estado:** `tsc`, `eslint` e build de produção limpos; **317 testes
+verdes** (3 novos cobrindo o schema da 040).
+
+### 0-B.1 Pendências desta sessão
+- [ ] **Aplicar a migration 040 no Supabase** (SQL Editor) — o código já
+      assume as colunas; sem isso a Fila e a aprovação quebram em
+      produção. Os testes usam pglite com as migrations reais, então
+      passam mesmo sem isso.
+- [ ] **Re-sincronizar a Inngest depois do deploy** — a 040 ADICIONA a
+      função `render-approved-post`, e sem a integração Vercel↔Inngest
+      isso exige o `curl -X PUT .../api/inngest` manual (ver §0-A.6).
+- [ ] Verificar em produção com a conta real: aprovar um post de cada
+      formato (single, carrossel, Reels, vídeo feed) e conferir
+      `render_status='ready'` + arte igual ao preview.
 
 ---
 

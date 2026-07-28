@@ -74,3 +74,33 @@ export const LAYOUT_FONTS = [
 export function resolvePostFontFamily(key: string | null | undefined): string {
   return POST_FONTS.find((f) => f.key === key)?.family ?? FONT_FAMILY;
 }
+
+/** Todas as famílias registradas — mesma lista que o svg-render.ts grava
+ * em /tmp pro resvg. Serve tambem a rota /api/fonts, pro browser desenhar
+ * o preview da fila com EXATAMENTE os mesmos bytes que o render final. */
+export const ALL_FONTS = [...POST_FONTS, ...LAYOUT_FONTS] as ReadonlyArray<{
+  key: string;
+  family: string;
+  buffers: ReadonlyArray<{ weight: number; data: string }>;
+}>;
+
+/** Nome de arquivo canônico de uma variante — mesma convenção usada pelo
+ * cache em disco do resvg (`${key}-${weight}.ttf`, ver svg-render.ts). */
+export function fontFileName(key: string, weight: number): string {
+  return `${key}-${weight}.ttf`;
+}
+
+/** Busca os bytes de uma variante pelo nome de arquivo. `null` se não
+ * existir — a rota devolve 404 em vez de vazar erro de parsing. */
+export function findFontByFileName(
+  fileName: string
+): { family: string; weight: number; buffer: Buffer } | null {
+  const match = /^([a-z0-9-]+)-(\d{3})\.ttf$/.exec(fileName);
+  if (!match) return null;
+  const [, key, weightRaw] = match;
+  const weight = Number(weightRaw);
+  const font = ALL_FONTS.find((f) => f.key === key);
+  const variant = font?.buffers.find((b) => b.weight === weight);
+  if (!font || !variant) return null;
+  return { family: font.family, weight, buffer: Buffer.from(variant.data, "base64") };
+}

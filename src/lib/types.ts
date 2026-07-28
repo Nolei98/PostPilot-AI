@@ -1,6 +1,10 @@
 // ============================================================
 // Tipos do domínio — espelham o schema do Supabase
 // ============================================================
+// import type: só tipo, apagado na compilação — render-shared.ts importa
+// BrandMark daqui, e um import de valor fecharia um ciclo.
+import type { CardBrand } from "@/lib/render-shared";
+import type { LumGrid } from "@/lib/contrast";
 
 export type NewsStatus = "new" | "scored" | "candidate" | "discarded";
 
@@ -190,6 +194,46 @@ export interface IgProfile {
 /** Quando o template de identidade visual é aplicado */
 export type TemplateApplyMode = "all" | "on_approval";
 
+/**
+ * Estado do render da arte (migration 040) — ortogonal a [[PostStatus]].
+ * 'none' = ainda na fila, arte não existe (a Fila desenha preview ao vivo);
+ * 'pending'/'rendering' = job em andamento; 'ready' = arte congelada e
+ * publicável; 'error' = falhou, ver render_error.
+ */
+export type RenderStatus = "none" | "pending" | "rendering" | "ready" | "error";
+
+/** Formato do quadro de um vídeo — só vivia no evento do attach-video até
+ * a migration 040 persistir em posts.video_shape. */
+export type VideoShape = "reels" | "feed" | "feed-blur";
+
+/**
+ * SNAPSHOT do que decidiu a arte, congelado no momento da aprovação
+ * (posts.render_spec, migration 040). É o contrato central do modelo
+ * render-on-approval: enquanto o post está na fila, a mesma estrutura é
+ * resolvida AO VIVO a partir do Brand Kit atual (e o preview desenha com
+ * ela); ao aprovar, o valor resolvido é gravado e nunca mais muda —
+ * mudar template/cor em Ajustes não alcança post já aprovado.
+ *
+ * `templates` guarda a spec COMPLETA inline, não o id: editar o modelo no
+ * Template Studio depois não pode reescrever arte já aprovada.
+ */
+export interface RenderSpec {
+  v: 1;
+  frozenAt: string;
+  format: PostFormat;
+  layoutPreset: string;
+  singlePostStyle: string;
+  videoShape?: VideoShape;
+  cardBrand: CardBrand;
+  brandTemplate: BrandTemplate;
+  profile: IgProfile;
+  identity: VisualIdentity;
+  /** true = o post leva contra-capa (2ª página) */
+  closingPage: boolean;
+  templates: Partial<Record<Surface, { id: string; spec: TemplateSpec }>>;
+  watermark: boolean;
+}
+
 /** Identidade visual da CONTRA-CAPA (defaults em Ajustes; override por post) */
 export interface VisualIdentity {
   colorBackground: string; // fundo do slide (HEX)
@@ -252,6 +296,9 @@ export interface CarouselCardRow {
   /** Foto de fundo bruta do card (migration 029) — refetchada em
    * re-renders (edição de texto, resync) pra não perder a foto. */
   bg_url: string | null;
+  /** Luminância do bg_url deste card (migration 040) — cada card tem o
+   * próprio fundo, então tem a própria amostra. Ver [[LumGrid]]. */
+  bg_luminance: LumGrid | null;
   layout: CardLayoutOverride | null;
   // Vídeo anexado ao card (migration 037) — mesmo pipeline do vídeo do
   // post único, tratamento "interior com vídeo" (título + moldura 16:9 + corpo).
@@ -311,6 +358,26 @@ export interface Post {
   // Sprint C — erro da última coleta de métricas (migration 038). Só
   // registro/depuração: não muda status nem impede a próxima janela.
   metrics_error: string | null;
+
+  // ---- render-on-approval (migration 040) ----
+  // Enquanto o post está na fila a arte NÃO existe: image_url é null e a
+  // Fila desenha um preview ao vivo por cima de base_image_url. Aprovar
+  // dispara o render, que congela render_spec e preenche image_url.
+  render_status: RenderStatus;
+  render_error: string | null;
+  /** Snapshot congelado na aprovação — ver [[RenderSpec]]. */
+  render_spec: RenderSpec | null;
+  /** Renovado a cada aprovação/regeração; o job guarda os writes por ele
+   * pra um render superado não sobrescrever um mais recente. */
+  render_token: string | null;
+  /** Foto base já normalizada pro quadro da arte, sem nenhuma marca. */
+  base_image_url: string | null;
+  /** Amostra de luminância da base, medida uma vez na geração — preview e
+   * render final decidem contraste pelo MESMO número. */
+  base_luminance: LumGrid | null;
+  /** Quadro do vídeo; até a 040 só existia no evento do attach-video. */
+  video_shape: VideoShape | null;
+
   created_at: string;
 }
 
@@ -356,18 +423,24 @@ export interface PostWithNews extends Post {
     "title" | "url" | "viral_score" | "image_url" | "image_license_hint"
   >;
   // Presente só em posts format='carousel' (embed do PostgREST).
-  carousel_cards?: Pick<
-    CarouselCardRow,
-    | "id"
-    | "idx"
-    | "role"
-    | "headline"
-    | "body"
-    | "image_url"
-    | "layout"
-    | "video_url"
-    | "video_poster_url"
-    | "video_status"
-    | "video_error"
-  >[];
+  carousel_cards?: EmbeddedCarouselCard[];
 }
+
+/** Colunas de carousel_cards que as telas embutem — bg_url/bg_luminance
+ * entram na 040 porque o preview ao vivo desenha por cima do fundo. */
+export type EmbeddedCarouselCard = Pick<
+  CarouselCardRow,
+  | "id"
+  | "idx"
+  | "role"
+  | "headline"
+  | "body"
+  | "image_url"
+  | "bg_url"
+  | "bg_luminance"
+  | "layout"
+  | "video_url"
+  | "video_poster_url"
+  | "video_status"
+  | "video_error"
+>;

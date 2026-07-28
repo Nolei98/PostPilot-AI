@@ -104,6 +104,56 @@ describe("migration 038: renovação de token + erro de métricas", () => {
     ).rejects.toThrow();
   });
 
+  it("migration 040: posts nasce com render_status 'none' e só aceita os 5 estados", async () => {
+    const { rows } = await db.query<{ column_name: string; column_default: string }>(
+      `select column_name, column_default from information_schema.columns
+       where table_name = 'posts' and column_name = 'render_status'`
+    );
+    expect(rows).toHaveLength(1);
+    // Post recém-gerado NÃO tem arte: ela só nasce na aprovação.
+    expect(rows[0].column_default).toContain("none");
+
+    await expect(
+      db.query(
+        `insert into posts (user_id, client_id, news_item_id, hook, caption, hashtags, image_prompt, render_status)
+         values (gen_random_uuid(), gen_random_uuid(), null, 'h', 'c', '#a', 'p', 'montando')`
+      )
+    ).rejects.toThrow();
+  });
+
+  it("migration 040: colunas do snapshot congelado e da base existem", async () => {
+    const { rows } = await db.query<{ column_name: string }>(
+      "select column_name from information_schema.columns where table_name = 'posts'"
+    );
+    const cols = rows.map((r) => r.column_name);
+    for (const c of [
+      "render_error",
+      "render_spec",
+      "render_token",
+      "base_image_url",
+      "base_luminance",
+      "video_shape",
+    ]) {
+      expect(cols).toContain(c);
+    }
+
+    // Cada card tem o próprio fundo, logo a própria luminância — preview e
+    // render final decidem contraste pelo MESMO número.
+    const { rows: cardCols } = await db.query<{ column_name: string }>(
+      "select column_name from information_schema.columns where table_name = 'carousel_cards'"
+    );
+    expect(cardCols.map((r) => r.column_name)).toContain("bg_luminance");
+  });
+
+  it("migration 040: video_shape só aceita os quadros que o render conhece", async () => {
+    await expect(
+      db.query(
+        `insert into posts (user_id, client_id, news_item_id, hook, caption, hashtags, image_prompt, video_shape)
+         values (gen_random_uuid(), gen_random_uuid(), null, 'h', 'c', '#a', 'p', 'quadrado')`
+      )
+    ).rejects.toThrow();
+  });
+
   it("posts tem metrics_error (falha de coleta deixa de ser invisível)", async () => {
     const { rows } = await db.query<{ column_name: string }>(
       "select column_name from information_schema.columns where table_name = 'posts'"

@@ -5,10 +5,11 @@
 // 1) copiar texto  2) baixar arte  3) marcar como postado.
 // Feedback: "✓ Copiado!" com pop, saída animada ao concluir.
 // ============================================================
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 /* eslint-disable @next/next/no-img-element */
 import JSZip from "jszip";
-import { cancelSchedule, markAsPosted, revertApproval } from "@/app/actions";
+import { cancelSchedule, markAsPosted, retryRender, revertApproval } from "@/app/actions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardActions } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
@@ -25,9 +26,15 @@ export function ReadyPostCard({
   reach?: number | null;
 }) {
   const toast = useToast();
+  const router = useRouter();
   const pages = [post.image_url, post.closing_image_url].filter(
     (u): u is string => !!u
   );
+  // Render-on-approval (migration 040): entre aprovar e a arte existir há
+  // uma janela de segundos. Baixar/postar nessa janela pegaria a arte
+  // vazia (ou a anterior), então o card mostra o estado e trava as ações.
+  const isRendering = post.render_status === "pending" || post.render_status === "rendering";
+  const renderFailed = post.render_status === "error";
   const isCarousel = pages.length > 1;
   const isVideo = (post.format === "video" || post.format === "video_feed") && !!post.video_url;
   const isFeedVideo = post.format === "video_feed";
@@ -132,6 +139,23 @@ export function ReadyPostCard({
     }
   }
 
+  // Enquanto o job monta a arte, busca o post de novo a cada 3s — quando
+  // render_status sai de pending/rendering o efeito para sozinho. Sem
+  // isso o card ficaria travado até um refresh manual.
+  useEffect(() => {
+    if (!isRendering) return;
+    const id = setInterval(() => router.refresh(), 3000);
+    return () => clearInterval(id);
+  }, [isRendering, router]);
+
+  /** Tenta de novo depois de uma falha de render. */
+  function handleRetryRender() {
+    startTransition(async () => {
+      await retryRender(post.id);
+      toast("⟳ Montando a arte de novo…");
+    });
+  }
+
   const isPosted = post.status === "published";
 
   /** Marca como postado — o card fica na aba "Postados", só muda de estado */
@@ -193,6 +217,16 @@ export function ReadyPostCard({
               🗓 AGENDADO · {scheduledLabel}
             </span>
           )}
+          {isRendering && (
+            <span className="mb-1 inline-block rounded-full border border-line bg-[#0D0418]/70 px-2.5 py-0.5 text-micro tracking-wider text-muted">
+              ⟳ MONTANDO A ARTE…
+            </span>
+          )}
+          {renderFailed && (
+            <span className="mb-1 inline-block rounded-full border border-error/50 bg-[#0D0418]/70 px-2.5 py-0.5 text-micro tracking-wider text-error">
+              ⚠ FALHA AO MONTAR A ARTE
+            </span>
+          )}
           <p className="mb-1 text-body font-semibold leading-snug">
             {post.hook}
           </p>
@@ -243,8 +277,12 @@ export function ReadyPostCard({
             <Button
               variant="secondary"
               size="sm"
-              loading={downloading}
-              disabled={isVideo ? !post.video_url : pages.length === 0}
+              loading={downloading || isRendering}
+              disabled={
+                isRendering ||
+                renderFailed ||
+                (isVideo ? !post.video_url : pages.length === 0)
+              }
               onClick={isVideo ? downloadVideo : isCarousel ? downloadZip : downloadImage}
             >
               {isVideo ? "Baixar vídeo" : isCarousel ? "Baixar .zip" : "Baixar arte"}
@@ -254,13 +292,34 @@ export function ReadyPostCard({
                 variant="success"
                 size="sm"
                 loading={isPending}
-                disabled={exiting}
+                disabled={exiting || isRendering || renderFailed}
                 onClick={handlePosted}
               >
                 ✓ Postei
               </Button>
             )}
           </CardActions>
+
+          {/* Falha de render: o post está aprovado mas sem arte. Tentar de
+              novo é a saída normal (a causa costuma ser transitória — foto
+              de fundo que não baixou, timeout do Storage). */}
+          {renderFailed && !isPosted && (
+            <div className="border-t border-line px-3 py-2">
+              <p className="mb-2 text-micro text-error">
+                {post.render_error ?? "Erro desconhecido ao montar a arte."}
+              </p>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full"
+                loading={isPending}
+                disabled={exiting}
+                onClick={handleRetryRender}
+              >
+                ⟳ Tentar montar de novo
+              </Button>
+            </div>
+          )}
 
           {/* Desistir da aprovação (com confirmação) — só faz sentido antes de postar */}
           {!isPosted && (

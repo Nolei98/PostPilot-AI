@@ -2,12 +2,15 @@
 // Job: geração completa do post a partir de uma notícia candidata.
 //
 // Disparado pelo scan-news (evento post/generate.requested).
-// Fluxo: Sonnet gera texto → cria Post (draft) → gera a página de
-// conteúdo (Flux/mock + hook + chip) e, se o modo for 'all', TAMBÉM
-// a página de fechamento (identidade visual) → Post vira
-// pending_approval → dispara notificação.
-// As duas páginas nunca se substituem: conteúdo = image_url,
-// fechamento = closing_image_url (carrossel de até 2 páginas).
+// Fluxo: Sonnet gera texto → cria Post (draft) → resolve a imagem BASE
+// (foto da matéria ou provider de Ajustes) → Post vira pending_approval
+// → dispara notificação.
+//
+// A ARTE não é montada aqui (migration 040). Este job resolve só a metade
+// CARA — os bytes da foto, onde estão as chamadas pagas. A metade barata,
+// compor o layout por cima, roda na APROVAÇÃO, porque é ela que precisa
+// mudar quando o usuário troca template ou cor. Enquanto o post está na
+// fila, a Fila desenha um preview ao vivo sobre a base.
 // Cada passo tem retry independente (steps da Inngest).
 // ============================================================
 import { inngest } from "@/inngest/client";
@@ -18,7 +21,7 @@ import {
   toPgVector,
   DUPLICATE_MAX_DISTANCE,
 } from "@/lib/ai/embedding";
-import { generatePostImage, renderAndUploadTemplateArt } from "@/lib/image";
+import { persistBaseImage, resolveBaseImage } from "@/lib/image";
 import { resolvePostFontFamily } from "@/lib/font-data";
 import type {
   BrandTemplate,
@@ -236,49 +239,54 @@ export const generatePost = inngest.createFunction(
       return null;
     });
 
-    // Plano free → arte sai com a marca "feito com PostPilot"
-    // (loop viral do produto; some no upgrade via resync)
-    const watermark = quota.plan === "free";
+    // 4. Imagem BASE — só a foto, sem nenhuma marca. Usa a imagem
+    //    original da matéria quando o feed trouxe uma; senão o provider
+    //    configurado em Ajustes.
+    //
+    //    A ARTE não é composta aqui (migration 040). Enquanto o post está
+    //    na fila, a Fila desenha um preview ao vivo sobre esta base com o
+    //    Brand Kit ATUAL — então trocar template/cor em Ajustes aparece na
+    //    hora, sem re-renderizar nada. A arte de verdade só é montada na
+    //    aprovação, e aí congela.
+    const baseImage = await step.run("resolve-base-image", async () => {
+      // Fotos de banco já usadas por este usuário — não repetir a mesma
+      // foto em dois posts.
+      const excludeStockIds = new Set<string>();
+      const { data: used } = await supabase
+        .from("posts")
+        .select("stock_photo_id")
+        .eq("user_id", userId)
+        .not("stock_photo_id", "is", null);
+      for (const row of used ?? []) {
+        if (row.stock_photo_id) excludeStockIds.add(row.stock_photo_id as string);
+      }
 
-    // 4. Página de CONTEÚDO — usa a imagem original da matéria quando
-    //    o feed trouxe uma; senão o provider configurado em Ajustes.
-    const imageUrl = await step.run("generate-content-image", async () => {
-      return generatePostImage(
-        pkg.image_prompt,
-        pkg.hook,
-        postId,
-        prefs.profile,
-        watermark,
-        news.image_url,
-        prefs.imageProvider,
-        userId,
-        prefs.brand
-      );
+      const { buffer, stock } = await resolveBaseImage({
+        imagePrompt: pkg.image_prompt,
+        sourceImageUrl: news.image_url,
+        imageProvider: prefs.imageProvider,
+        excludeStockIds,
+      });
+      const { baseUrl, grid } = await persistBaseImage(postId, buffer);
+
+      await supabase
+        .from("posts")
+        .update({
+          base_image_url: baseUrl,
+          base_luminance: grid,
+          ...(stock && { stock_photo_id: stock.id, stock_photo_credit: stock.credit }),
+        })
+        .eq("id", postId);
+
+      return { baseUrl };
     });
 
-    // 4b. Página de FECHAMENTO — só no modo 'all'. Não substitui a
-    //     página de conteúdo; é uma segunda imagem do carrossel.
-    const closingImageUrl = applyTemplate
-      ? await step.run("generate-closing-image", async () => {
-          return renderAndUploadTemplateArt(
-            postId,
-            prefs.identity,
-            prefs.profile,
-            watermark,
-            prefs.brand
-          );
-        })
-      : null;
-
-    // 5. Post pronto para aprovação
+    // 5. Post pronto para aprovação. image_url segue nulo de propósito —
+    //    a arte nasce na aprovação.
     await step.run("mark-ready", async () => {
       const { error } = await supabase
         .from("posts")
-        .update({
-          image_url: imageUrl,
-          closing_image_url: closingImageUrl,
-          status: "pending_approval",
-        })
+        .update({ status: "pending_approval", render_status: "none" })
         .eq("id", postId);
       if (error) throw new Error(`Erro ao finalizar post: ${error.message}`);
     });
@@ -289,6 +297,6 @@ export const generatePost = inngest.createFunction(
       data: { postId, userId },
     });
 
-    return { postId, imageUrl, closingImageUrl };
+    return { postId, baseImageUrl: baseImage.baseUrl };
   }
 );

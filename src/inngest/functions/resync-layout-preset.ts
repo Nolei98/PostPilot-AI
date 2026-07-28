@@ -13,9 +13,14 @@
 // ============================================================
 import { inngest } from "@/inngest/client";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resolvePostFontFamily } from "@/lib/font-data";
-import type { CardBrand } from "@/lib/carousel-render";
-import type { BrandTemplate, IgProfile, VisualIdentity } from "@/lib/types";
+import { resolveRenderSpec, withPost } from "@/lib/render-spec";
+import {
+  renderCardVideo,
+  renderCarouselPost,
+  renderSinglePost,
+  renderVideoPost,
+} from "@/lib/post-render";
+import type { RenderSpec } from "@/lib/types";
 
 export const resyncLayoutPreset = inngest.createFunction(
   { id: "resync-layout-preset", retries: 2, concurrency: { limit: 1 } },
@@ -24,43 +29,19 @@ export const resyncLayoutPreset = inngest.createFunction(
     const { clientId, userId } = event.data as { clientId: string; userId: string };
     const supabase = createAdminClient();
 
-    const prefs = await step.run("fetch-brand", async () => {
-      const { data: bk } = await supabase
-        .from("brand_kits")
-        .select("*")
-        .eq("client_id", clientId)
-        .maybeSingle();
-      const profile: IgProfile = {
-        handle: bk?.ig_handle ?? "seuperfil.ia",
-        displayName: bk?.ig_display_name ?? "Seu Perfil",
-        avatarUrl: bk?.ig_avatar_url ?? null,
-        verified: bk?.ig_verified ?? false,
-        showProfileChip: bk?.show_profile_chip ?? true,
-      };
-      const cardBrand: CardBrand = {
-        colorBackground: bk?.color_background ?? "#0B0B12",
-        colorAccent: bk?.color_accent ?? "#7C5CFF",
-        colorText: bk?.color_text ?? "#FFFFFF",
-        fontFamily: resolvePostFontFamily(bk?.post_font_family),
-        brandName: bk?.brand_name ?? null,
-        wordmark: bk?.wordmark ?? null,
-        handle: bk?.ig_handle ?? null,
-        keywords: bk?.keywords ?? null,
-        brandMark: bk?.brand_mark ?? "auto",
-        layoutPreset: bk?.layout_preset ?? "editorial-noir",
-      };
-      const brandTemplate: BrandTemplate = {
-        fontFamily: resolvePostFontFamily(bk?.post_font_family),
-        logoUrl: bk?.logo_url ?? null,
-        showLogo: bk?.show_brand_logo ?? true,
-      };
-      return { profile, cardBrand, brandTemplate };
-    });
-
-    const watermark = await step.run("check-plan", async () => {
-      const { getUserPlan } = await import("@/lib/subscription");
-      return (await getUserPlan(userId)) === "free";
-    });
+    // Uma resolução só pro cliente inteiro (Brand Kit + modelos do
+    // Template Studio + plano). Cada post deriva daqui com withPost, que
+    // só troca formato/contra-capa/overrides tpl_* — o resto é igual pra
+    // todos, então não faz sentido reler por post.
+    //
+    // Template Studio (B15): respeitar o modelo escolhido por superfície é
+    // obrigatório aqui. Antes o resync re-renderizava todo card pelo motor
+    // antigo, então salvar o layout em Ajustes revertia silenciosamente a
+    // arte dos carrosséis que tinham modelo — era exatamente o "post não
+    // herdou o template" de 2026-07-27. Sem seleção → motor antigo.
+    const baseSpec = (await step.run("resolve-spec", async () =>
+      resolveRenderSpec({ clientId, userId, post: { format: "single" } })
+    )) as RenderSpec;
 
     // Marca TUDO que este job vai reprocessar como 'pending' antes de
     // começar. A Fila usa isso pra mostrar "aplicando o layout novo"
@@ -96,64 +77,22 @@ export const resyncLayoutPreset = inngest.createFunction(
 
     for (const post of carouselPosts) {
       await step.run(`carousel-${post.id}`, async () => {
-        const { renderAndUploadCard } = await import("@/lib/carousel-render");
-        let newsImg: string | null = null;
         const { data: news } = await supabase
           .from("news_items")
           .select("image_url")
           .eq("id", post.news_item_id)
           .maybeSingle();
-        newsImg = news?.image_url ?? null;
 
-        const { data: cards } = await supabase
-          .from("carousel_cards")
-          .select("*")
-          .eq("post_id", post.id)
-          .order("idx");
-        if (!cards || cards.length === 0) return { skipped: true };
-
-        let coverUrl: string | null = null;
-        const lastIdx = cards.length - 1;
-        for (const c of cards) {
-          const isCover = c.idx === 0;
-          const isClosing = c.idx === lastIdx;
-          const pageKind = isCover ? "cover" : isClosing ? "closing" : "interior";
-          const bgUrl = (c.bg_url as string | null) ?? (isCover || isClosing ? newsImg : null);
-          let bgBuf: Buffer | null = null;
-          if (bgUrl) {
-            try {
-              const r = await fetch(bgUrl);
-              if (r.ok) bgBuf = Buffer.from(await r.arrayBuffer());
-            } catch {
-              /* sem foto → sólido */
-            }
-          }
-          try {
-            const url = await renderAndUploadCard(
-              post.id,
-              {
-                idx: c.idx,
-                role: c.role as "hook" | "value" | "cta",
-                headline: c.headline ?? "",
-                body: c.body ?? "",
-              },
-              prefs.cardBrand,
-              pageKind,
-              bgBuf,
-              prefs.profile,
-              cards.length
-            );
-            await supabase.from("carousel_cards").update({ image_url: url }).eq("id", c.id);
-            if (isCover) coverUrl = url;
-          } catch (err) {
-            console.error(`[resync-layout-preset] falha no card ${c.idx} do post ${post.id}:`, err);
-          }
-        }
+        const { cardUrls, coverUrl } = await renderCarouselPost(
+          post.id,
+          withPost(baseSpec, { format: "carousel" }),
+          { fallbackBgUrl: news?.image_url ?? null }
+        );
         if (coverUrl) {
           await supabase.from("posts").update({ image_url: coverUrl }).eq("id", post.id);
         }
         await clearRerender(post.id);
-        return { cards: cards.length };
+        return { cards: cardUrls.length };
       });
     }
 
@@ -171,60 +110,40 @@ export const resyncLayoutPreset = inngest.createFunction(
     });
 
     for (const post of singlePosts) {
-      await step.run(`single-page1-${post.id}`, async () => {
-        const { regenerateContentImage } = await import("@/lib/image");
+      await step.run(`single-${post.id}`, async () => {
         try {
-          const imageUrl = await regenerateContentImage(
+          const { imageUrl, closingUrl } = await renderSinglePost(
             post.id,
             post.hook ?? "",
-            prefs.profile,
-            watermark,
-            prefs.brandTemplate
+            withPost(baseSpec, {
+              format: "single",
+              template_applied: post.template_applied,
+              tpl_keyword: post.tpl_keyword,
+              tpl_top_text: post.tpl_top_text,
+              tpl_bottom_text: post.tpl_bottom_text,
+              tpl_cta_enabled: post.tpl_cta_enabled,
+              tpl_color_background: post.tpl_color_background,
+              tpl_color_accent: post.tpl_color_accent,
+              tpl_color_text: post.tpl_color_text,
+              tpl_color_keyword_box: post.tpl_color_keyword_box,
+            })
           );
-          if (imageUrl) await supabase.from("posts").update({ image_url: imageUrl }).eq("id", post.id);
+          const patch: Record<string, string> = {};
+          if (imageUrl) patch.image_url = imageUrl;
+          if (closingUrl) patch.closing_image_url = closingUrl;
+          if (Object.keys(patch).length) {
+            await supabase.from("posts").update(patch).eq("id", post.id);
+          }
           return { updated: !!imageUrl };
         } catch (err) {
-          console.error(`[resync-layout-preset] falha na página 1 do post ${post.id}:`, err);
+          // Post gerado antes da migration 040 pode não ter
+          // `{id}-base.jpg` (o upload da base era best-effort) — sem base
+          // não dá pra recompor, e a arte antiga segue válida.
+          console.error(`[resync-layout-preset] falha no post único ${post.id}:`, err);
           return { updated: false };
+        } finally {
+          await clearRerender(post.id);
         }
-      });
-
-      if (post.template_applied) {
-        await step.run(`single-closing-${post.id}`, async () => {
-          const { renderAndUploadTemplateArt } = await import("@/lib/image");
-          const identity: VisualIdentity = {
-            colorBackground: post.tpl_color_background ?? "#0B0B12",
-            colorAccent: post.tpl_color_accent ?? "#7C5CFF",
-            colorText: post.tpl_color_text ?? "#FFFFFF",
-            colorKeywordBox: post.tpl_color_keyword_box ?? "#7C5CFF",
-            keyword: post.tpl_keyword ?? "IA",
-            topText: post.tpl_top_text ?? "",
-            bottomText: post.tpl_bottom_text ?? "",
-            ctaEnabled: post.tpl_cta_enabled ?? false,
-          };
-          try {
-            const closingImageUrl = await renderAndUploadTemplateArt(
-              post.id,
-              identity,
-              prefs.profile,
-              watermark,
-              prefs.brandTemplate
-            );
-            await supabase.from("posts").update({ closing_image_url: closingImageUrl }).eq("id", post.id);
-            return { updated: true };
-          } catch (err) {
-            console.error(`[resync-layout-preset] falha na contra-capa do post ${post.id}:`, err);
-            return { updated: false };
-          }
-        });
-      }
-
-      // Só depois da contra-capa (quando existe) o post único está
-      // realmente pronto — liberar antes deixaria o card sem spinner
-      // com a arte ainda mudando.
-      await step.run(`single-done-${post.id}`, async () => {
-        await clearRerender(post.id);
-        return { done: true };
       });
     }
 
@@ -245,36 +164,15 @@ export const resyncLayoutPreset = inngest.createFunction(
     for (const post of videoPosts) {
       await step.run(`video-${post.id}`, async () => {
         try {
-          const { data: srcFile, error: dlErr } = await supabase.storage
-            .from("post-images")
-            .download(`${post.id}-video-source.mp4`);
-          if (dlErr || !srcFile) throw new Error("vídeo fonte não encontrado no Storage");
-          const videoBuffer = Buffer.from(await srcFile.arrayBuffer());
-
-          const { extractPosterFrame, composeReelsVideo } = await import("@/lib/video");
-          const { buildReelsVideoOverlayPng } = await import("@/lib/image");
-
-          const poster = await extractPosterFrame(videoBuffer, 0.5);
-          const overlay = await buildReelsVideoOverlayPng(post.hook ?? "", prefs.cardBrand, poster);
-          const finalVideo = await composeReelsVideo(videoBuffer, overlay);
-          // Pôster salvo precisa ser do vídeo FINAL (com overlay), não
-          // do bruto usado só pra medir contraste — mesmo fix de attach-video.ts.
-          const finalPoster = await extractPosterFrame(finalVideo, 0.5);
-
-          const videoPath = `${post.id}-video.mp4`;
-          const posterPath = `${post.id}-video-poster.jpg`;
-          await supabase.storage.from("post-images").upload(videoPath, finalVideo, { contentType: "video/mp4", upsert: true });
-          await supabase.storage.from("post-images").upload(posterPath, finalPoster, { contentType: "image/jpeg", upsert: true });
-          const { data: videoUrlData } = supabase.storage.from("post-images").getPublicUrl(videoPath);
-          const { data: posterUrlData } = supabase.storage.from("post-images").getPublicUrl(posterPath);
-
+          const { videoUrl, posterUrl } = await renderVideoPost(
+            post.id,
+            post.hook ?? "",
+            withPost(baseSpec, { format: "video" }),
+            "reels"
+          );
           await supabase
             .from("posts")
-            .update({
-              video_url: `${videoUrlData.publicUrl}?v=${Date.now()}`,
-              video_poster_url: `${posterUrlData.publicUrl}?v=${Date.now()}`,
-              video_error: null,
-            })
+            .update({ video_url: videoUrl, video_poster_url: posterUrl, video_error: null })
             .eq("id", post.id);
           await clearRerender(post.id);
           return { updated: true };
@@ -305,33 +203,15 @@ export const resyncLayoutPreset = inngest.createFunction(
     for (const post of feedVideoPosts) {
       await step.run(`feed-video-${post.id}`, async () => {
         try {
-          const { data: srcFile, error: dlErr } = await supabase.storage
-            .from("post-images")
-            .download(`${post.id}-video-source.mp4`);
-          if (dlErr || !srcFile) throw new Error("vídeo fonte não encontrado no Storage");
-          const videoBuffer = Buffer.from(await srcFile.arrayBuffer());
-
-          const { composeFeedVideo, extractPosterFrame } = await import("@/lib/video");
-          const { buildFeedVideoOverlay } = await import("@/lib/image");
-
-          const { overlayPng, frame } = buildFeedVideoOverlay(post.hook ?? "", prefs.cardBrand);
-          const finalVideo = await composeFeedVideo(videoBuffer, overlayPng, frame);
-          const finalPoster = await extractPosterFrame(finalVideo, 0.5);
-
-          const videoPath = `${post.id}-video.mp4`;
-          const posterPath = `${post.id}-video-poster.jpg`;
-          await supabase.storage.from("post-images").upload(videoPath, finalVideo, { contentType: "video/mp4", upsert: true });
-          await supabase.storage.from("post-images").upload(posterPath, finalPoster, { contentType: "image/jpeg", upsert: true });
-          const { data: videoUrlData } = supabase.storage.from("post-images").getPublicUrl(videoPath);
-          const { data: posterUrlData } = supabase.storage.from("post-images").getPublicUrl(posterPath);
-
+          const { videoUrl, posterUrl } = await renderVideoPost(
+            post.id,
+            post.hook ?? "",
+            withPost(baseSpec, { format: "video_feed" }),
+            "feed"
+          );
           await supabase
             .from("posts")
-            .update({
-              video_url: `${videoUrlData.publicUrl}?v=${Date.now()}`,
-              video_poster_url: `${posterUrlData.publicUrl}?v=${Date.now()}`,
-              video_error: null,
-            })
+            .update({ video_url: videoUrl, video_poster_url: posterUrl, video_error: null })
             .eq("id", post.id);
           await clearRerender(post.id);
           return { updated: true };
@@ -358,41 +238,16 @@ export const resyncLayoutPreset = inngest.createFunction(
     for (const card of videoCards) {
       await step.run(`card-video-${card.id}`, async () => {
         try {
-          const sourcePath = `${card.post_id}-card-${card.idx}-video-source.mp4`;
-          const { data: srcFile, error: dlErr } = await supabase.storage
-            .from("post-images")
-            .download(sourcePath);
-          if (dlErr || !srcFile) throw new Error("vídeo fonte não encontrado no Storage");
-          const videoBuffer = Buffer.from(await srcFile.arrayBuffer());
-
-          const { composeFeedVideo } = await import("@/lib/video");
-          const { buildCardVideoOverlay } = await import("@/lib/image");
-
-          // Mesmo cálculo do attach-card-video: capa, fechamento ou
-          // interior — sem isso o resync devolvia a capa com estrutura
-          // de card do meio, perdendo eyebrow/wordmark/deslize.
-          const { count: totalCards } = await supabase
-            .from("carousel_cards")
-            .select("*", { count: "exact", head: true })
-            .eq("post_id", card.post_id);
-          const total = totalCards ?? 0;
-          const pageKind =
-            card.idx === 0 ? "cover" : total > 0 && card.idx === total - 1 ? "closing" : "interior";
-
-          const { overlayPng, frame } = buildCardVideoOverlay(
-            { headline: card.headline, body: card.body },
-            prefs.cardBrand,
-            { pageKind, index: card.idx, total }
+          // renderCardVideo recalcula capa/interior/fechamento a partir da
+          // posição — sem isso a capa saía com estrutura de card do meio,
+          // perdendo eyebrow/wordmark/deslize.
+          const { videoUrl } = await renderCardVideo(
+            card.id,
+            withPost(baseSpec, { format: "carousel" })
           );
-          const finalVideo = await composeFeedVideo(videoBuffer, overlayPng, frame);
-
-          const videoPath = `${card.post_id}-card-${card.idx}-video.mp4`;
-          await supabase.storage.from("post-images").upload(videoPath, finalVideo, { contentType: "video/mp4", upsert: true });
-          const { data: videoUrlData } = supabase.storage.from("post-images").getPublicUrl(videoPath);
-
           await supabase
             .from("carousel_cards")
-            .update({ video_url: `${videoUrlData.publicUrl}?v=${Date.now()}`, video_error: null })
+            .update({ video_url: videoUrl, video_error: null })
             .eq("id", card.id);
           return { updated: true };
         } catch (err) {

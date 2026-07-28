@@ -560,82 +560,155 @@ export async function composePhotoBg(
     .toBuffer();
 }
 
-/** Renderiza um card em qualquer preset de layout ALTERNATIVO (Fase 3) —
- * mesmo motor de contraste (luminância real → tema → overlay) do layout
- * padrão, só a tipografia/estrutura do SVG muda (layout-*.ts). */
-async function renderAltLayoutCard(
-  builders: AltLayoutBuilders,
+/** Mede a luminância (0–1) de uma faixa horizontal do card já enquadrado.
+ * `top`/`height` em px do canvas 1080x1350; a faixa cheia é o card todo.
+ *
+ * Injetável porque existem duas fontes: o render real mede a foto com o
+ * sharp; o preview da Fila deriva da grade guardada na geração
+ * (base_luminance / bg_luminance), sem tocar em pixel. Injetar em vez de
+ * cada lado decidir o layout por conta própria é o que garante que a arte
+ * da fila e a arte final sejam o mesmo desenho. */
+export type MeasureBand = (rect: { top: number; height: number }) => Promise<number> | number;
+
+/** O que desenhar num card, decidido sem rasterizar nada. */
+export interface CardSvgPlan {
+  svg: string;
+  /** Topo da banda a borrar quando há foto; null = sem banda. */
+  blurBandTop: number | null;
+  /** Card interior com foto em metade do quadro (override imagePosition). */
+  imageBand?: HalfImageBand;
+}
+
+/** Meta-linha do TOPO (eyebrow + @handle) fica FORA da banda de
+ * identidade (rodapé) — sem checagem própria, herdava o tema/cor do
+ * rodapé cegamente e podia sumir contra a foto (bug real visto ao vivo:
+ * rótulo quase invisível no topo de um post). Mesma COR de texto já
+ * escolhida pela banda; só a opacidade da placa muda com a luminância
+ * local do topo — 0 quando já dá pra ler sem ajuda. */
+const TOP_BAND_H = 140;
+
+/**
+ * Escolhe e monta o SVG de um card — a árvore de decisão inteira
+ * (meia-imagem, layout alternativo, capa/fechamento, interior com ou sem
+ * foto), sem sharp e sem resvg. `measure` fornece a luminância.
+ */
+export async function buildCardSvgPlan(
   card: CarouselCard,
   brand: CardBrand,
   pageKind: CoverPageKind,
-  bgImage: Buffer | null,
-  totalCards: number
-): Promise<Buffer> {
-  const { buildCover, buildCard } = builders;
+  hasBg: boolean,
+  totalCards: number,
+  imagePosition: "top" | "bottom" | null,
+  measure: MeasureBand
+): Promise<CardSvgPlan> {
   const isCoverStyle = pageKind === "cover" || pageKind === "closing";
+  const alt = brand.layoutPreset ? ALT_LAYOUTS[brand.layoutPreset] : undefined;
+  const whole = { top: 0, height: CARD_H };
 
-  if (isCoverStyle) {
-    const eyebrowRight = pageKind === "closing" ? "OBRIGADO" : null;
-    const opts = {
-      showSwipeHint: pageKind === "cover",
-      body: pageKind === "closing" ? card.body : null,
-      eyebrowRight,
-    };
-    if (bgImage) {
-      const probe = buildCover(card.headline ?? "", { ...brand, colorText: "#FFFFFF" }, true, opts);
-      const covered = await sharp(bgImage)
-        .resize(CARD_W, CARD_H, { fit: "cover", position: "attention" })
-        .toBuffer();
-      const band = await sharp(covered)
-        .extract({ left: 0, top: probe.blurBandTop, width: CARD_W, height: CARD_H - probe.blurBandTop })
-        .toBuffer();
-      const luminance = await measureImageLuminance(band);
-      const theme = pickTheme(luminance);
-      const textColor = textColorForTheme(theme);
-      const alpha = overlayAlphaFor(theme, textColor, luminance);
-      // Meta-linha do TOPO (eyebrow + @handle) fica FORA da banda de
-      // identidade (rodapé) — sem essa checagem própria, herdava o
-      // tema/cor do rodapé cegamente e podia sumir contra a foto (bug
-      // real visto ao vivo: rótulo quase invisível no topo de um post).
-      // Mesma cor de texto (textColor já escolhida), só a OPACIDADE da
-      // placa muda com a luminância LOCAL do topo — 0 quando já dá pra
-      // ler sem ajuda.
-      const topBand = await sharp(covered)
-        .extract({ left: 0, top: 0, width: CARD_W, height: 140 })
-        .toBuffer();
-      const topLuminance = await measureImageLuminance(topBand);
-      const topAlpha = overlayAlphaFor(theme, textColor, topLuminance);
-      const { svg, blurBandTop } = buildCover(card.headline ?? "", { ...brand, colorText: textColor }, true, {
-        ...opts,
-        overlay: { theme, alpha },
-        topOverlay: { theme, alpha: topAlpha },
-      });
-      return composePhotoBg(bgImage, svg, blurBandTop);
-    }
-    const { svg } = buildCover(card.headline ?? "", brand, false, opts);
-    return rasterizeSvg(svg);
-  }
-
-  if (bgImage) {
-    const luminance = await measureImageLuminance(bgImage);
+  /** tema + cor + véu a partir de uma faixa */
+  async function contrast(rect: { top: number; height: number }) {
+    const luminance = await measure(rect);
     const theme = pickTheme(luminance);
     const textColor = textColorForTheme(theme);
-    const alpha = overlayAlphaFor(theme, textColor, luminance);
-    const svg = buildCard(
-      card.headline ?? "",
-      card.body ?? null,
-      { ...brand, colorText: textColor },
-      { index: card.idx + 1, total: totalCards },
-      true,
-      { theme, alpha }
-    );
-    return composePhotoBg(bgImage, svg, null);
+    return { theme, textColor, luminance, alpha: overlayAlphaFor(theme, textColor, luminance) };
   }
-  const svg = buildCard(card.headline ?? "", card.body ?? null, brand, {
-    index: card.idx + 1,
-    total: totalCards,
-  });
-  return rasterizeSvg(svg);
+
+  // 1. Interior com foto em METADE do quadro (override por card).
+  if (!isCoverStyle && hasBg && imagePosition) {
+    const { svg, imageBand } = buildCardSvgHalfImage(card, brand, imagePosition);
+    return { svg, blurBandTop: null, imageBand };
+  }
+
+  // 2. Layouts alternativos (Fase 3) — mesma matemática de contraste,
+  //    só a tipografia/estrutura do SVG muda.
+  if (alt) {
+    const { buildCover, buildCard } = alt;
+    if (isCoverStyle) {
+      const opts = {
+        showSwipeHint: pageKind === "cover",
+        body: pageKind === "closing" ? card.body : null,
+        eyebrowRight: pageKind === "closing" ? "OBRIGADO" : null,
+      };
+      if (!hasBg) return { svg: buildCover(card.headline ?? "", brand, false, opts).svg, blurBandTop: null };
+
+      const probe = buildCover(card.headline ?? "", { ...brand, colorText: "#FFFFFF" }, true, opts);
+      const band = await contrast({ top: probe.blurBandTop, height: CARD_H - probe.blurBandTop });
+      const topLuminance = await measure({ top: 0, height: TOP_BAND_H });
+      const built = buildCover(card.headline ?? "", { ...brand, colorText: band.textColor }, true, {
+        ...opts,
+        overlay: { theme: band.theme, alpha: band.alpha },
+        topOverlay: {
+          theme: band.theme,
+          alpha: overlayAlphaFor(band.theme, band.textColor, topLuminance),
+        },
+      });
+      return { svg: built.svg, blurBandTop: built.blurBandTop };
+    }
+
+    const counter = { index: card.idx + 1, total: totalCards };
+    if (!hasBg) {
+      return { svg: buildCard(card.headline ?? "", card.body ?? null, brand, counter), blurBandTop: null };
+    }
+    const c = await contrast(whole);
+    return {
+      svg: buildCard(
+        card.headline ?? "",
+        card.body ?? null,
+        { ...brand, colorText: c.textColor },
+        counter,
+        true,
+        { theme: c.theme, alpha: c.alpha }
+      ),
+      blurBandTop: null,
+    };
+  }
+
+  // 3. Editorial Noir — capa/fechamento.
+  if (isCoverStyle) {
+    const coverOpts: CoverOptions = {
+      showSwipeHint: pageKind === "cover",
+      body: pageKind === "closing" ? card.body : null,
+      align: pageKind === "closing" ? "center" : "bottom",
+      showActionIcons: pageKind === "closing",
+    };
+    if (!hasBg) return { svg: buildCoverSvg(card, brand, false, coverOpts).svg, blurBandTop: null };
+
+    // 1ª passada (sem overlay) só pra descobrir onde cai a banda de
+    // identidade; mede a luminância REAL dessa banda (não a foto toda) e
+    // calibra tema + overlay a partir dela.
+    const probe = buildCoverSvg(card, { ...brand, colorText: "#FFFFFF" }, true, coverOpts);
+    const band = await contrast({ top: probe.blurBandTop, height: CARD_H - probe.blurBandTop });
+    const built = buildCoverSvg(card, { ...brand, colorText: band.textColor }, true, {
+      ...coverOpts,
+      overlay: { theme: band.theme, alpha: band.alpha },
+    });
+    return { svg: built.svg, blurBandTop: built.blurBandTop };
+  }
+
+  // 4. Editorial Noir — card interior.
+  if (!hasBg) return { svg: buildCardSvg(card, brand), blurBandTop: null };
+  const c = await contrast(whole);
+  return {
+    svg: buildCardSvg(card, { ...brand, colorText: c.textColor }, true, {
+      theme: c.theme,
+      alpha: c.alpha,
+    }),
+    blurBandTop: null,
+  };
+}
+
+/** Medição real (sharp) de uma faixa da foto já enquadrada no card. */
+export function measureBandOf(bgImage: Buffer): MeasureBand {
+  let covered: Promise<Buffer> | null = null;
+  return async ({ top, height }) => {
+    covered ??= sharp(bgImage)
+      .resize(CARD_W, CARD_H, { fit: "cover", position: "attention" })
+      .toBuffer();
+    const band = await sharp(await covered)
+      .extract({ left: 0, top, width: CARD_W, height })
+      .toBuffer();
+    return measureImageLuminance(band);
+  };
 }
 
 export async function renderAndUploadCard(
@@ -652,58 +725,25 @@ export async function renderAndUploadCard(
    * identidade própria) e quando não há foto. */
   imagePosition: "top" | "bottom" | null = null
 ): Promise<string> {
-  const isCoverStyle = pageKind === "cover" || pageKind === "closing";
-  const altLayout = brand.layoutPreset ? ALT_LAYOUTS[brand.layoutPreset] : undefined;
+  // O QUE desenhar é decidido por buildCardSvgPlan (puro, compartilhado
+  // com o preview ao vivo da Fila); aqui só se rasteriza e compõe.
+  const plan = await buildCardSvgPlan(
+    card,
+    brand,
+    pageKind,
+    !!bgImage,
+    totalCards,
+    imagePosition,
+    bgImage ? measureBandOf(bgImage) : () => 0
+  );
 
   let png: Buffer;
-  if (!isCoverStyle && bgImage && imagePosition) {
-    const { svg, imageBand } = buildCardSvgHalfImage(card, brand, imagePosition);
-    png = await composeHalfPhotoCard(bgImage, svg, imageBand);
-  } else if (altLayout) {
-    png = await renderAltLayoutCard(altLayout, card, brand, pageKind, bgImage, totalCards);
-  } else if (isCoverStyle) {
-    const coverOpts: CoverOptions = {
-      showSwipeHint: pageKind === "cover",
-      body: pageKind === "closing" ? card.body : null,
-      align: pageKind === "closing" ? "center" : "bottom",
-      showActionIcons: pageKind === "closing",
-    };
-    if (bgImage) {
-      // 1ª passada (sem overlay) só pra descobrir onde cai a banda de
-      // identidade; mede a luminância REAL dessa banda (não a foto toda) e
-      // calibra tema + overlay a partir dela (contrast.ts).
-      const probe = buildCoverSvg(card, { ...brand, colorText: "#FFFFFF" }, true, coverOpts);
-      const band = await sharp(bgImage)
-        .resize(CARD_W, CARD_H, { fit: "cover", position: "attention" })
-        .extract({
-          left: 0,
-          top: probe.blurBandTop,
-          width: CARD_W,
-          height: CARD_H - probe.blurBandTop,
-        })
-        .toBuffer();
-      const luminance = await measureImageLuminance(band);
-      const theme = pickTheme(luminance);
-      const textColor = textColorForTheme(theme);
-      const alpha = overlayAlphaFor(theme, textColor, luminance);
-      const { svg, blurBandTop } = buildCoverSvg(card, { ...brand, colorText: textColor }, true, {
-        ...coverOpts,
-        overlay: { theme, alpha },
-      });
-      png = await composePhotoBg(bgImage, svg, blurBandTop);
-    } else {
-      const { svg } = buildCoverSvg(card, brand, false, coverOpts);
-      png = rasterizeSvg(svg);
-    }
+  if (plan.imageBand && bgImage) {
+    png = await composeHalfPhotoCard(bgImage, plan.svg, plan.imageBand);
   } else if (bgImage) {
-    const luminance = await measureImageLuminance(bgImage);
-    const theme = pickTheme(luminance);
-    const textColor = textColorForTheme(theme);
-    const alpha = overlayAlphaFor(theme, textColor, luminance);
-    const onPhoto: CardBrand = { ...brand, colorText: textColor };
-    png = await composePhotoBg(bgImage, buildCardSvg(card, onPhoto, true, { theme, alpha }), null);
+    png = await composePhotoBg(bgImage, plan.svg, plan.blurBandTop);
   } else {
-    png = rasterizeSvg(buildCardSvg(card, brand));
+    png = rasterizeSvg(plan.svg);
   }
 
   // Fechamento: chip de perfil (avatar + @handle) no canto inferior

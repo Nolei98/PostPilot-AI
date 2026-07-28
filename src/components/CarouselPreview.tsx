@@ -6,16 +6,23 @@
 // aprovação e na tela de "prontos para publicar".
 // ============================================================
 import { useState } from "react";
+import { PreviewFrame } from "@/components/PreviewFrame";
+import type { PreviewPage } from "@/lib/post-preview";
 /* eslint-disable @next/next/no-img-element */
 
 export function CarouselPreview({
   images,
+  pages,
   alt,
   className = "",
   videos,
   posters,
 }: {
   images: string[];
+  /** Páginas do preview AO VIVO (post ainda na fila, arte não existe
+   * — ver src/lib/post-preview.ts). Quando presente vence `images`:
+   * cada slide é desenhado na hora com o Brand Kit atual. */
+  pages?: PreviewPage[];
   alt: string;
   className?: string;
   /** Vídeo por slide (mesma ordem/tamanho de `images`) — quando o card
@@ -27,21 +34,25 @@ export function CarouselPreview({
   posters?: (string | null)[];
 }) {
   const [index, setIndex] = useState(0);
-  const hasMultiple = images.length > 1;
+  const count = pages?.length ?? images.length;
+  const hasMultiple = count > 1;
   const currentVideo = videos?.[index];
 
   function prev(e: React.MouseEvent) {
     e.stopPropagation();
-    setIndex((i) => (i - 1 + images.length) % images.length);
+    setIndex((i) => (i - 1 + count) % count);
   }
   function next(e: React.MouseEvent) {
     e.stopPropagation();
-    setIndex((i) => (i + 1) % images.length);
+    setIndex((i) => (i + 1) % count);
   }
 
-  if (images.length === 0) {
+  if (count === 0) {
     return <div className={`skeleton ${className}`} />;
   }
+
+  const slideAlt = `${alt} (página ${index + 1} de ${count})`;
+  const livePage = pages?.[index];
 
   return (
     <div className={`relative overflow-hidden bg-surface-2 ${className}`}>
@@ -53,12 +64,10 @@ export function CarouselPreview({
           controls
           className="h-full w-full object-cover"
         />
+      ) : livePage ? (
+        <PreviewFrame page={livePage} alt={slideAlt} />
       ) : (
-        <img
-          src={images[index]}
-          alt={`${alt} (página ${index + 1} de ${images.length})`}
-          className="h-full w-full object-cover"
-        />
+        <img src={images[index]} alt={slideAlt} className="h-full w-full object-cover" />
       )}
 
       {hasMultiple && (
@@ -85,12 +94,12 @@ export function CarouselPreview({
 
           {/* Indicador "1/2" no canto — não colide com o chip (esquerda) */}
           <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-micro text-white">
-            {index + 1}/{images.length}
+            {index + 1}/{count}
           </span>
 
           {/* Dots no rodapé da imagem */}
           <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5">
-            {images.map((_, i) => (
+            {Array.from({ length: count }).map((_, i) => (
               <button
                 key={i}
                 onClick={(e) => {

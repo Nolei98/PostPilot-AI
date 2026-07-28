@@ -60,8 +60,11 @@ export const config = {
   // Protege tudo, exceto: rotas do Inngest (assinadas pela própria
   // Inngest), o webhook do Stripe (assinado pelo Stripe — sem cookie
   // de sessão, era redirecionado pro /login e o pagamento nunca
-  // sincronizava), assets estáticos e favicon.
+  // sincronizava), as fontes das artes (assets estáticos referenciados
+  // pelo globals.css, que carrega até no /login — atrás do guard o
+  // browser recebia o HTML do redirect no lugar do .ttf), assets
+  // estáticos e favicon.
   matcher: [
-    "/((?!api/inngest|api/stripe/webhook|_next/static|_next/image|favicon.ico|support.js|image-slot.js|uploads).*)",
+    "/((?!api/inngest|api/stripe/webhook|api/fonts|_next/static|_next/image|favicon.ico|support.js|image-slot.js|uploads).*)",
   ],
 };

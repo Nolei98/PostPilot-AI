@@ -82,23 +82,42 @@ async function circularAvatar(url: string, size: number): Promise<Buffer | null>
   }
 }
 
+/** Onde o avatar raster entra por cima do SVG do chip (coords do canvas). */
+export interface ChipAvatarSlot {
+  x: number;
+  y: number;
+  size: number;
+}
+
+export interface ChipMarkup {
+  svg: string;
+  /** null quando o perfil não tem foto — o SVG já traz as iniciais. */
+  avatar: ChipAvatarSlot | null;
+}
+
+export interface ChipOptions {
+  position?: "top-center" | "bottom-left";
+  /** Altura do canvas — obrigatório pra calcular a margem inferior em "bottom-left". */
+  canvasHeight?: number;
+  /** Largura do chip em % do canvas (default 33%, "bottom-left" usa algo mais compacto). */
+  widthPercent?: number;
+}
+
 /**
- * Monta as camadas do chip de perfil para compor em qualquer slide.
- * position "top-center" (default, posts single) ou "bottom-left"
- * (fechamento do carrossel — mesma margem da trilha de ícones).
+ * SVG do chip de perfil — PURO: sem sharp, sem rede, sem rasterizar.
+ * Devolve também onde o avatar entra, pra quem for compor de verdade
+ * (buildProfileChipLayers) ou pro preview da Fila desenhar um <img> ali.
+ *
+ * Existe separado porque o preview roda no browser: se ele recalculasse a
+ * geometria do chip por conta própria, chip do preview e chip da arte
+ * final divergiriam na primeira mudança que alguém fizesse aqui.
  */
-export async function buildProfileChipLayers(
+export function buildProfileChipSvg(
   profile: IgProfile,
   canvasWidth: number,
   fontFamily: string = FONT_FAMILY,
-  opts: {
-    position?: "top-center" | "bottom-left";
-    /** Altura do canvas — obrigatório pra calcular a margem inferior em "bottom-left". */
-    canvasHeight?: number;
-    /** Largura do chip em % do canvas (default 33%, "bottom-left" usa algo mais compacto). */
-    widthPercent?: number;
-  } = {}
-): Promise<CompositeLayer[]> {
+  opts: ChipOptions = {}
+): ChipMarkup {
   const position = opts.position ?? "top-center";
   const s = canvasWidth / 1080; // fator de escala
   const canvasHeight = opts.canvasHeight ?? Math.round(canvasWidth * 1.25);
@@ -156,10 +175,7 @@ export async function buildProfileChipLayers(
 
   // Avatar: imagem real (circular, com anel sutil) ou fallback em
   // gradiente de marca com as iniciais do nome.
-  const avatarLayer = profile.avatarUrl
-    ? await circularAvatar(profile.avatarUrl, avatarSize)
-    : null;
-  const fallbackAvatarSvg = avatarLayer
+  const fallbackAvatarSvg = profile.avatarUrl
     ? ""
     : `<circle cx="${avatarX + avatarSize / 2}" cy="${avatarY + avatarSize / 2}" r="${avatarSize / 2}" fill="url(#avatarGrad)"/>
        <text x="${avatarX + avatarSize / 2}" y="${avatarY + avatarSize / 2 + nameSize * 0.36}"
@@ -195,10 +211,41 @@ export async function buildProfileChipLayers(
             font-size="${handleSize}" font-weight="500" fill="#B0B3C0">${escapeXml(handleText)}</text>
     </svg>`;
 
-  const layers: CompositeLayer[] = [{ input: rasterizeSvg(chipSvg), top: 0, left: 0 }];
-  // Avatar raster entra como camada própria, por cima do chip
-  if (avatarLayer) {
-    layers.push({ input: avatarLayer, top: avatarY, left: avatarX });
+  return {
+    svg: chipSvg,
+    avatar: profile.avatarUrl ? { x: avatarX, y: avatarY, size: avatarSize } : null,
+  };
+}
+
+/**
+ * Monta as camadas do chip de perfil para compor em qualquer slide.
+ * position "top-center" (default, posts single) ou "bottom-left"
+ * (fechamento do carrossel — mesma margem da trilha de ícones).
+ */
+export async function buildProfileChipLayers(
+  profile: IgProfile,
+  canvasWidth: number,
+  fontFamily: string = FONT_FAMILY,
+  opts: ChipOptions = {}
+): Promise<CompositeLayer[]> {
+  const { svg, avatar } = buildProfileChipSvg(profile, canvasWidth, fontFamily, opts);
+  // Baixar a foto pode falhar (URL morta, host fora do ar) — nesse caso o
+  // SVG precisa ser remontado COM as iniciais, senão sobra o buraco do
+  // avatar que nunca chegou.
+  const avatarLayer = avatar ? await circularAvatar(profile.avatarUrl!, avatar.size) : null;
+  if (avatar && !avatarLayer) {
+    const fallback = buildProfileChipSvg(
+      { ...profile, avatarUrl: null },
+      canvasWidth,
+      fontFamily,
+      opts
+    );
+    return [{ input: rasterizeSvg(fallback.svg), top: 0, left: 0 }];
+  }
+
+  const layers: CompositeLayer[] = [{ input: rasterizeSvg(svg), top: 0, left: 0 }];
+  if (avatarLayer && avatar) {
+    layers.push({ input: avatarLayer, top: avatar.y, left: avatar.x });
   }
   return layers;
 }

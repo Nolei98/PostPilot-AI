@@ -298,15 +298,60 @@ async function resyncIdentityOnUnmodifiedPendingPosts(
   }
 }
 
+/**
+ * Marca o post pra render e dispara o job (migration 040). Chamado por
+ * TODA saída da fila (aprovar e agendar) — é aqui que a arte passa a
+ * existir de verdade; até este ponto o que se via era preview ao vivo.
+ *
+ * O token novo é o que invalida um render anterior ainda em voo: aprovar
+ * → desistir → aprovar de novo não pode terminar com a arte do primeiro
+ * run gravada por cima da do segundo.
+ */
+async function requestRender(postId: string, userId: string) {
+  const supabase = createClient();
+  const token = crypto.randomUUID();
+  await supabase
+    .from("posts")
+    .update({ render_status: "pending", render_error: null, render_token: token })
+    .eq("id", postId);
+  await enqueue("requestRender", {
+    name: "post/render.requested",
+    data: { postId, userId, token },
+  });
+}
+
+/**
+ * Tenta o render de novo depois de um `render_status='error'` (botão na
+ * tela Prontos). Token novo, mesmo caminho da aprovação — não existe
+ * "retomar" um render pela metade: ele é barato e idempotente.
+ */
+export async function retryRender(postId: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  await requestRender(postId, user.id);
+  revalidatePath("/ready");
+}
+
 /** Aprova um post → vai para a tela "post pronto" */
 export async function approvePost(postId: string) {
   const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
   const { error } = await supabase
     .from("posts")
     .update({ status: "approved", approved_at: new Date().toISOString() })
     .eq("id", postId)
     .eq("status", "pending_approval"); // só aprova o que está na fila
   if (error) throw new Error(error.message);
+
+  await requestRender(postId, user.id);
   revalidatePath("/");
   revalidatePath("/ready");
 }
@@ -346,16 +391,33 @@ export async function schedulePost(postId: string, scheduledForIso: string) {
     .eq("id", postId)
     .eq("status", "pending_approval");
   if (error) throw new Error(error.message);
+
+  // Agendar também sai da fila, então também congela a arte agora. O job
+  // de publicação só pega post com render_status='ready'.
+  await requestRender(postId, user.id);
   revalidatePath("/");
   revalidatePath("/ready");
 }
+
+/**
+ * Estado de render de um post que VOLTA pra fila (migration 040): a arte
+ * deixa de estar congelada e o preview ao vivo manda de novo. Zerar o
+ * token também mata um render ainda em voo — todo write dele é guardado
+ * por `render_token`, que não vai mais bater.
+ */
+const backToQueueRender = {
+  render_status: "none" as const,
+  render_error: null,
+  render_spec: null,
+  render_token: null,
+};
 
 /** Cancela o agendamento (Sprint C) — volta pro estado pré-agendamento (fila). */
 export async function cancelSchedule(postId: string) {
   const supabase = createClient();
   const { error } = await supabase
     .from("posts")
-    .update({ status: "pending_approval", scheduled_for: null })
+    .update({ status: "pending_approval", scheduled_for: null, ...backToQueueRender })
     .eq("id", postId)
     .eq("status", "scheduled");
   if (error) throw new Error(error.message);
@@ -1274,7 +1336,13 @@ export async function revertApproval(
   const supabase = createClient();
   const { error } = await supabase
     .from("posts")
-    .update({ status: target, approved_at: null })
+    .update({
+      status: target,
+      approved_at: null,
+      // Descartado não precisa disso, mas zerar é inofensivo e evita um
+      // segundo caminho de update só pra distinguir os dois destinos.
+      ...backToQueueRender,
+    })
     .eq("id", postId)
     .eq("status", "approved"); // só reverte o que está aprovado
   if (error) throw new Error(error.message);
@@ -1681,8 +1749,12 @@ export async function saveSinglePostStyle(formData: FormData) {
  * Salva o modelo escolhido do Template Studio (Sprint B+, B15) pra UMA
  * superfície (cover_image/carousel_page/carousel_last) do cliente ativo —
  * merge em brand_kits.template_selection (jsonb), as outras superfícies
- * ficam intactas. Vale só pras PRÓXIMAS gerações (sem resync dos posts já
- * na fila, ao contrário de layout_preset/single_post_style).
+ * ficam intactas.
+ *
+ * Dispara o MESMO resync em background do layout_preset: escolher um
+ * modelo e ver a fila continuar na arte antiga lê como "o template não
+ * foi aplicado" (reclamação de 2026-07-27). O job já sabe pular o que
+ * não muda, e o resync respeita a seleção de modelo desde a mesma data.
  */
 export async function saveTemplateSelection(formData: FormData) {
   const supabase = createClient();
@@ -1717,7 +1789,13 @@ export async function saveTemplateSelection(formData: FormData) {
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
 
+  await enqueue("saveTemplateSelection", {
+    name: "post/resync-layout.requested",
+    data: { clientId, userId: user.id },
+  });
+
   revalidatePath("/settings");
+  revalidatePath("/");
 }
 
 /**
