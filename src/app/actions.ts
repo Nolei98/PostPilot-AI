@@ -320,16 +320,79 @@ export async function uploadPostImage(
 }
 
 /**
- * Anexa um vídeo a um post pendente (Fase 4, kit v2 §3) — sobe o
- * arquivo bruto pro Storage e dispara o processamento em BACKGROUND
- * (Inngest): o ffmpeg compõe o quadro por cima (Reels 9:16 ou feed 4:5,
- * migration 036 — `shape` no FormData), o que pode levar dezenas de
- * segundos — não dá pra fazer síncrono como a foto.
- * `video_status` vira 'processing' na hora; a fila mostra isso e
- * atualiza quando o job terminar (revalidatePath cobre o próximo load).
+ * Passo 1 do upload de vídeo: devolve uma URL ASSINADA pra o browser
+ * mandar o arquivo DIRETO pro Storage.
+ *
+ * Por que não recebe o arquivo aqui: um Server Action passa pelo corpo
+ * da requisição da função serverless, e a Vercel corta esse corpo em
+ * **4,5MB** — teto da plataforma, que `serverActions.bodySizeLimit` não
+ * vence (o limite do Next só afrouxa o lado do Next). Vídeo de celular
+ * passa disso com folga, e o erro chegava no client como resposta
+ * não-JSON ("Falha ao subir vídeo"), parecendo arquivo inválido.
+ * Com a URL assinada o binário vai browser → Storage, sem tocar na
+ * função: o que trafega aqui é só o ticket.
+ *
+ * O ticket é curto (2h) e vale pra UM caminho, derivado do post/card no
+ * servidor — o browser não escolhe onde grava.
  */
-export async function uploadPostVideo(
-  formData: FormData
+export async function createVideoUploadTicket(input: {
+  postId?: string;
+  cardId?: string;
+}): Promise<{ ok: boolean; path?: string; token?: string; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+
+  let path: string;
+  if (input.cardId) {
+    // RLS de carousel_cards já garante que o card é do usuário (join com
+    // posts.user_id) — se não for, a leitura volta vazia.
+    const { data: card } = await supabase
+      .from("carousel_cards")
+      .select("id, post_id, idx")
+      .eq("id", input.cardId)
+      .maybeSingle();
+    if (!card) return { ok: false, error: "Card não encontrado." };
+    path = `${card.post_id}-card-${card.idx}-video-source.mp4`;
+  } else if (input.postId) {
+    const { data: post } = await supabase
+      .from("posts")
+      .select("id")
+      .eq("id", input.postId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!post) return { ok: false, error: "Post não encontrado." };
+    path = `${post.id}-video-source.mp4`;
+  } else {
+    return { ok: false, error: "Post ou card não informado." };
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage
+    .from("post-images")
+    .createSignedUploadUrl(path, { upsert: true });
+  if (error || !data) {
+    console.error("[createVideoUploadTicket] falha ao assinar upload:", error);
+    return { ok: false, error: "Não foi possível preparar o envio. Tente de novo." };
+  }
+  return { ok: true, path: data.path, token: data.token };
+}
+
+/**
+ * Passo 2 do upload de vídeo do POST: o arquivo JÁ está no Storage
+ * (mandado pelo browser com o ticket acima). Aqui só marca o estado e
+ * dispara o processamento em BACKGROUND (Inngest): o ffmpeg compõe o
+ * quadro (Reels 9:16, feed 4:5 sólido ou feed-blur), o que leva dezenas
+ * de segundos — não dá pra fazer síncrono como a foto.
+ *
+ * `video_status` vira 'processing' na hora; a Fila mostra isso e
+ * atualiza sozinha quando o job terminar.
+ */
+export async function attachUploadedPostVideo(
+  postId: string,
+  shape: "reels" | "feed" | "feed-blur"
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = createClient();
   const {
@@ -337,56 +400,17 @@ export async function uploadPostVideo(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Não autenticado" };
 
-  const postId = String(formData.get("post_id") ?? "");
-  const file = formData.get("video") as File | null;
-  // "reels" (9:16, default), "feed" (4:5, fundo sólido — migration 036)
-  // ou "feed-blur" (4:5, fundo = o próprio vídeo borrado, 2026-07-23) —
-  // decide o quadro de composição em attach-video.ts.
-  const shapeRaw = formData.get("shape");
-  const shape = shapeRaw === "feed" ? "feed" : shapeRaw === "feed-blur" ? "feed-blur" : "reels";
-  if (!postId || !file || file.size === 0) {
-    return { ok: false, error: "Selecione um vídeo." };
-  }
-  if (file.size > 50 * 1024 * 1024) {
-    return { ok: false, error: "Vídeo muito grande (máx 50MB)." };
-  }
-
-  const { data: post } = await supabase
+  const { error } = await supabase
     .from("posts")
-    .select("id")
+    .update({ video_status: "processing", video_error: null })
     .eq("id", postId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (!post) return { ok: false, error: "Post não encontrado." };
-
-  try {
-    const buf = Buffer.from(await file.arrayBuffer());
-    const admin = createAdminClient();
-    const { error: upErr } = await admin.storage
-      .from("post-images")
-      .upload(`${postId}-video-source.mp4`, buf, {
-        contentType: file.type || "video/mp4",
-        upsert: true,
-      });
-    if (upErr) throw new Error(upErr.message);
-
-    const { error } = await supabase
-      .from("posts")
-      .update({ video_status: "processing", video_error: null })
-      .eq("id", postId);
-    if (error) return { ok: false, error: error.message };
-  } catch (err) {
-    console.error("[uploadPostVideo] falha ao subir vídeo:", err);
-    return {
-      ok: false,
-      error: "Não foi possível processar esse vídeo. Tente outro arquivo (.mp4/.mov).",
-    };
-  }
+    .eq("user_id", user.id);
+  if (error) return { ok: false, error: error.message };
 
   // COM await de propósito (ver enqueue() em @/lib/enqueue): sem ele o
   // vídeo ficava "processando" pra sempre em produção, porque a função
   // serverless congela no return antes do evento sair.
-  await enqueue("uploadPostVideo", {
+  await enqueue("attachUploadedPostVideo", {
     name: "post/attach-video.requested",
     data: { postId, userId: user.id, shape },
   });
@@ -397,15 +421,13 @@ export async function uploadPostVideo(
 }
 
 /**
- * Anexa um vídeo a um CARD do carrossel (migration 037) — mesmo padrão
- * de uploadPostVideo: sobe o arquivo bruto pro Storage e dispara o
- * processamento em BACKGROUND (Inngest); o ffmpeg compõe o card
- * "interior com vídeo" (título + moldura 16:9 + corpo). RLS de
- * carousel_cards já garante que o card pertence ao usuário (join com
- * posts.user_id) — não precisa de checagem extra aqui.
+ * Passo 2 do upload de vídeo de um CARD de carrossel (migration 037) —
+ * mesmo desenho do post: o arquivo já subiu direto pro Storage, aqui só
+ * marca 'processing' e enfileira a composição do card "interior com
+ * vídeo" (título + moldura 16:9 + corpo).
  */
-export async function uploadCarouselCardVideo(
-  formData: FormData
+export async function attachUploadedCardVideo(
+  cardId: string
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = createClient();
   const {
@@ -413,46 +435,13 @@ export async function uploadCarouselCardVideo(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Não autenticado" };
 
-  const cardId = String(formData.get("card_id") ?? "");
-  const file = formData.get("video") as File | null;
-  if (!cardId || !file || file.size === 0) {
-    return { ok: false, error: "Selecione um vídeo." };
-  }
-  if (file.size > 50 * 1024 * 1024) {
-    return { ok: false, error: "Vídeo muito grande (máx 50MB)." };
-  }
-
-  const { data: card } = await supabase
+  const { error } = await supabase
     .from("carousel_cards")
-    .select("id, post_id, idx")
-    .eq("id", cardId)
-    .maybeSingle();
-  if (!card) return { ok: false, error: "Card não encontrado." };
+    .update({ video_status: "processing", video_error: null })
+    .eq("id", cardId);
+  if (error) return { ok: false, error: error.message };
 
-  try {
-    const buf = Buffer.from(await file.arrayBuffer());
-    const admin = createAdminClient();
-    const sourcePath = `${card.post_id}-card-${card.idx}-video-source.mp4`;
-    const { error: upErr } = await admin.storage.from("post-images").upload(sourcePath, buf, {
-      contentType: file.type || "video/mp4",
-      upsert: true,
-    });
-    if (upErr) throw new Error(upErr.message);
-
-    const { error } = await supabase
-      .from("carousel_cards")
-      .update({ video_status: "processing", video_error: null })
-      .eq("id", cardId);
-    if (error) return { ok: false, error: error.message };
-  } catch (err) {
-    console.error("[uploadCarouselCardVideo] falha ao subir vídeo:", err);
-    return {
-      ok: false,
-      error: "Não foi possível processar esse vídeo. Tente outro arquivo (.mp4/.mov).",
-    };
-  }
-
-  await enqueue("uploadCarouselCardVideo", {
+  await enqueue("attachUploadedCardVideo", {
     name: "card/attach-video.requested",
     data: { cardId, userId: user.id },
   });

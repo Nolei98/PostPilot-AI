@@ -20,7 +20,8 @@ import {
   schedulePost,
   updatePost,
   uploadPostImage,
-  uploadPostVideo,
+  attachUploadedPostVideo,
+  createVideoUploadTicket,
 } from "@/app/actions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardActions } from "@/components/ui/Card";
@@ -32,6 +33,7 @@ import { CarouselPreview } from "@/components/CarouselPreview";
 import { CarouselDownload } from "@/components/CarouselDownload";
 import { CarouselEditor } from "@/components/CarouselEditor";
 import { resizeImageForUpload } from "@/lib/resizeImageClient";
+import { MAX_VIDEO_BYTES, uploadVideoWithTicket } from "@/lib/upload-video-client";
 import { useToast } from "@/components/ui/Toast";
 import type { PreviewPage } from "@/lib/post-preview";
 import type { IgProfile, PostWithNews, Surface, VisualIdentity } from "@/lib/types";
@@ -145,16 +147,24 @@ export function PostCard({
       e.target.value = "";
       if (!file) return;
       setVideoError(null);
+      if (file.size > MAX_VIDEO_BYTES) {
+        setVideoError("Vídeo muito grande (máx 50MB).");
+        return;
+      }
       startVideoUpload(async () => {
         try {
-          const fd = new FormData();
-          fd.set("post_id", post.id);
-          fd.set("video", file);
-          fd.set("shape", shape);
-          const result = await uploadPostVideo(fd);
+          // O arquivo vai DIRETO pro Storage: passar por Server Action
+          // esbarra no teto de 4,5MB da função serverless da Vercel.
+          const ticket = await createVideoUploadTicket({ postId: post.id });
+          const sent = await uploadVideoWithTicket(file, ticket);
+          if (!sent.ok) {
+            setVideoError(sent.error ?? "Falha ao subir vídeo.");
+            return;
+          }
+          const result = await attachUploadedPostVideo(post.id, shape);
           if (!result.ok) setVideoError(result.error ?? "Falha ao subir vídeo.");
         } catch {
-          setVideoError("Falha ao subir vídeo. Tente um arquivo menor.");
+          setVideoError("Falha ao subir vídeo. Tente de novo.");
         }
       });
     };

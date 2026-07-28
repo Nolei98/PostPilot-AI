@@ -9,7 +9,13 @@
 // ============================================================
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { updateCarouselCard, uploadCarouselCardVideo, uploadCarouselCardImage } from "@/app/actions";
+import {
+  updateCarouselCard,
+  attachUploadedCardVideo,
+  createVideoUploadTicket,
+  uploadCarouselCardImage,
+} from "@/app/actions";
+import { MAX_VIDEO_BYTES, uploadVideoWithTicket } from "@/lib/upload-video-client";
 import { Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { LoadingOrb } from "@/components/ui/LoadingOrb";
@@ -129,15 +135,23 @@ function CardRow({
     e.target.value = "";
     if (!file) return;
     setVideoError(null);
+    if (file.size > MAX_VIDEO_BYTES) {
+      setVideoError("Vídeo muito grande (máx 50MB).");
+      return;
+    }
     startVideoUpload(async () => {
       try {
-        const fd = new FormData();
-        fd.set("card_id", card.id);
-        fd.set("video", file);
-        const result = await uploadCarouselCardVideo(fd);
+        // Direto pro Storage — Server Action tem teto de 4,5MB na Vercel.
+        const ticket = await createVideoUploadTicket({ cardId: card.id });
+        const sent = await uploadVideoWithTicket(file, ticket);
+        if (!sent.ok) {
+          setVideoError(sent.error ?? "Falha ao subir vídeo.");
+          return;
+        }
+        const result = await attachUploadedCardVideo(card.id);
         if (!result.ok) setVideoError(result.error ?? "Falha ao subir vídeo.");
       } catch {
-        setVideoError("Falha ao subir vídeo. Tente um arquivo menor.");
+        setVideoError("Falha ao subir vídeo. Tente de novo.");
       }
     });
   }
