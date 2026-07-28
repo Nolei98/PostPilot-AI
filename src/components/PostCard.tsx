@@ -98,12 +98,10 @@ export function PostCard({
   // router.refresh() busca o post de novo no servidor; quando o job
   // termina, video_status muda e o efeito abaixo para sozinho.
   useEffect(() => {
-    const trabalhando =
-      post.video_status === "processing" || post.rerender_status === "pending";
-    if (!trabalhando) return;
+    if (post.video_status !== "processing") return;
     const id = setInterval(() => router.refresh(), 4000);
     return () => clearInterval(id);
-  }, [post.video_status, post.rerender_status, router]);
+  }, [post.video_status, router]);
 
   function handleToggleTemplate(checked: boolean) {
     if (checked) {
@@ -476,13 +474,6 @@ export function PostCard({
                 className="aspect-[4/5] w-full"
               />
               {(uploading || uploadingVideo || post.video_status === "processing") && <LoadingOrb />}
-              {/* Resync de layout em andamento (migration 039): a arte na
-                  tela ainda é a antiga, e sem esse sinal o usuário conclui
-                  que a troca de layout não funcionou. */}
-              {post.rerender_status === "pending" &&
-                !uploading &&
-                !uploadingVideo &&
-                post.video_status !== "processing" && <LoadingOrb label="Aplicando layout" />}
             </div>
           )}
 

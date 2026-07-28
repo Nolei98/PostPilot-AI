@@ -11,7 +11,6 @@ import { scanNews } from "@/inngest/functions/scan-news";
 import { generatePost } from "@/inngest/functions/generate-post";
 import { generateCarousel } from "@/inngest/functions/generate-carousel";
 import { notifyPostReady } from "@/inngest/functions/notify";
-import { resyncLayoutPreset } from "@/inngest/functions/resync-layout-preset";
 import { renderApprovedPost } from "@/inngest/functions/render-approved-post";
 import { attachVideo } from "@/inngest/functions/attach-video";
 import { attachCardVideo } from "@/inngest/functions/attach-card-video";
@@ -26,7 +25,6 @@ export const { GET, POST, PUT } = serve({
     generatePost,
     generateCarousel,
     notifyPostReady,
-    resyncLayoutPreset,
     renderApprovedPost,
     attachVideo,
     attachCardVideo,

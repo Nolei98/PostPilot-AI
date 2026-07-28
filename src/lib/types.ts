@@ -351,10 +351,6 @@ export interface Post {
   // tentativa de publicação (não derruba o status, que continua
   // 'scheduled' até o próximo tick do job de publicação).
   publish_error: string | null;
-  // Re-render em andamento pelo resync de layout (migration 039) — a
-  // Fila mostra o orbe girando enquanto está 'pending'. Só sinal de UI:
-  // não bloqueia aprovar, editar nem agendar.
-  rerender_status: "idle" | "pending";
   // Sprint C — erro da última coleta de métricas (migration 038). Só
   // registro/depuração: não muda status nem impede a próxima janela.
   metrics_error: string | null;

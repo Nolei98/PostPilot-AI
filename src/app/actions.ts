@@ -38,91 +38,6 @@ function buildCardBrand(bk: Record<string, unknown> | null): CardBrand {
   };
 }
 
-/**
- * Re-renderiza os cards dos carrosséis PENDENTES do cliente com o
- * Brand Kit atual — chamado ao salvar identidade/template, para o novo
- * visual (@0verlens) aparecer nos carrosséis já na fila (não só nos
- * próximos). Card 0 = capa (divisor). Atualiza image_url dos cards + o
- * do post (thumbnail = capa).
- */
-async function resyncCarouselOnPendingPosts(
-  clientId: string,
-  cardBrand: CardBrand,
-  profile: IgProfile
-) {
-  const supabase = createClient();
-  const { data: posts } = await supabase
-    .from("posts")
-    .select("id, news_item_id")
-    .eq("client_id", clientId)
-    .eq("status", "pending_approval")
-    .eq("format", "carousel");
-  if (!posts || posts.length === 0) return;
-
-  const { renderAndUploadCard } = await import("@/lib/carousel-render");
-  for (const post of posts) {
-    // Fallback: imagem da notícia p/ a capa quando o card não tem bg_url salvo.
-    let newsImg: string | null = null;
-    const { data: news } = await supabase
-      .from("news_items")
-      .select("image_url")
-      .eq("id", post.news_item_id)
-      .maybeSingle();
-    newsImg = news?.image_url ?? null;
-
-    // select "*" p/ pegar bg_url sem quebrar se a migration 029 não rodou.
-    const { data: cards } = await supabase
-      .from("carousel_cards")
-      .select("*")
-      .eq("post_id", post.id)
-      .order("idx");
-    if (!cards || cards.length === 0) continue;
-
-    let coverUrl: string | null = null;
-    const lastIdx = cards.length - 1;
-    for (const c of cards) {
-      const isCover = c.idx === 0;
-      const isClosing = c.idx === lastIdx;
-      const pageKind = isCover ? "cover" : isClosing ? "closing" : "interior";
-      // Reusa a foto salva (bg_url); capa/fechamento sem bg_url caem na
-      // imagem da notícia.
-      const bgUrl = (c.bg_url as string | null) ?? (isCover || isClosing ? newsImg : null);
-      let bgBuf: Buffer | null = null;
-      if (bgUrl) {
-        try {
-          const r = await fetch(bgUrl);
-          if (r.ok) bgBuf = Buffer.from(await r.arrayBuffer());
-        } catch {
-          /* sem foto → sólido */
-        }
-      }
-      try {
-        const url = await renderAndUploadCard(
-          post.id,
-          {
-            idx: c.idx,
-            role: c.role as "hook" | "value" | "cta",
-            headline: c.headline ?? "",
-            body: c.body ?? "",
-          },
-          cardBrand,
-          pageKind,
-          bgBuf,
-          profile,
-          cards.length
-        );
-        await supabase.from("carousel_cards").update({ image_url: url }).eq("id", c.id);
-        if (isCover) coverUrl = url;
-      } catch (err) {
-        console.error(`[resyncCarousel] falha no card ${c.idx} do post ${post.id}:`, err);
-      }
-    }
-    if (coverUrl) {
-      await supabase.from("posts").update({ image_url: coverUrl }).eq("id", post.id);
-    }
-  }
-}
-
 /** Monta o template de marca (fonte + logo) a partir de uma linha de notification_configs */
 function buildBrand(config: {
   post_font_family?: string | null;
@@ -134,168 +49,6 @@ function buildBrand(config: {
     logoUrl: config?.logo_url ?? null,
     showLogo: config?.show_brand_logo ?? true,
   };
-}
-
-// ------------------------------------------------------------
-// SINCRONIZAÇÃO: sempre que o perfil ou a identidade visual são
-// salvos em Ajustes, os posts ainda na fila (pending_approval) são
-// re-renderizados para refletir a mudança — sem custo (Flux não é
-// chamado de novo; só a composição local é refeita).
-// ------------------------------------------------------------
-
-/**
- * Re-renderiza o CHIP (foto/nome/@/selo) em todos os posts ainda na
- * fila do usuário. Chamada sempre que o perfil é salvo em Ajustes —
- * corrige o chip desatualizado em posts já gerados antes da mudança.
- */
-async function resyncChipOnPendingPosts(
-  userId: string,
-  clientId: string,
-  profile: IgProfile,
-  brand: BrandTemplate
-) {
-  const supabase = createClient();
-  const { data: posts, error: postsError } = await supabase
-    .from("posts")
-    .select(
-      "id, hook, template_applied, tpl_keyword, tpl_top_text, tpl_bottom_text, tpl_cta_enabled, tpl_color_background, tpl_color_accent, tpl_color_text, tpl_color_keyword_box"
-    )
-    .eq("client_id", clientId)
-    .eq("status", "pending_approval");
-  if (postsError) {
-    // Não deixa a sincronização falhar em silêncio — se a migration não
-    // rodou (coluna ausente) ou outro erro de schema, aparece no log.
-    console.error("[resyncChipOnPendingPosts] erro ao buscar posts:", postsError.message);
-    return;
-  }
-  if (!posts || posts.length === 0) return;
-
-  const { regenerateContentImage, renderAndUploadTemplateArt } = await import(
-    "@/lib/image"
-  );
-  // Plano free → marca "feito com PostPilot"; pago → sem marca.
-  // Computado aqui para o re-render manter (ou remover) a marca correta.
-  const { getUserPlan } = await import("@/lib/subscription");
-  const watermark = (await getUserPlan(userId)) === "free";
-
-  for (const post of posts) {
-    const updates: Record<string, string> = {};
-
-    // Página 1 (conteúdo) — só re-renderiza se a base foi salva
-    // (posts gerados antes desse recurso não têm base; ficam como estão)
-    let newContentUrl: string | null = null;
-    try {
-      newContentUrl = await regenerateContentImage(post.id, post.hook, profile, watermark, brand);
-    } catch (err) {
-      console.error(`[resyncChipOnPendingPosts] erro ao regenerar conteúdo do post ${post.id}:`, err);
-    }
-    if (newContentUrl) updates.image_url = newContentUrl;
-
-    // Página 2 (fechamento) — mantém a identidade PRÓPRIA do post,
-    // só troca o perfil (chip)
-    if (post.template_applied) {
-      const identity: VisualIdentity = {
-        colorBackground: post.tpl_color_background ?? "#0B0B12",
-        colorAccent: post.tpl_color_accent ?? "#7C5CFF",
-        colorText: post.tpl_color_text ?? "#FFFFFF",
-        colorKeywordBox: post.tpl_color_keyword_box ?? "#7C5CFF",
-        keyword: post.tpl_keyword ?? "IA",
-        topText: post.tpl_top_text ?? "",
-        bottomText: post.tpl_bottom_text ?? "",
-        ctaEnabled: post.tpl_cta_enabled ?? false,
-      };
-      updates.closing_image_url = await renderAndUploadTemplateArt(
-        post.id,
-        identity,
-        profile,
-        watermark,
-        brand
-      );
-    }
-
-    if (Object.keys(updates).length > 0) {
-      await supabase.from("posts").update(updates).eq("id", post.id);
-    }
-  }
-}
-
-/**
- * Re-renderiza a página de fechamento nos posts pendentes.
- *
- * - Modo 'all' (força = true): o default rege TODOS os posts por
- *   definição — sincroniza incondicionalmente, mesmo que o post
- *   tenha valores diferentes do default antigo (ex: foi gerado antes
- *   de outra mudança, ou veio de um teste). Não existe "customização
- *   protegida" nesse modo.
- * - Modo 'on_approval' (força = false): só sincroniza os posts cujo
- *   template ainda bate EXATAMENTE com o default ANTIGO — preserva
- *   edições manuais feitas via "Editar" na fila.
- */
-async function resyncIdentityOnUnmodifiedPendingPosts(
-  userId: string,
-  clientId: string,
-  oldIdentity: VisualIdentity,
-  newIdentity: VisualIdentity,
-  profile: IgProfile,
-  force: boolean,
-  brand: BrandTemplate
-) {
-  const supabase = createClient();
-  const { data: posts, error: postsError } = await supabase
-    .from("posts")
-    .select(
-      "id, tpl_keyword, tpl_top_text, tpl_bottom_text, tpl_cta_enabled, tpl_color_background, tpl_color_accent, tpl_color_text, tpl_color_keyword_box"
-    )
-    .eq("client_id", clientId)
-    .eq("status", "pending_approval")
-    .eq("template_applied", true);
-  if (postsError) {
-    console.error(
-      "[resyncIdentityOnUnmodifiedPendingPosts] erro ao buscar posts:",
-      postsError.message
-    );
-    return;
-  }
-  if (!posts || posts.length === 0) return;
-
-  const { renderAndUploadTemplateArt } = await import("@/lib/image");
-  const { getUserPlan } = await import("@/lib/subscription");
-  const watermark = (await getUserPlan(userId)) === "free";
-
-  for (const post of posts) {
-    const matchesOldDefault =
-      (post.tpl_keyword ?? "") === oldIdentity.keyword &&
-      (post.tpl_top_text ?? "") === oldIdentity.topText &&
-      (post.tpl_bottom_text ?? "") === oldIdentity.bottomText &&
-      (post.tpl_cta_enabled ?? false) === oldIdentity.ctaEnabled &&
-      (post.tpl_color_background ?? "") === oldIdentity.colorBackground &&
-      (post.tpl_color_accent ?? "") === oldIdentity.colorAccent &&
-      (post.tpl_color_text ?? "") === oldIdentity.colorText &&
-      (post.tpl_color_keyword_box ?? "") === oldIdentity.colorKeywordBox;
-    if (!force && !matchesOldDefault) continue; // post customizado — preserva (só no modo on_approval)
-
-    const closingImageUrl = await renderAndUploadTemplateArt(
-      post.id,
-      newIdentity,
-      profile,
-      watermark,
-      brand
-    );
-    await supabase
-      .from("posts")
-      .update({
-        closing_image_url: closingImageUrl,
-        tpl_keyword: newIdentity.keyword,
-        tpl_top_text: newIdentity.topText,
-        tpl_bottom_text: newIdentity.bottomText,
-        tpl_cta_enabled: newIdentity.ctaEnabled,
-        tpl_color_background: newIdentity.colorBackground,
-        tpl_color_accent: newIdentity.colorAccent,
-        tpl_color_text: newIdentity.colorText,
-        tpl_color_keyword_box: newIdentity.colorKeywordBox,
-      })
-      .eq("id", post.id);
-  }
 }
 
 /**
@@ -933,24 +686,6 @@ export async function saveIgProfile(formData: FormData) {
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
 
-  // Sincroniza o chip (foto/nome/@/selo) nos posts ainda na fila —
-  // sem isso, um post gerado antes da mudança ficaria com dado velho.
-  const { data: freshConfig } = await supabase
-    .from("brand_kits")
-    .select("*")
-    .eq("client_id", clientId)
-    .single();
-  if (freshConfig) {
-    const profile: IgProfile = {
-      handle: freshConfig.ig_handle,
-      displayName: freshConfig.ig_display_name,
-      avatarUrl: freshConfig.ig_avatar_url,
-      verified: freshConfig.ig_verified,
-      showProfileChip: freshConfig.show_profile_chip,
-    };
-    await resyncChipOnPendingPosts(user.id, clientId, profile, buildBrand(freshConfig));
-  }
-
   revalidatePath("/settings");
   revalidatePath("/");
 }
@@ -1024,36 +759,6 @@ export async function saveVisualIdentity(formData: FormData) {
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
 
-  // Sincroniza os posts na fila que ainda usam o default (não
-  // customizados post-a-post).
-  if (oldConfig) {
-    const oldIdentity: VisualIdentity = {
-      colorBackground: oldConfig.color_background,
-      colorAccent: oldConfig.color_accent,
-      colorText: oldConfig.color_text,
-      colorKeywordBox: oldConfig.color_keyword_box,
-      keyword: oldConfig.tpl_keyword,
-      topText: oldConfig.tpl_top_text,
-      bottomText: oldConfig.tpl_bottom_text,
-      ctaEnabled: oldConfig.tpl_cta_enabled ?? false,
-    };
-    const profile: IgProfile = {
-      handle: oldConfig.ig_handle,
-      displayName: oldConfig.ig_display_name,
-      avatarUrl: oldConfig.ig_avatar_url,
-      verified: oldConfig.ig_verified,
-      showProfileChip: oldConfig.show_profile_chip,
-    };
-    await resyncIdentityOnUnmodifiedPendingPosts(
-      user.id,
-      clientId,
-      oldIdentity,
-      newIdentity,
-      profile,
-      mode === "all", // modo 'all' sincroniza tudo, sem checar customização
-      buildBrand(oldConfig)
-    );
-  }
 
   revalidatePath("/settings");
   revalidatePath("/");
@@ -1105,15 +810,6 @@ export async function saveBrandTemplate(formData: FormData) {
     }
   }
 
-  // Captura o default ANTIGO — necessário pra resincronizar a cor da
-  // contra-capa nos posts ainda não customizados (mesma lógica de
-  // saveVisualIdentity).
-  const { data: oldConfig } = await supabase
-    .from("brand_kits")
-    .select("*")
-    .eq("client_id", clientId)
-    .maybeSingle();
-
   const { error } = await supabase
     .from("brand_kits")
     .update({
@@ -1126,39 +822,6 @@ export async function saveBrandTemplate(formData: FormData) {
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
 
-  const { data: freshConfig } = await supabase
-    .from("brand_kits")
-    .select("*")
-    .eq("client_id", clientId)
-    .single();
-  if (freshConfig) {
-    const profile: IgProfile = {
-      handle: freshConfig.ig_handle,
-      displayName: freshConfig.ig_display_name,
-      avatarUrl: freshConfig.ig_avatar_url,
-      verified: freshConfig.ig_verified,
-      showProfileChip: freshConfig.show_profile_chip,
-    };
-    const brand = buildBrand(freshConfig);
-    await resyncChipOnPendingPosts(user.id, clientId, profile, brand);
-    // Carrosséis pendentes também re-renderizam com a nova fonte/logo/cor.
-    await resyncCarouselOnPendingPosts(clientId, buildCardBrand(freshConfig), profile);
-
-    if (brandColor && oldConfig) {
-      const oldIdentity: VisualIdentity = {
-        colorBackground: oldConfig.color_background,
-        colorAccent: oldConfig.color_accent,
-        colorText: oldConfig.color_text,
-        colorKeywordBox: oldConfig.color_keyword_box,
-        keyword: oldConfig.tpl_keyword,
-        topText: oldConfig.tpl_top_text,
-        bottomText: oldConfig.tpl_bottom_text,
-        ctaEnabled: oldConfig.tpl_cta_enabled ?? false,
-      };
-      const newIdentity: VisualIdentity = { ...oldIdentity, colorAccent: brandColor };
-      await resyncIdentityOnUnmodifiedPendingPosts(user.id, clientId, oldIdentity, newIdentity, profile, false, brand);
-    }
-  }
 
   revalidatePath("/settings");
   revalidatePath("/");
@@ -1646,21 +1309,6 @@ export async function saveBrandLabel(formData: FormData) {
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
 
-  // Re-renderiza os carrosséis pendentes com a nova identidade.
-  const { data: bk } = await supabase
-    .from("brand_kits")
-    .select("*")
-    .eq("client_id", clientId)
-    .maybeSingle();
-  const profile: IgProfile = {
-    handle: bk?.ig_handle ?? "seuperfil.ia",
-    displayName: bk?.ig_display_name ?? "Seu Perfil",
-    avatarUrl: bk?.ig_avatar_url ?? null,
-    verified: bk?.ig_verified ?? false,
-    showProfileChip: bk?.show_profile_chip ?? true,
-  };
-  await resyncCarouselOnPendingPosts(clientId, buildCardBrand(bk), profile);
-
   revalidatePath("/settings");
   revalidatePath("/");
 }
@@ -1691,18 +1339,6 @@ export async function saveLayoutPreset(formData: FormData) {
     .update({ layout_preset: layoutPreset })
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
-
-  // Resync roda em BACKGROUND (Inngest) — contas grandes têm centenas de
-  // posts únicos pendentes (a página 1 também depende do layout_preset
-  // desde a unificação com o motor de layouts) e rodar isso síncrono
-  // dentro do Server Action arrisca estourar o timeout serverless.
-  // O envio do evento, porém, PRECISA ser aguardado: sem await a função
-  // serverless congela no return e o evento nunca sai — era por isso que
-  // salvar o layout não atualizava a fila em produção.
-  await enqueue("saveLayoutPreset", {
-    name: "post/resync-layout.requested",
-    data: { clientId, userId: user.id },
-  });
 
   revalidatePath("/settings");
   revalidatePath("/");
@@ -1735,11 +1371,6 @@ export async function saveSinglePostStyle(formData: FormData) {
     .update({ single_post_style: singlePostStyle })
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
-
-  await enqueue("saveSinglePostStyle", {
-    name: "post/resync-layout.requested",
-    data: { clientId, userId: user.id },
-  });
 
   revalidatePath("/settings");
   revalidatePath("/");
@@ -1788,11 +1419,6 @@ export async function saveTemplateSelection(formData: FormData) {
     .update({ template_selection: next })
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
-
-  await enqueue("saveTemplateSelection", {
-    name: "post/resync-layout.requested",
-    data: { clientId, userId: user.id },
-  });
 
   revalidatePath("/settings");
   revalidatePath("/");

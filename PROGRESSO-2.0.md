@@ -78,14 +78,40 @@ Peças (todas nesta sessão, `main`):
 **Estado:** `tsc`, `eslint` e build de produção limpos; **317 testes
 verdes** (3 novos cobrindo o schema da 040).
 
-### 0-B.1 Pendências desta sessão
-- [ ] **Aplicar a migration 040 no Supabase** (SQL Editor) — o código já
-      assume as colunas; sem isso a Fila e a aprovação quebram em
-      produção. Os testes usam pglite com as migrations reais, então
-      passam mesmo sem isso.
-- [ ] **Re-sincronizar a Inngest depois do deploy** — a 040 ADICIONA a
-      função `render-approved-post`, e sem a integração Vercel↔Inngest
-      isso exige o `curl -X PUT .../api/inngest` manual (ver §0-A.6).
+### 0-B.1 Resync de layout aposentado (migration 041)
+
+Consequência direta do modelo novo: `resync-layout-preset` re-renderizava
+em massa a arte dos posts **pendentes**, e post pendente não tem mais arte
+— quem desenha é o preview ao vivo. O job virou trabalho morto que ainda
+gastava render e gravava `image_url` em post de fila. Removidos:
+
+- o job `resync-layout-preset.ts` e os três disparos em Ajustes
+  (`saveLayoutPreset`, `saveSinglePostStyle`, `saveTemplateSelection`);
+- os três resyncs SÍNCRONOS que viviam dentro de `actions.ts` pelo mesmo
+  motivo (`resyncChipOnPendingPosts`, `resyncCarouselOnPendingPosts`,
+  `resyncIdentityOnUnmodifiedPendingPosts`) — salvar perfil, identidade
+  visual ou marca não re-renderiza mais nada: o preview já mostra o
+  Brand Kit atual no próximo load;
+- o orbe "Aplicando layout" da Fila e o polling que dependia dele;
+- `posts.rerender_status` (migration `041_drop_rerender_status.sql`) —
+  sinal de UI transitório, sem conteúdo;
+- `scripts/test-resync.ts`.
+
+Efeito prático: trocar layout/cor/template em Ajustes passou de "job em
+background de minutos, com spinner" pra instantâneo.
+
+### 0-B.2 Pendências desta sessão
+- [x] **Migration 040 aplicada no Supabase em 28/07** (conferido via
+      PostgREST: colunas presentes e backfill correto — 0 posts fora da
+      fila sem `render_status='ready'`).
+- [x] **Inngest re-sincronizada** depois do deploy do commit `2d6a9f1`
+      (`curl -X PUT .../api/inngest` → `Successfully registered`). Repetir
+      a cada deploy que adicione/remova função enquanto não houver
+      integração Vercel↔Inngest (ver §0-A.6) — o deploy da 041, que
+      REMOVE o `resync-layout-preset`, precisa do mesmo PUT.
+- [ ] **Aplicar a migration 041 no Supabase** — só dropa
+      `posts.rerender_status`. Não é pré-requisito do deploy: o código já
+      não lê nem escreve a coluna.
 - [ ] Verificar em produção com a conta real: aprovar um post de cada
       formato (single, carrossel, Reels, vídeo feed) e conferir
       `render_status='ready'` + arte igual ao preview.

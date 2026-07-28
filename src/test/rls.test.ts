@@ -86,22 +86,15 @@ describe("migration 038: renovação de token + erro de métricas", () => {
     }
   });
 
-  it("migration 039: posts tem rerender_status, default 'idle' e só aceita idle/pending", async () => {
-    const { rows } = await db.query<{ column_name: string; column_default: string }>(
-      `select column_name, column_default from information_schema.columns
+  it("migration 041: rerender_status morreu junto com o resync de layout", async () => {
+    // O sinal de "aplicando layout" (039) existia pro re-render em massa
+    // dos posts da fila. Com o preview ao vivo (040) não há o que
+    // re-renderizar na fila — nem job, nem espera, nem coluna.
+    const { rows } = await db.query<{ column_name: string }>(
+      `select column_name from information_schema.columns
        where table_name = 'posts' and column_name = 'rerender_status'`
     );
-    expect(rows).toHaveLength(1);
-    expect(rows[0].column_default).toContain("idle");
-
-    // O CHECK precisa barrar estado inventado — a UI liga o spinner em
-    // 'pending' e só sai dele quando o job devolve pra 'idle'.
-    await expect(
-      db.query(
-        `insert into posts (user_id, client_id, news_item_id, hook, caption, hashtags, image_prompt, rerender_status)
-         values (gen_random_uuid(), gen_random_uuid(), null, 'h', 'c', '#a', 'p', 'processando')`
-      )
-    ).rejects.toThrow();
+    expect(rows).toHaveLength(0);
   });
 
   it("migration 040: posts nasce com render_status 'none' e só aceita os 5 estados", async () => {

@@ -24,11 +24,6 @@ type Events = {
   "post/ready.notify": {
     data: { postId: string; userId: string };
   };
-  // Layout preset (Ajustes) mudou → re-renderiza em background os posts
-  // pendentes do cliente (carrosséis + página 1/contra-capa dos únicos).
-  "post/resync-layout.requested": {
-    data: { clientId: string; userId: string };
-  };
   // Post aprovado/agendado → monta a arte final UMA vez e congela o
   // RenderSpec usado (migration 040). `token` é o posts.render_token
   // gravado pela ação: o job descarta o próprio trabalho se ele mudou,
