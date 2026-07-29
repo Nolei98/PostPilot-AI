@@ -107,11 +107,24 @@ existiam).
 
 ### 0-D.5 Pendências
 
-- [ ] Verificar em produção o resto de §0-C.6 (fundo custom por post e
-      por card, wordmark em `title`, conversão único⇄carrossel) — o
-      carrossel com vídeo já foi conferido nesta sessão.
-- [ ] `PUT` manual em `/api/inngest` no próximo deploy (continua valendo
-      de §0-C.6 — a 041 removeu função).
+- [x] **Deploy de produção no ar** (push `870f45f..777b3d3`, build Ready)
+      e **`PUT` em `/api/inngest` feito em 29/07** →
+      `{"message":"Successfully registered","modified":true}` — o
+      `modified:true` confirma que a remoção do `resync-layout-preset`
+      (041) entrou na definição do app.
+- [x] **Migrations 041–047 conferidas no Postgres de produção** via
+      PostgREST: `bg_mode/bg_color/mark_mode/mark_color/ref/eyebrow` em
+      `posts`, `auto_generate` em `brand_kits`, e `posts.rerender_status`
+      já respondendo `42703 column does not exist`.
+- [ ] Verificar VISUALMENTE em produção o resto de §0-C.6 (fundo custom
+      por post e por card, wordmark em `title`, conversão
+      único⇄carrossel) — o carrossel com vídeo já foi conferido. Estado
+      do banco em 29/07: 148 pendentes, 49 carrosséis, e as features
+      novas ainda sem uso real (1 post com fundo != marca, 0 com wordmark
+      fora de `accent`, 0 com rótulo próprio).
+- [ ] **Ligar a pausa (047) de fato**: os 6 clientes estão
+      `auto_generate=true` (o default da migration). Desmarcar em Ajustes
+      → "Criar posts automaticamente" no cliente ativo.
 - [ ] Se a pausa (047) ficar ligada por muito tempo, decidir o que fazer
       com as candidatas acumuladas: hoje elas ficam marcadas e NÃO são
       geradas retroativamente ao religar.
@@ -244,9 +257,13 @@ verdes**. Working tree limpa em `870f45f`.
       arte igual ao preview. Cobrir também o que entrou nesta sessão:
       fundo custom por post e por card, wordmark em `title`, conversão
       único⇄carrossel, e carrossel com vídeo em card do miolo.
-- [ ] Clientes `GetKoda` (`191a7460…`) e `TesteVIVO` (`933d1644…`) seguem
-      em `pollinations` nos dois providers — continuam sob o 402. O
-      cliente ativo não está afetado (§0-B, correção de §0-A.7).
+- [x] **Bloqueio da Pollinations encerrado em 29/07:** `GetKoda`
+      (`191a7460…`) e `TesteVIVO` (`933d1644…`) foram pra `gemini` nos
+      DOIS campos, via `scripts/set-client-provider.ts` (Ajustes só edita
+      o cliente ATIVO, e trocar vários exigiria alternar de cliente na
+      interface um por um). Conferido depois: **nenhum cliente em
+      `pollinations`**. `GEMINI_API_KEY` existe em Production na Vercel e
+      a chave do `.env.local` responde 200 em `gemini-2.5-flash`.
 
 ---
 
@@ -417,14 +434,33 @@ erro nenhum registrado. Duas causas, ambas corrigidas:
 
 ### 0-A.6 Pendências que sobraram desta sessão
 - [ ] **App Review do Meta** — gargalo pra vender: sem ele só contas cadastradas
-      como "Testador do Instagram" conectam, ou seja, nenhum cliente pago. Falta
-      construir Política de Privacidade, Termos e página de exclusão de dados
-      (o site hoje não tem nenhuma das três), e os links `app.html`/`brand.html`
-      do rodapé da landing apontam pra arquivos que não existem em `public/`.
-- [ ] **Integração Vercel↔Inngest** (vercel.com/integrations) — sem ela, todo
-      deploy que ADICIONE ou REMOVA função Inngest precisa de um `PUT` manual no
-      endpoint (foi preciso hoje pra registrar o `refresh-social-tokens`).
+      como "Testador do Instagram" conectam, ou seja, nenhum cliente pago.
+      **Correção 29/07:** a parte de CÓDIGO já está feita, ao contrário do que
+      esta linha dizia — `/privacidade` (165 linhas), `/termos` (122) e
+      `/exclusao-de-dados` (74) existem em `src/app/`, e o rodapé da landing
+      aponta pras três (não há mais `app.html`/`brand.html` em `public/index.html`).
+      O que falta é tudo do lado da conta Meta — ver a lista de §4.3.
+- [x] **Integração Vercel↔Inngest — DECIDIDO NÃO FAZER (29/07).** Tentada e
+      desfeita de propósito: `vercel integration add inngest/account`
+      provisiona uma conta Inngest **nova e vazia** (saiu
+      `account-yellow-school`), e conectá-la ao projeto falhou justamente
+      porque `INNGEST_SIGNING_KEY` já existe —
+      `Failed to connect: This project already has an existing environment
+      variable with name INNGEST_SIGNING_KEY (400)`. Pra seguir seria preciso
+      APAGAR `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` de Production (as de
+      26d atrás, que apontam pra conta que roda hoje) e deixar a integração
+      escrever as dela — ou seja, migrar os três crons (`scan-news`,
+      `publish-scheduled-posts`, `refresh-social-tokens`) pra outra conta e
+      perder o histórico de runs. Não vale o preço pra economizar um `curl`
+      por deploy. O recurso foi removido (`vercel integration-resource remove`)
+      e as env vars ficaram intactas.
+      **Consequência aceita:** todo deploy que ADICIONE ou REMOVA função
+      Inngest continua exigindo
+      `curl -X PUT https://post-pilot-ai-seven.vercel.app/api/inngest`
+      (resposta boa: `{"message":"Successfully registered","modified":true}`).
       Mudança dentro de função já existente não precisa.
+      Se um dia valer a pena, o caminho honesto é migrar de conta com
+      intenção — não como efeito colateral de instalar uma integração.
 - [ ] **Provider de IA do cliente ativo** — ver §0-A.7.
 
 ### 0-A.7 O bloqueio da Pollinations é por cliente, não global
@@ -911,16 +947,17 @@ Advanced Access via App Review: `instagram_business_basic`,
 
 O que falta, separado por quem consegue fazer:
 
-**Depende de código (dá pra construir aqui):**
-- [ ] Página de **Política de Privacidade** pública — o Meta não aceita a
-      submissão sem URL válida. Hoje o site não tem: `src/app/` só tem
-      `fila/`, `login/`, `pricing/`, `ready/`, `settings/`, e a raiz é servida
-      de `public/index.html`.
-- [ ] Página de **Termos de Uso** — exigida pra app comercial.
-- [ ] **Exclusão de dados do usuário** — o Meta pede uma das duas: URL de
-      instruções ou callback de deleção. Não existe nenhuma.
-- [ ] Consertar os links quebrados do rodapé da landing: `app.html` e
-      `brand.html` não existem em `public/` (o revisor do Meta navega o site).
+**Depende de código — FEITO (conferido em 29/07):**
+- [x] **Política de Privacidade** — `src/app/privacidade/page.tsx` (165 linhas),
+      renderizada por `src/components/LegalPage.tsx`.
+- [x] **Termos de Uso** — `src/app/termos/page.tsx` (122 linhas).
+- [x] **Exclusão de dados** — `src/app/exclusao-de-dados/page.tsx` (74 linhas);
+      é a URL de instruções, a opção mais simples das duas que o Meta aceita.
+- [x] **Rodapé da landing** aponta pras três (`/privacidade`, `/termos`,
+      `/exclusao-de-dados`); `app.html`/`brand.html` não existem mais em
+      `public/index.html`.
+- [ ] Conferir as três URLs no domínio de produção antes de submeter — o
+      revisor navega o site, e link quebrado reprova sozinho.
 
 **Depende do usuário (conta Meta, não dá pra automatizar):**
 - [ ] Preencher ícone, categoria e descrição do app no painel.
