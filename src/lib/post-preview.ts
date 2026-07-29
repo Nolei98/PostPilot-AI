@@ -94,6 +94,10 @@ export interface PreviewPostInput {
   video_url?: string | null;
   video_status?: "none" | "processing" | "ready" | "error" | null;
   video_shape?: "reels" | "feed" | "feed-blur" | null;
+  /** Foto de fundo escolhida (048) + o véu por cima dela. */
+  bg_image_url?: string | null;
+  bg_image_luminance?: LumGrid | null;
+  bg_overlay?: "auto" | "on" | "off" | null;
 }
 
 /** Escala o SVG pro container (mesmo truque de layout-preview.ts). */
@@ -138,6 +142,21 @@ function luminanceAt(
     { left: 0, top: rect.top, width: canvas.w, height: rect.height },
     { width: canvas.w, height: canvas.h }
   );
+}
+
+/**
+ * Véu sobre a foto de fundo (048). 'auto' respeita a medição, com o piso
+ * de vídeo; 'on' escurece de vez mesmo quando a medida dispensaria; 'off'
+ * não desenha nada — foto limpa não precisa de véu, e forçar um deixava
+ * a arte lavada.
+ */
+function veilFor(
+  c: { theme: "light" | "dark"; alpha: number },
+  overlay: "auto" | "on" | "off" | null | undefined
+): { theme: "light" | "dark"; alpha: number } | undefined {
+  if (overlay === "off") return { theme: c.theme, alpha: 0 };
+  if (overlay === "on") return { theme: c.theme, alpha: Math.max(0.55, c.alpha) };
+  return { theme: c.theme, alpha: Math.max(0.32, c.alpha) };
 }
 
 function contrastFor(
@@ -429,16 +448,16 @@ function buildVideoPage(post: PreviewPostInput, spec: RenderSpec): PreviewPage |
   // Feed 4:5 com FOTO de fundo (2026-07-29): a foto entra como camada e
   // o overlay troca o retângulo sólido por um véu de leitura. O véu é
   // medido na faixa do texto, igual ao render.
-  const photoBgUrl = shape === "feed" ? post.base_image_url ?? null : null;
+  const photoBgUrl = shape === "feed" ? post.bg_image_url ?? null : null;
   const frameForBand = buildFeedVideoOverlaySvg(headline, spec.cardBrand).frame;
   const bandTop = frameForBand.y + frameForBand.h;
   const c = photoBgUrl
-    ? contrastFor(post.base_luminance, { top: bandTop, height: HEIGHT - bandTop }, canvas)
+    ? contrastFor(post.bg_image_luminance, { top: bandTop, height: HEIGHT - bandTop }, canvas)
     : null;
   const { svg, frame } = buildFeedVideoOverlaySvg(
     headline,
     spec.cardBrand,
-    c ? { theme: c.theme, alpha: Math.max(0.32, c.alpha) } : undefined
+    c ? veilFor(c, post.bg_overlay) : undefined
   );
   const layers: PreviewLayer[] = [];
   if (photoBgUrl) layers.push({ kind: "photo", url: photoBgUrl });

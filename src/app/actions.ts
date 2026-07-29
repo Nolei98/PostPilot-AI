@@ -488,13 +488,16 @@ export async function updatePost(
  * de chip + hook do fluxo automático.
  */
 /**
- * Foto de FUNDO de um post de vídeo no feed 4:5 (2026-07-29).
+ * Foto de FUNDO deste post (migration 048).
  *
- * Grava a base crua (`{postId}-base.jpg` + `base_image_url`/
- * `base_luminance`), NÃO uma arte composta: no modelo render-on-approval
- * quem monta a peça é a aprovação, e o preview da fila desenha por cima
- * dessa base. É o mesmo par de campos que o post único já usa — sem
- * coluna nova, e o contraste do texto sai da luminância medida aqui.
+ * Coluna própria (`bg_image_url`) e caminho próprio (`{postId}-bg.jpg`)
+ * de propósito: `base_image_url` é onde o attach-video grava o PÔSTER do
+ * vídeo pra medir contraste. Compartilhar o campo fazia o pôster virar
+ * fundo sem ninguém pedir, e a foto escolhida sumir no próximo upload de
+ * vídeo — que foi o que aconteceu no teste de 29/07.
+ *
+ * Grava a foto CRUA, não arte composta: no modelo render-on-approval
+ * quem monta a peça é a aprovação, e a fila desenha o preview por cima.
  */
 export async function uploadPostBackgroundImage(
   formData: FormData
@@ -530,18 +533,18 @@ export async function uploadPostBackgroundImage(
 
     const { error: upErr } = await supabase.storage
       .from("post-images")
-      .upload(`${postId}-base.jpg`, jpeg, { contentType: "image/jpeg", upsert: true });
+      .upload(`${postId}-bg.jpg`, jpeg, { contentType: "image/jpeg", upsert: true });
     if (upErr) return { ok: false, error: upErr.message };
 
-    const { data: pub } = supabase.storage.from("post-images").getPublicUrl(`${postId}-base.jpg`);
+    const { data: pub } = supabase.storage.from("post-images").getPublicUrl(`${postId}-bg.jpg`);
     // `?v=` porque o caminho é fixo e o upload é upsert — sem carimbo, a
     // imagem antiga fica no cache do navegador/CDN (mesma armadilha que
     // segurava o vídeo trocado em 29/07).
     const { error } = await supabase
       .from("posts")
       .update({
-        base_image_url: `${pub.publicUrl}?v=${Date.now()}`,
-        base_luminance: await buildLuminanceGrid(jpeg),
+        bg_image_url: `${pub.publicUrl}?v=${Date.now()}`,
+        bg_image_luminance: await buildLuminanceGrid(jpeg),
       })
       .eq("id", postId);
     if (error) return { ok: false, error: error.message };
@@ -552,6 +555,50 @@ export async function uploadPostBackgroundImage(
 
   revalidatePath("/");
   return { ok: true };
+}
+
+/** Tira a foto de fundo — o post volta pro fundo por COR (042). */
+export async function removePostBackgroundImage(postId: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { error } = await supabase
+    .from("posts")
+    .update({ bg_image_url: null, bg_image_luminance: null })
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .eq("status", "pending_approval");
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+}
+
+/**
+ * Véu de leitura sobre a foto de fundo (migration 048): 'auto' só
+ * escurece quando o contraste exige, 'on' sempre, 'off' nunca. Existe
+ * porque foto limpa não precisa de véu, e foto cheia às vezes precisa de
+ * mais do que o mínimo pra WCAG — é decisão de gosto, não só de medida.
+ */
+export async function savePostBackgroundOverlay(
+  postId: string,
+  overlay: "auto" | "on" | "off"
+) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { error } = await supabase
+    .from("posts")
+    .update({ bg_overlay: overlay })
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .eq("status", "pending_approval");
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
 }
 
 export async function uploadPostImage(

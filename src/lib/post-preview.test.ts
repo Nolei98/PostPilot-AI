@@ -378,3 +378,57 @@ describe("URL do vídeo carrega a versão do upload", () => {
     expect(video?.url).toMatch(/-video-source\.mp4$/);
   });
 });
+
+// Foto de fundo do vídeo no feed 4:5 (migration 048). Coluna própria:
+// base_image_url guarda o PÔSTER do vídeo (attach-video), não a escolha
+// da pessoa — usar o mesmo campo fazia o pôster virar fundo sozinho.
+describe("feed 4:5 com foto de fundo escolhida", () => {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://projeto.supabase.test";
+
+  const videoFeed = {
+    ...post,
+    format: "video_feed" as const,
+    video_shape: "feed" as const,
+    video_status: "ready" as const,
+    video_poster_url: "https://exemplo.test/poster.jpg?v=1",
+  };
+
+  it("a foto entra como camada e o pôster do vídeo NÃO", async () => {
+    const pages = await buildPostPreview(
+      {
+        ...videoFeed,
+        base_image_url: "https://exemplo.test/poster-do-video.jpg",
+        bg_image_url: "https://exemplo.test/escolhida.jpg",
+      },
+      spec({ format: "video_feed", videoShape: "feed" }),
+      []
+    );
+    const foto = pages[0].layers.find((l) => l.kind === "photo");
+    expect(foto).toMatchObject({ url: "https://exemplo.test/escolhida.jpg" });
+  });
+
+  it("sem foto escolhida não há camada de foto — fundo é a cor", async () => {
+    const pages = await buildPostPreview(
+      { ...videoFeed, base_image_url: "https://exemplo.test/poster-do-video.jpg", bg_image_url: null },
+      spec({ format: "video_feed", videoShape: "feed" }),
+      []
+    );
+    expect(pages[0].layers.some((l) => l.kind === "photo")).toBe(false);
+  });
+
+  it("'sem véu' não desenha o gradiente que o 'auto' desenha", async () => {
+    const base = { ...videoFeed, bg_image_url: "https://exemplo.test/escolhida.jpg" };
+    const auto = await buildPostPreview(
+      { ...base, bg_overlay: "auto" },
+      spec({ format: "video_feed", videoShape: "feed" }),
+      []
+    );
+    const off = await buildPostPreview(
+      { ...base, bg_overlay: "off" },
+      spec({ format: "video_feed", videoShape: "feed" }),
+      []
+    );
+    expect(auto[0].svg).toContain("feed-photo-band");
+    expect(off[0].svg).not.toContain("stop-opacity=\"0.3");
+  });
+});

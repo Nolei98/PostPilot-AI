@@ -25,6 +25,8 @@ import {
   convertPostFormat,
   savePostVideoShape,
   uploadPostBackgroundImage,
+  removePostBackgroundImage,
+  savePostBackgroundOverlay,
   savePostBackground,
   savePostEyebrow,
   savePostMarkColor,
@@ -295,6 +297,20 @@ export function PostCard({
       } catch {
         setUploadError("Falha ao subir imagem. Tente um arquivo menor.");
       }
+    });
+  }
+
+  function removerFundo() {
+    startUpload(async () => {
+      await removePostBackgroundImage(post.id);
+      router.refresh();
+    });
+  }
+
+  function aplicarVeu(modo: "auto" | "on" | "off") {
+    startBgSave(async () => {
+      await savePostBackgroundOverlay(post.id, modo);
+      router.refresh();
     });
   }
 
@@ -976,7 +992,7 @@ export function PostCard({
                 <span>
                   {uploading
                     ? "Enviando…"
-                    : post.base_image_url
+                    : post.bg_image_url
                       ? "Trocar a foto de fundo"
                       : "Usar uma foto de fundo"}
                 </span>
@@ -989,10 +1005,47 @@ export function PostCard({
                 />
               </label>
             )}
-            {isVideoPost && post.base_image_url && (
-              <p className="text-micro text-subtle">
-                Com foto de fundo, a cor acima fica só por baixo dela.
-              </p>
+            {isVideoPost && post.bg_image_url && (
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-micro text-subtle">
+                    Com foto de fundo, a cor acima fica só por baixo dela.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={removerFundo}
+                    disabled={uploading}
+                    className="text-micro text-subtle underline-offset-2 transition-colors hover:text-content hover:underline disabled:opacity-50"
+                  >
+                    tirar foto
+                  </button>
+                </div>
+                {/* Véu por cima da foto (048): medir contraste garante o
+                    mínimo legível, mas quanto a foto deve recuar é gosto. */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(
+                    [
+                      ["auto", "Véu automático"],
+                      ["on", "Escurecer mais"],
+                      ["off", "Sem véu"],
+                    ] as ["auto" | "on" | "off", string][]
+                  ).map(([modo, label]) => (
+                    <button
+                      key={modo}
+                      type="button"
+                      aria-pressed={(post.bg_overlay ?? "auto") === modo}
+                      onClick={() => aplicarVeu(modo)}
+                      className={`rounded-full px-2.5 py-1 text-micro transition-colors ${
+                        (post.bg_overlay ?? "auto") === modo
+                          ? "bg-content text-surface"
+                          : "bg-surface-2 text-muted hover:text-content"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </section>
           )}

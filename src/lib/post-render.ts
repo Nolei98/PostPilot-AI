@@ -257,9 +257,9 @@ export async function renderVideoPost(
     // Fundo por FOTO quando o post tem uma base (2026-07-29); senão, a
     // cor sólida da marca, que era o único fundo possível antes.
     const { buildFeedVideoOverlay, buildFeedVideoOverlayPhotoBg } = await import("@/lib/image");
-    const photo = await downloadOptional(`${postId}-base.jpg`);
+    const photo = await downloadOptional(`${postId}-bg.jpg`);
     const built = photo
-      ? await buildFeedVideoOverlayPhotoBg(hook, spec.cardBrand, photo)
+      ? await buildFeedVideoOverlayPhotoBg(hook, spec.cardBrand, photo, spec.bgOverlay)
       : buildFeedVideoOverlay(hook, spec.cardBrand);
     finalVideo = await composeFeedVideo(source, built.overlayPng, built.frame);
   }

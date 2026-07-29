@@ -183,6 +183,8 @@ export interface RenderSpecPostInput {
   mark_color?: string | null;
   /** Rótulo do topo da capa (migration 046); nulo = padrão do preset. */
   eyebrow?: string | null;
+  /** Véu sobre a foto de fundo (migration 048). */
+  bg_overlay?: "auto" | "on" | "off" | null;
   template_applied?: boolean | null;
   video_shape?: VideoShape | null;
   tpl_keyword?: string | null;
@@ -234,6 +236,7 @@ export function withPost(base: RenderSpec, post: RenderSpecPostInput): RenderSpe
     format: post.format,
     videoShape: post.video_shape ?? base.videoShape,
     closingPage: post.template_applied ?? false,
+    bgOverlay: post.bg_overlay ?? "auto",
     identity: {
       colorBackground: post.tpl_color_background ?? base.identity.colorBackground,
       colorAccent: post.tpl_color_accent ?? base.identity.colorAccent,
@@ -304,6 +307,7 @@ export async function resolveRenderSpec(input: {
     profile: profileFromKit(bk),
     identity: identityFromPost(input.post, bk),
     closingPage: input.post.template_applied ?? false,
+    bgOverlay: input.post.bg_overlay ?? "auto",
     templates,
     watermark,
   };

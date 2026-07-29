@@ -881,7 +881,9 @@ export function buildFeedVideoOverlaySvg(
 export async function buildFeedVideoOverlayPhotoBg(
   headline: string,
   cardBrand: CardBrand,
-  photo: Buffer
+  photo: Buffer,
+  /** Véu por cima da foto (048): 'auto' segue a medição. */
+  overlayMode: "auto" | "on" | "off" = "auto"
 ): Promise<{ overlayPng: Buffer; frame: FeedVideoFrame }> {
   const textColorBrand = cardBrand.colorText || "#FFFFFF";
   const { frame } = feedVideoLayoutParts(headline, cardBrand);
@@ -898,7 +900,15 @@ export async function buildFeedVideoOverlayPhotoBg(
     .toBuffer();
   const luminance = await measureImageLuminance(band);
   const theme = pickTheme(luminance);
-  const alpha = Math.max(VIDEO_SCRIM_FLOOR, overlayAlphaFor(theme, textColorBrand, luminance));
+  const medido = overlayAlphaFor(theme, textColorBrand, luminance);
+  // 'off' é escolha consciente de quem olhou a foto: nem o piso de vídeo
+  // se aplica. 'on' força um véu forte mesmo que a medida dispensasse.
+  const alpha =
+    overlayMode === "off"
+      ? 0
+      : overlayMode === "on"
+        ? Math.max(0.55, medido)
+        : Math.max(VIDEO_SCRIM_FLOOR, medido);
 
   const { svg } = buildFeedVideoOverlaySvg(headline, cardBrand, { theme, alpha });
   const overlayPng = await sharp(covered)

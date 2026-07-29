@@ -239,6 +239,8 @@ export interface RenderSpec {
   identity: VisualIdentity;
   /** true = o post leva contra-capa (2ª página) */
   closingPage: boolean;
+  /** Véu sobre a foto de fundo (migration 048) — congelado como o resto. */
+  bgOverlay?: "auto" | "on" | "off";
   templates: Partial<Record<Surface, { id: string; spec: TemplateSpec }>>;
   watermark: boolean;
 }
@@ -398,6 +400,12 @@ export interface Post {
   mark_color: string | null;
   /** Rótulo do topo da capa (migration 046). null = padrão do preset. */
   eyebrow: string | null;
+  /** Foto de FUNDO deste post (migration 048) — coluna própria porque
+   * base_image_url guarda o pôster do vídeo, não uma escolha da pessoa. */
+  bg_image_url: string | null;
+  bg_image_luminance: LumGrid | null;
+  /** Véu de leitura sobre a foto: 'auto' só quando precisa. */
+  bg_overlay: "auto" | "on" | "off";
   /** Troca de formato em andamento (migration 044) — só sinal de UI. */
   convert_status: "idle" | "pending";
   convert_error: string | null;
