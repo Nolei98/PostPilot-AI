@@ -487,6 +487,73 @@ export async function updatePost(
  * substitui a página de conteúdo do post, aplicando o mesmo overlay
  * de chip + hook do fluxo automático.
  */
+/**
+ * Foto de FUNDO de um post de vídeo no feed 4:5 (2026-07-29).
+ *
+ * Grava a base crua (`{postId}-base.jpg` + `base_image_url`/
+ * `base_luminance`), NÃO uma arte composta: no modelo render-on-approval
+ * quem monta a peça é a aprovação, e o preview da fila desenha por cima
+ * dessa base. É o mesmo par de campos que o post único já usa — sem
+ * coluna nova, e o contraste do texto sai da luminância medida aqui.
+ */
+export async function uploadPostBackgroundImage(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+
+  const postId = String(formData.get("post_id") ?? "");
+  const file = formData.get("image") as File | null;
+  if (!postId || !file || file.size === 0) return { ok: false, error: "Selecione uma imagem." };
+  if (file.size > 20 * 1024 * 1024) return { ok: false, error: "Imagem muito grande (máx 20MB)." };
+
+  const { data: post } = await supabase
+    .from("posts")
+    .select("id")
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .eq("status", "pending_approval")
+    .maybeSingle();
+  if (!post) return { ok: false, error: "Post não encontrado." };
+
+  try {
+    const sharp = (await import("sharp")).default;
+    const { buildLuminanceGrid } = await import("@/lib/contrast");
+    const buf = Buffer.from(await file.arrayBuffer());
+    const jpeg = await sharp(buf)
+      .resize(1080, 1350, { fit: "cover", position: "attention" })
+      .jpeg({ quality: 90 })
+      .toBuffer();
+
+    const { error: upErr } = await supabase.storage
+      .from("post-images")
+      .upload(`${postId}-base.jpg`, jpeg, { contentType: "image/jpeg", upsert: true });
+    if (upErr) return { ok: false, error: upErr.message };
+
+    const { data: pub } = supabase.storage.from("post-images").getPublicUrl(`${postId}-base.jpg`);
+    // `?v=` porque o caminho é fixo e o upload é upsert — sem carimbo, a
+    // imagem antiga fica no cache do navegador/CDN (mesma armadilha que
+    // segurava o vídeo trocado em 29/07).
+    const { error } = await supabase
+      .from("posts")
+      .update({
+        base_image_url: `${pub.publicUrl}?v=${Date.now()}`,
+        base_luminance: await buildLuminanceGrid(jpeg),
+      })
+      .eq("id", postId);
+    if (error) return { ok: false, error: error.message };
+  } catch (err) {
+    console.error("[uploadPostBackgroundImage] falha ao processar imagem:", err);
+    return { ok: false, error: "Não foi possível processar essa imagem. Tente um JPG/PNG." };
+  }
+
+  revalidatePath("/");
+  return { ok: true };
+}
+
 export async function uploadPostImage(
   formData: FormData
 ): Promise<{ ok: boolean; error?: string }> {

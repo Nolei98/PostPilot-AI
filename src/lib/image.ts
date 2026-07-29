@@ -838,9 +838,21 @@ export function buildFeedVideoOverlay(
  */
 export function buildFeedVideoOverlaySvg(
   headline: string,
-  cardBrand: CardBrand
+  cardBrand: CardBrand,
+  /**
+   * Fundo por FOTO em vez da cor sólida da marca. Quando presente, o
+   * retângulo de fundo não é desenhado (quem pinta é a imagem, atrás) e
+   * entra um véu de leitura na faixa do texto — mesma matemática do
+   * feed-blur, que também tem fundo imprevisível.
+   */
+  photoBg?: { theme: "light" | "dark"; alpha: number }
 ): { svg: string; frame: FeedVideoFrame } {
   const { bg, frame, dividerSvg, headlineSvg } = feedVideoLayoutParts(headline, cardBrand);
+
+  const bandTop = frame.y + frame.h;
+  const bgLayer = photoBg
+    ? buildOverlayGradientSvg("feed-photo-band", bandTop, HEIGHT - bandTop, WIDTH, photoBg.theme, photoBg.alpha, "bottom")
+    : `<rect width="${WIDTH}" height="${HEIGHT}" fill="${bg}" mask="url(#feed-video-hole)"/>`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
   <defs>
@@ -849,12 +861,61 @@ export function buildFeedVideoOverlaySvg(
       <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="#000"/>
     </mask>
   </defs>
-  <rect width="${WIDTH}" height="${HEIGHT}" fill="${bg}" mask="url(#feed-video-hole)"/>
+  ${bgLayer}
   ${dividerSvg}
   ${headlineSvg}
 </svg>`;
 
   return { svg, frame };
+}
+
+/**
+ * Overlay do feed 4:5 com FOTO de fundo (2026-07-29). O fundo do feed
+ * era só a cor sólida da marca; com foto, o post de vídeo ganha a mesma
+ * liberdade que o post único já tinha.
+ *
+ * A foto é achatada no PNG do overlay, e o buraco da moldura é recortado
+ * DELA também (`dest-out` com a máscara arredondada) — senão a foto
+ * taparia o vídeo, que o ffmpeg encaixa por baixo.
+ */
+export async function buildFeedVideoOverlayPhotoBg(
+  headline: string,
+  cardBrand: CardBrand,
+  photo: Buffer
+): Promise<{ overlayPng: Buffer; frame: FeedVideoFrame }> {
+  const textColorBrand = cardBrand.colorText || "#FFFFFF";
+  const { frame } = feedVideoLayoutParts(headline, cardBrand);
+
+  const covered = await sharp(photo)
+    .resize(WIDTH, HEIGHT, { fit: "cover", position: "attention" })
+    .toBuffer();
+
+  // Contraste medido na faixa onde o texto senta de verdade (abaixo da
+  // moldura), não no quadro inteiro: é a mesma regra do feed-blur.
+  const bandTop = frame.y + frame.h;
+  const band = await sharp(covered)
+    .extract({ left: 0, top: bandTop, width: WIDTH, height: HEIGHT - bandTop })
+    .toBuffer();
+  const luminance = await measureImageLuminance(band);
+  const theme = pickTheme(luminance);
+  const alpha = Math.max(VIDEO_SCRIM_FLOOR, overlayAlphaFor(theme, textColorBrand, luminance));
+
+  const { svg } = buildFeedVideoOverlaySvg(headline, cardBrand, { theme, alpha });
+  const overlayPng = await sharp(covered)
+    .composite([
+      { input: rasterizeSvg(svg), top: 0, left: 0 },
+      // Abre o buraco da moldura na foto — o vídeo entra por trás.
+      {
+        input: roundedRectMaskPng(frame.w, frame.h, frame.radius),
+        top: frame.y,
+        left: frame.x,
+        blend: "dest-out",
+      },
+    ])
+    .png()
+    .toBuffer();
+
+  return { overlayPng, frame };
 }
 
 /**

@@ -10,7 +10,14 @@
 // ============================================================
 import { describe, it, expect } from "vitest";
 import sharp from "sharp";
-import { buildReelsVideoOverlayPng, buildReelsVideoOverlaySvg, feedVideoLayoutParts, cardVideoLayoutParts } from "@/lib/image";
+import {
+  buildReelsVideoOverlayPng,
+  buildReelsVideoOverlaySvg,
+  buildFeedVideoOverlaySvg,
+  buildFeedVideoOverlayPhotoBg,
+  feedVideoLayoutParts,
+  cardVideoLayoutParts,
+} from "@/lib/image";
 import { displayFontFor } from "@/lib/render-shared";
 import type { CardBrand } from "@/lib/render-shared";
 import type { LayoutPreset } from "@/lib/render-shared";
@@ -277,5 +284,58 @@ describe("rótulo do topo nos formatos de vídeo (046)", () => {
     // o vídeo desce pra não encostar no rótulo
     expect(com.frame.y).toBeGreaterThanOrEqual(sem.frame.y);
     expect(com.frame.y).toBeGreaterThan(92);
+  });
+});
+
+// Fundo por FOTO no feed 4:5 (2026-07-29): antes o fundo do vídeo no
+// feed só podia ser a cor sólida da marca.
+describe("feed 4:5 com foto de fundo", () => {
+  it("com foto, o retângulo sólido dá lugar ao véu de leitura", () => {
+    const brand = brandWith("editorial-noir");
+    const solido = buildFeedVideoOverlaySvg(HEADLINE, brand).svg;
+    const comFoto = buildFeedVideoOverlaySvg(HEADLINE, brand, { theme: "dark", alpha: 0.4 }).svg;
+    // o fundo sólido usa a máscara do buraco; o véu não
+    expect(solido).toContain('mask="url(#feed-video-hole)"');
+    expect(comFoto).not.toContain('mask="url(#feed-video-hole)"');
+    expect(comFoto).toContain("feed-photo-band");
+  });
+
+  it("a moldura do vídeo não muda de lugar por causa do fundo", () => {
+    const brand = brandWith("editorial-noir");
+    const a = buildFeedVideoOverlaySvg(HEADLINE, brand).frame;
+    const b = buildFeedVideoOverlaySvg(HEADLINE, brand, { theme: "dark", alpha: 0.4 }).frame;
+    expect(b).toEqual(a);
+  });
+
+  it("o PNG com foto abre o buraco da moldura pro vídeo entrar", async () => {
+    const foto = await sharp({
+      create: { width: 1080, height: 1350, channels: 3, background: { r: 30, g: 30, b: 30 } },
+    })
+      .png()
+      .toBuffer();
+    const { overlayPng, frame } = await buildFeedVideoOverlayPhotoBg(
+      HEADLINE,
+      brandWith("editorial-noir"),
+      foto
+    );
+    // pixel no meio da moldura tem que estar TRANSPARENTE
+    const centro = await sharp(overlayPng)
+      .extract({
+        left: frame.x + Math.round(frame.w / 2),
+        top: frame.y + Math.round(frame.h / 2),
+        width: 1,
+        height: 1,
+      })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    expect(centro.info.channels).toBe(4);
+    expect(centro.data[3]).toBe(0); // alpha zero = buraco
+
+    // e um pixel fora da moldura continua opaco (a foto está lá)
+    const fora = await sharp(overlayPng)
+      .extract({ left: 10, top: 10, width: 1, height: 1 })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    expect(fora.data[3]).toBeGreaterThan(200);
   });
 });

@@ -24,6 +24,7 @@ import {
   createVideoUploadTicket,
   convertPostFormat,
   savePostVideoShape,
+  uploadPostBackgroundImage,
   savePostBackground,
   savePostEyebrow,
   savePostMarkColor,
@@ -274,6 +275,27 @@ export function PostCard({
     // Vídeo pronto + virando carrossel = pergunta onde ele fica.
     if (!isCarousel && videoPronto) setVideoDestino(true);
     else convertFormat(isCarousel ? "single" : "carousel");
+  }
+
+  // Foto de fundo do vídeo no feed 4:5 — mesma base crua do post único.
+  function handleBackgroundUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadError(null);
+    startUpload(async () => {
+      try {
+        const resized = await resizeImageForUpload(file);
+        const fd = new FormData();
+        fd.set("post_id", post.id);
+        fd.set("image", resized);
+        const result = await uploadPostBackgroundImage(fd);
+        if (!result.ok) setUploadError(result.error ?? "Falha ao subir imagem.");
+        else router.refresh();
+      } catch {
+        setUploadError("Falha ao subir imagem. Tente um arquivo menor.");
+      }
+    });
   }
 
   // Reenquadrar (sem reenviar arquivo): só troca video_shape/format.
@@ -887,7 +909,22 @@ export function PostCard({
           </section>
 
           {/* Fundo da arte (migration 042) — vale só pra ESTE post e
-              congela na aprovação. */}
+              congela na aprovação.
+
+              Em vídeo, só o feed 4:5 tem fundo visível: no Reels o vídeo
+              cobre o quadro inteiro e no feed borrado o fundo é o próprio
+              vídeo. Oferecer o controle nesses dois prometia algo que o
+              formato não pode cumprir (relatado em 29/07). */}
+          {isVideoPost && videoAtivo !== "feed" ? (
+            <section className="space-y-1.5">
+              <span className="text-caption text-muted">🎨 Fundo da arte</span>
+              <p className="text-micro text-subtle">
+                {videoAtivo === "reels"
+                  ? "No Reels o vídeo ocupa a tela inteira — não há fundo pra escolher. Troque pro feed 4:5 se quiser cor ou imagem atrás."
+                  : "Neste enquadramento o fundo é o próprio vídeo, borrado. Troque pro feed 4:5 (fundo da marca) se quiser cor ou imagem."}
+              </p>
+            </section>
+          ) : (
           <section className="space-y-1.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-caption text-muted">🎨 Fundo da arte</span>
@@ -932,7 +969,33 @@ export function PostCard({
             <p className="text-micro text-subtle">
               A cor do texto se ajusta sozinha ao fundo escolhido.
             </p>
+            {/* Vídeo no feed 4:5 também aceita FOTO de fundo — o post
+                único já aceitava; não havia motivo pro vídeo não. */}
+            {isVideoPost && (
+              <label className="flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content">
+                <span>
+                  {uploading
+                    ? "Enviando…"
+                    : post.base_image_url
+                      ? "Trocar a foto de fundo"
+                      : "Usar uma foto de fundo"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={handleBackgroundUpload}
+                />
+              </label>
+            )}
+            {isVideoPost && post.base_image_url && (
+              <p className="text-micro text-subtle">
+                Com foto de fundo, a cor acima fica só por baixo dela.
+              </p>
+            )}
           </section>
+          )}
 
           {/* Cor do wordmark (migration 043). */}
           <section className="space-y-1.5">

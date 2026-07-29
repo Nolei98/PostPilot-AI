@@ -426,8 +426,22 @@ function buildVideoPage(post: PreviewPostInput, spec: RenderSpec): PreviewPage |
   }
 
   const canvas = { w: WIDTH, h: HEIGHT };
-  const { svg, frame } = buildFeedVideoOverlaySvg(headline, spec.cardBrand);
+  // Feed 4:5 com FOTO de fundo (2026-07-29): a foto entra como camada e
+  // o overlay troca o retângulo sólido por um véu de leitura. O véu é
+  // medido na faixa do texto, igual ao render.
+  const photoBgUrl = shape === "feed" ? post.base_image_url ?? null : null;
+  const frameForBand = buildFeedVideoOverlaySvg(headline, spec.cardBrand).frame;
+  const bandTop = frameForBand.y + frameForBand.h;
+  const c = photoBgUrl
+    ? contrastFor(post.base_luminance, { top: bandTop, height: HEIGHT - bandTop }, canvas)
+    : null;
+  const { svg, frame } = buildFeedVideoOverlaySvg(
+    headline,
+    spec.cardBrand,
+    c ? { theme: c.theme, alpha: Math.max(0.32, c.alpha) } : undefined
+  );
   const layers: PreviewLayer[] = [];
+  if (photoBgUrl) layers.push({ kind: "photo", url: photoBgUrl });
   if (shape === "feed-blur") {
     layers.push({ kind: "video", url, poster, frame: null, blurredBackdrop: true });
   }

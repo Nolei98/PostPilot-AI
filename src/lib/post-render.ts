@@ -42,6 +42,14 @@ async function fetchBg(url: string | null | undefined): Promise<Buffer | null> {
 }
 
 /** Baixa um arquivo do Storage do post (vídeo fonte, base). */
+/** Baixa se existir; null quando o arquivo não está lá (fundo opcional). */
+async function downloadOptional(path: string): Promise<Buffer | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.storage.from(BUCKET).download(path);
+  if (error || !data) return null;
+  return Buffer.from(await data.arrayBuffer());
+}
+
 async function download(path: string): Promise<Buffer> {
   const supabase = createAdminClient();
   const { data, error } = await supabase.storage.from(BUCKET).download(path);
@@ -246,9 +254,14 @@ export async function renderVideoPost(
   } else {
     // Feed 4:5 sólido: vídeo numa moldura própria (16:9, cantos
     // arredondados), texto na seção dele — nunca sobrepostos.
-    const { buildFeedVideoOverlay } = await import("@/lib/image");
-    const { overlayPng, frame } = buildFeedVideoOverlay(hook, spec.cardBrand);
-    finalVideo = await composeFeedVideo(source, overlayPng, frame);
+    // Fundo por FOTO quando o post tem uma base (2026-07-29); senão, a
+    // cor sólida da marca, que era o único fundo possível antes.
+    const { buildFeedVideoOverlay, buildFeedVideoOverlayPhotoBg } = await import("@/lib/image");
+    const photo = await downloadOptional(`${postId}-base.jpg`);
+    const built = photo
+      ? await buildFeedVideoOverlayPhotoBg(hook, spec.cardBrand, photo)
+      : buildFeedVideoOverlay(hook, spec.cardBrand);
+    finalVideo = await composeFeedVideo(source, built.overlayPng, built.frame);
   }
 
   const finalPoster = await extractPosterFrame(finalVideo, 0.5);
