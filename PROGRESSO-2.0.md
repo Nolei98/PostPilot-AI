@@ -959,6 +959,13 @@ O que falta, separado por quem consegue fazer:
 - [ ] Conferir as três URLs no domínio de produção antes de submeter — o
       revisor navega o site, e link quebrado reprova sozinho.
 
+> **Dossiê pronto (29/07): `docs/meta-app-review.md`.** Traz a descrição do
+> app, a categoria sugerida, as TRÊS justificativas de permissão já
+> escritas pra colar no painel, o roteiro do screencast passo a passo (com
+> os pontos que costumam reprovar), o que esperar da verificação de
+> negócio e o checklist de antes do "Submit". A lista abaixo continua
+> valendo — o dossiê é o material pra executá-la.
+
 **Depende do usuário (conta Meta, não dá pra automatizar):**
 - [ ] Preencher ícone, categoria e descrição do app no painel.
 - [ ] **Verificação de negócio** (Business Verification) — costuma exigir
