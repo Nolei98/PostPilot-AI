@@ -664,7 +664,12 @@ export function buildReelsVideoOverlaySvg(
   // Gradiente de legibilidade (mesmo motor de contrast.ts) cobrindo a
   // zona segura inferior inteira — divisor + título já entram juntos
   // na mesma banda, sem precisar de placa separada pra marca.
-  const scrim = buildOverlayGradientSvg("reels-safezone", zone.top, REELS_H - zone.top, REELS_W, theme, alpha, "bottom");
+  // Rótulo do topo (046) — precisa estar decidido ANTES do scrim, porque
+  // o véu de legibilidade tem que crescer pra cobrir ele também: texto
+  // fora do véu some quando o vídeo clareia naquele trecho.
+  const eyebrowText = (cardBrand.eyebrow ?? "").trim().toUpperCase();
+  const scrimTop = eyebrowText ? Math.max(0, zone.top - 48) : zone.top;
+  const scrim = buildOverlayGradientSvg("reels-safezone", scrimTop, REELS_H - scrimTop, REELS_W, theme, alpha, "bottom");
 
   // Assinatura da marca no estilo do preset (filete, bloco, barra ou
   // cápsula) — o Reels mantém a geometria de zona segura de 2026-07-23;
@@ -683,8 +688,17 @@ export function buildReelsVideoOverlaySvg(
   });
   const headlineSvg = `<text font-family="${family}" font-weight="${displayWeight}" font-size="${size}" fill="${textColor}" text-anchor="start" letter-spacing="${identity.display.letterSpacing}">${tspansLocal(lines, REELS_SAFE_MARGIN_X, headStartY, lineH)}</text>`;
 
+  // Rótulo do topo (046) no Reels: fica ACIMA da assinatura de marca, e
+  // não no topo do quadro. O topo de um Reels é território do Instagram
+  // (nome, som, botões) — texto ali some atrás da interface. Dentro da
+  // zona segura ele é lido junto do resto, que é o ponto do rótulo.
+  const eyebrowSvg = eyebrowText
+    ? `<text x="${REELS_SAFE_MARGIN_X}" y="${dividerY - 44}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${textColor}" fill-opacity="0.8">${escapeXmlLocal(eyebrowText)}</text>`
+    : "";
+
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${REELS_W}" height="${REELS_H}" viewBox="0 0 ${REELS_W} ${REELS_H}">
   ${scrim}
+  ${eyebrowSvg}
   ${dividerSvg}
   ${headlineSvg}
 </svg>`;
@@ -750,7 +764,16 @@ export function feedVideoLayoutParts(
   const dividerYRel = FEED_FRAME_H + FEED_GAP_FRAME_TO_DIVIDER;
   const headStartYRel = dividerYRel + FEED_GAP_DIVIDER_TO_HEADLINE + Math.round(size * 0.6);
   const lastLineYRel = headStartYRel + (lines.length - 1) * lineH;
-  const groupTop = Math.round((HEIGHT - lastLineYRel) / 2);
+  // Rótulo do topo (046): no feed 4:5 ele cabe no TOPO de verdade — o
+  // quadro é do post, não tem interface do Instagram por cima como no
+  // Reels. Quando existe, o grupo (vídeo + marca + título) é empurrado
+  // pra baixo o suficiente pra não encostar nele.
+  const eyebrowText = (cardBrand.eyebrow ?? "").trim().toUpperCase();
+  const EYEBROW_Y = 92;
+  const groupTop = Math.max(
+    eyebrowText ? EYEBROW_Y + 58 : 0,
+    Math.round((HEIGHT - lastLineYRel) / 2)
+  );
 
   const frame: FeedVideoFrame = {
     x: FEED_FRAME_MARGIN_X,
@@ -779,7 +802,10 @@ export function feedVideoLayoutParts(
   // cards; Editorial Noir e Serif Luxe mantêm o centro.
   const headAnchor = identity.anchor;
   const headX = headAnchor === "middle" ? cx : FEED_FRAME_MARGIN_X;
-  const headlineSvg = `<text font-family="${family}" font-weight="${displayWeight}" font-size="${size}" fill="${text}" text-anchor="${headAnchor}" letter-spacing="${identity.display.letterSpacing}">${tspansLocal(lines, headX, headStartY, lineH)}</text>`;
+  const eyebrowSvg = eyebrowText
+    ? `<text x="${FEED_FRAME_MARGIN_X}" y="${EYEBROW_Y}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${text}" fill-opacity="0.8">${escapeXmlLocal(eyebrowText)}</text>`
+    : "";
+  const headlineSvg = `${eyebrowSvg}<text font-family="${family}" font-weight="${displayWeight}" font-size="${size}" fill="${text}" text-anchor="${headAnchor}" letter-spacing="${identity.display.letterSpacing}">${tspansLocal(lines, headX, headStartY, lineH)}</text>`;
 
   return { bg, text, frame, dividerSvg, headlineSvg };
 }

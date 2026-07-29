@@ -10,7 +10,7 @@
 // ============================================================
 import { describe, it, expect } from "vitest";
 import sharp from "sharp";
-import { buildReelsVideoOverlayPng, feedVideoLayoutParts, cardVideoLayoutParts } from "@/lib/image";
+import { buildReelsVideoOverlayPng, buildReelsVideoOverlaySvg, feedVideoLayoutParts, cardVideoLayoutParts } from "@/lib/image";
 import { displayFontFor } from "@/lib/render-shared";
 import type { CardBrand } from "@/lib/render-shared";
 import type { LayoutPreset } from "@/lib/render-shared";
@@ -245,5 +245,37 @@ describe("rótulo do topo por post (046)", () => {
       total: 10,
     });
     expect(capa.headlineSvg).toContain("ENSAIO");
+  });
+});
+
+// O rótulo do topo (046) nasceu só na capa do carrossel: Reels e feed
+// 4:5 desenham SVG próprio em image.ts e ficaram de fora (relatado no
+// Reels em 29/07).
+describe("rótulo do topo nos formatos de vídeo (046)", () => {
+  it("Reels desenha o rótulo dentro da zona segura", () => {
+    const svg = buildReelsVideoOverlaySvg(HEADLINE, { ...brandWith("editorial-noir"), eyebrow: "Edição 12" }, {
+      theme: "dark",
+      textColor: "#FFFFFF",
+      alpha: 0.4,
+    });
+    expect(svg).toContain("EDIÇÃO 12");
+  });
+
+  it("Reels sem rótulo sai como antes", () => {
+    const svg = buildReelsVideoOverlaySvg(HEADLINE, brandWith("editorial-noir"), {
+      theme: "dark",
+      textColor: "#FFFFFF",
+      alpha: 0.4,
+    });
+    expect(svg).not.toContain("EDIÇÃO");
+  });
+
+  it("feed 4:5 desenha o rótulo e empurra o grupo pra baixo", () => {
+    const sem = feedVideoLayoutParts(HEADLINE, brandWith("editorial-noir"));
+    const com = feedVideoLayoutParts(HEADLINE, { ...brandWith("editorial-noir"), eyebrow: "Guia rápido" });
+    expect(com.headlineSvg).toContain("GUIA RÁPIDO");
+    // o vídeo desce pra não encostar no rótulo
+    expect(com.frame.y).toBeGreaterThanOrEqual(sem.frame.y);
+    expect(com.frame.y).toBeGreaterThan(92);
   });
 });
