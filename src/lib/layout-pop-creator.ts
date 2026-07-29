@@ -117,6 +117,10 @@ export function buildPopCreatorCoverSvg(
   const text = brand.colorText || "#FFFFFF";
   const pad = 64;
   const showSwipeHint = opts.showSwipeHint !== false;
+  // A cápsula do rótulo é pintada com a cor do WORDMARK (043+046):
+  // rótulo e marca são a mesma camada de identidade da peça. O blob
+  // decorativo continua no realce do kit — ele é fundo, não marca.
+  const markColor = brand.markColor || accent;
   const eyebrow = (opts.eyebrow ?? "Nº 01").toUpperCase();
   const eyebrowRight = (opts.eyebrowRight ?? (brand.handle ? `@${brand.handle}` : "")).toUpperCase();
 
@@ -151,7 +155,7 @@ export function buildPopCreatorCoverSvg(
       ? `<rect x="${CARD_W - pad - rightW}" y="${pillY}" width="${rightW}" height="${pillH}" rx="${pillH / 2}" fill="${topOverlay.theme === "dark" ? "#000" : "#fff"}" fill-opacity="${topOverlay.alpha}"/>`
       : "";
 
-  const eyebrowPill = `<rect x="${pad}" y="${pillY}" width="${pillW}" height="${pillH}" rx="${pillH / 2}" fill="${accent}"/>
+  const eyebrowPill = `<rect x="${pad}" y="${pillY}" width="${pillW}" height="${pillH}" rx="${pillH / 2}" fill="${markColor}"/>
   <text x="${pad + pillW / 2}" y="${pillY + pillH / 2 + 7}" font-family="${MONO_FONT}" font-weight="700" font-size="20" letter-spacing="1" fill="#0A0A0A" text-anchor="middle">${escapeXml(eyebrow)}</text>
   ${rightPlate}
   <text x="${CARD_W - pad}" y="${pillY + pillH / 2 + 7}" font-family="${MONO_FONT}" font-weight="400" font-size="22" letter-spacing="1" fill="${text}" fill-opacity="0.85" text-anchor="end">${escapeXml(eyebrowRight)}</text>`;

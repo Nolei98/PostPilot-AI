@@ -332,3 +332,27 @@ describe("applyEyebrow (rótulo do topo, migration 046)", () => {
     expect(resolved.colorText).toBe("#0A0A0A");
   });
 });
+
+describe("rótulo do topo herda a cor da marca (043 + 046)", () => {
+  const brand = cardBrandFromKit(KIT);
+
+  it("a capa pinta o rótulo com a MESMA cor do wordmark", async () => {
+    const { buildCoverSvg } = await import("@/lib/carousel-render");
+    const resolvido = resolveBackground(brand, {
+      format: "carousel",
+      mark_mode: "custom",
+      mark_color: "#22D3EE",
+      eyebrow: "Edição 12",
+    });
+    const { svg } = buildCoverSvg(
+      { idx: 0, role: "hook", headline: "Título", body: "" },
+      resolvido,
+      false,
+      {}
+    );
+    // rótulo e wordmark saem na mesma cor — são a mesma camada de marca
+    const ocorrencias = svg.split("#22D3EE").length - 1;
+    expect(ocorrencias).toBeGreaterThanOrEqual(2);
+    expect(svg).toContain("EDIÇÃO 12");
+  });
+});

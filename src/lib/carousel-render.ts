@@ -311,8 +311,11 @@ export function buildCoverSvg(
   // 29/07. Só desenha quando o post TEM rótulo próprio: nulo mantém a
   // capa exatamente como sempre foi.
   const eyebrowText = (brand.eyebrow ?? "").trim().toUpperCase();
+  // Cor: segue o WORDMARK, não o texto. Rótulo e marca são a mesma
+  // camada de identidade no topo da peça; deixar o rótulo na cor de
+  // corpo fazia ele competir com o título em vez de assinar junto.
   const eyebrowSvg = eyebrowText
-    ? `<text x="${pad}" y="92" font-family="${family}" font-weight="400" font-size="24" letter-spacing="2" fill="${text}" fill-opacity="0.8">${escapeXml(eyebrowText)}</text>`
+    ? `<text x="${pad}" y="92" font-family="${family}" font-weight="400" font-size="24" letter-spacing="2" fill="${mark}" fill-opacity="0.9">${escapeXml(eyebrowText)}</text>`
     : "";
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">

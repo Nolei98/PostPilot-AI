@@ -212,7 +212,7 @@ export function renderFromSpec(
   // quando existe: sem rótulo, o template sai exatamente como antes.
   const eyebrowText = (brand.eyebrow ?? "").trim().toUpperCase();
   const eyebrowSvg = eyebrowText
-    ? `<text x="${Math.round(W * 0.074)}" y="${Math.round(H * 0.068)}" font-family="${brand.fontFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${resolveColor("auto", brand, legibility)}" fill-opacity="0.8">${escapeXml(eyebrowText)}</text>`
+    ? `<text x="${Math.round(W * 0.074)}" y="${Math.round(H * 0.068)}" font-family="${brand.fontFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${brand.markColor || brand.colorAccent || resolveColor("auto", brand, legibility)}" fill-opacity="0.9">${escapeXml(eyebrowText)}</text>`
     : "";
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">

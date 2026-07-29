@@ -693,7 +693,7 @@ export function buildReelsVideoOverlaySvg(
   // (nome, som, botões) — texto ali some atrás da interface. Dentro da
   // zona segura ele é lido junto do resto, que é o ponto do rótulo.
   const eyebrowSvg = eyebrowText
-    ? `<text x="${REELS_SAFE_MARGIN_X}" y="${dividerY - 44}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${textColor}" fill-opacity="0.8">${escapeXmlLocal(eyebrowText)}</text>`
+    ? `<text x="${REELS_SAFE_MARGIN_X}" y="${dividerY - 44}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${cardBrand.markColor || accent}" fill-opacity="0.9">${escapeXmlLocal(eyebrowText)}</text>`
     : "";
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${REELS_W}" height="${REELS_H}" viewBox="0 0 ${REELS_W} ${REELS_H}">
@@ -803,7 +803,7 @@ export function feedVideoLayoutParts(
   const headAnchor = identity.anchor;
   const headX = headAnchor === "middle" ? cx : FEED_FRAME_MARGIN_X;
   const eyebrowSvg = eyebrowText
-    ? `<text x="${FEED_FRAME_MARGIN_X}" y="${EYEBROW_Y}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${text}" fill-opacity="0.8">${escapeXmlLocal(eyebrowText)}</text>`
+    ? `<text x="${FEED_FRAME_MARGIN_X}" y="${EYEBROW_Y}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${cardBrand.markColor || accent}" fill-opacity="0.9">${escapeXmlLocal(eyebrowText)}</text>`
     : "";
   const headlineSvg = `${eyebrowSvg}<text font-family="${family}" font-weight="${displayWeight}" font-size="${size}" fill="${text}" text-anchor="${headAnchor}" letter-spacing="${identity.display.letterSpacing}">${tspansLocal(lines, headX, headStartY, lineH)}</text>`;
 
@@ -987,7 +987,7 @@ export function cardVideoLayoutParts(
     // meta-linha em caixa diferente da capa estática do mesmo carrossel.
     const eyebrowText = (cardBrand.eyebrow || identity.eyebrow).toUpperCase();
     const eyebrowSvg =
-      `<text x="${pad}" y="${eyebrowY}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${text}" fill-opacity="0.8">${escapeXmlLocal(eyebrowText)}</text>` +
+      `<text x="${pad}" y="${eyebrowY}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${cardBrand.markColor || accent}" fill-opacity="0.9">${escapeXmlLocal(eyebrowText)}</text>` +
       (handle
         ? `<text x="${WIDTH - pad}" y="${eyebrowY}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${text}" fill-opacity="0.8" text-anchor="end">${escapeXmlLocal(handle)}</text>`
         : "");

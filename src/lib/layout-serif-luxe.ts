@@ -113,6 +113,9 @@ export function buildSerifLuxeCoverSvg(
   const text = brand.colorText || "#FFFFFF";
   const cx = CARD_W / 2;
   const showSwipeHint = opts.showSwipeHint !== false;
+  // Rótulo do topo segue a cor do WORDMARK (043+046): rótulo e marca
+  // são a mesma camada de identidade da peça.
+  const markColor = brand.markColor || accent;
   const eyebrow = (opts.eyebrow ?? "Nº01 · Ensaio").toUpperCase();
   const eyebrowRight = (opts.eyebrowRight ?? (brand.handle ? `@${brand.handle}` : "")).toUpperCase();
 
@@ -135,7 +138,7 @@ export function buildSerifLuxeCoverSvg(
   const headStartY = headLastY - (lines.length - 1) * lineH;
 
   const topRow = `<line x1="${64}" y1="86" x2="${CARD_W - 64}" y2="86" stroke="${text}" stroke-opacity="0.25" stroke-width="1"/>
-  <text x="${64}" y="66" font-family="${MONO_FONT}" font-weight="400" font-size="22" letter-spacing="2" fill="${text}" fill-opacity="0.75">${escapeXml(eyebrow)}</text>
+  <text x="${64}" y="66" font-family="${MONO_FONT}" font-weight="400" font-size="22" letter-spacing="2" fill="${markColor}" fill-opacity="0.9">${escapeXml(eyebrow)}</text>
   <text x="${CARD_W - 64}" y="66" font-family="${MONO_FONT}" font-weight="400" font-size="22" letter-spacing="2" fill="${text}" fill-opacity="0.75" text-anchor="end">${escapeXml(eyebrowRight)}</text>`;
 
   const rule = `<line x1="${cx - 46}" y1="${ruleY}" x2="${cx + 46}" y2="${ruleY}" stroke="${accent}" stroke-width="2"/>`;

@@ -117,6 +117,9 @@ export function buildBrutalismCoverSvg(
   const text = brand.colorText || "#FFFFFF";
   const pad = 64;
   const showSwipeHint = opts.showSwipeHint !== false;
+  // Rótulo do topo segue a cor do WORDMARK (043+046): rótulo e marca
+  // são a mesma camada de identidade da peça.
+  const markColor = brand.markColor || accent;
   const eyebrow = (opts.eyebrow ?? "Nº01 — ENSAIO").toUpperCase();
   const eyebrowRight = (opts.eyebrowRight ?? (brand.handle ? `@${brand.handle}` : "")).toUpperCase();
 
@@ -140,7 +143,7 @@ export function buildBrutalismCoverSvg(
   const headStartY = headLastY - (lines.length - 1) * lineH;
   const ruleY = headStartY - size * 0.85 - 30;
 
-  const topRow = `<text x="${pad}" y="98" font-family="${MONO_FONT}" font-weight="400" font-size="26" letter-spacing="1" fill="${text}" fill-opacity="0.9">${escapeXml(eyebrow)}</text>
+  const topRow = `<text x="${pad}" y="98" font-family="${MONO_FONT}" font-weight="400" font-size="26" letter-spacing="1" fill="${markColor}" fill-opacity="0.9">${escapeXml(eyebrow)}</text>
   <text x="${CARD_W - pad}" y="98" font-family="${MONO_FONT}" font-weight="400" font-size="26" letter-spacing="1" fill="${text}" fill-opacity="0.9" text-anchor="end">${escapeXml(eyebrowRight)}</text>`;
 
   const rule = `<rect x="${pad}" y="${ruleY}" width="120" height="16" fill="${accent}"/>`;

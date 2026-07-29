@@ -111,6 +111,9 @@ export function buildSwissMonoCoverSvg(
   const text = brand.colorText || "#FFFFFF";
   const pad = 64;
   const showSwipeHint = opts.showSwipeHint !== false;
+  // Rótulo do topo segue a cor do WORDMARK (043+046): rótulo e marca
+  // são a mesma camada de identidade da peça.
+  const markColor = brand.markColor || accent;
   const eyebrow = (opts.eyebrow ?? "01 / ENSAIO").toUpperCase();
   const eyebrowRight = (opts.eyebrowRight ?? (brand.handle ? `@${brand.handle}` : "")).toUpperCase();
 
@@ -131,7 +134,7 @@ export function buildSwissMonoCoverSvg(
   const headStartY = headLastY - (lines.length - 1) * lineH;
 
   const topRow = `<rect x="${pad}" y="66" width="14" height="14" fill="${accent}"/>
-  <text x="${pad + 26}" y="78" font-family="${MONO_FONT}" font-weight="400" font-size="24" letter-spacing="1.5" fill="${text}" fill-opacity="0.85">${escapeXml(eyebrow)}</text>
+  <text x="${pad + 26}" y="78" font-family="${MONO_FONT}" font-weight="400" font-size="24" letter-spacing="1.5" fill="${markColor}" fill-opacity="0.9">${escapeXml(eyebrow)}</text>
   <text x="${CARD_W - pad}" y="78" font-family="${MONO_FONT}" font-weight="400" font-size="24" letter-spacing="1.5" fill="${text}" fill-opacity="0.85" text-anchor="end">${escapeXml(eyebrowRight)}</text>
   <line x1="${pad}" y1="100" x2="${CARD_W - pad}" y2="100" stroke="${text}" stroke-opacity="0.2" stroke-width="1"/>`;
 
