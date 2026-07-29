@@ -11,13 +11,13 @@
 // blur usa cqw pelo mesmo motivo: um `blur(16px)` fixo seria proporcional
 // ao quadro de 1080px, não ao preview de ~300px.
 // ============================================================
-import { useRef } from "react";
+import { useState } from "react";
 import type { PreviewLayer, PreviewPage } from "@/lib/post-preview";
 
 /** blur(16px) no quadro de 1080px = 1.48% da largura. */
 const BLUR_CQW = (16 / 1080) * 100;
 
-function Layer({ layer }: { layer: PreviewLayer }) {
+function Layer({ layer, playing = false }: { layer: PreviewLayer; playing?: boolean }) {
   if (layer.kind === "photo") {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -79,6 +79,31 @@ function Layer({ layer }: { layer: PreviewLayer }) {
           borderRadius: `${layer.frame.radiusFrac * 100}cqw`,
         }
       : { inset: 0, width: "100%", height: "100%" };
+
+    // PARADO = imagem, não vídeo pausado. O <video> parado ainda decodifica
+    // e repinta, e no Reels (quadro inteiro, 9:16) isso aparecia como um
+    // piscar constante no card. Como a fila é tela de leitura, o estado
+    // padrão passa a ser o PÔSTER; o vídeo só é montado no hover.
+    if (!playing) {
+      return layer.poster ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={layer.poster}
+          alt=""
+          aria-hidden
+          className="absolute object-cover"
+          style={{
+            ...style,
+            ...(layer.blurredBackdrop ? { filter: "blur(2.5cqw)", transform: "scale(1.1)" } : {}),
+          }}
+        />
+      ) : (
+        // Sem pôster: um retângulo neutro no lugar do vídeo — melhor que
+        // um quadro preto piscando enquanto o arquivo carrega.
+        <div aria-hidden className="absolute bg-surface-2" style={style} />
+      );
+    }
+
     return (
       // eslint-disable-next-line jsx-a11y/media-has-caption
       <video
@@ -86,11 +111,10 @@ function Layer({ layer }: { layer: PreviewLayer }) {
         poster={layer.poster ?? undefined}
         muted
         loop
+        autoPlay
         playsInline
-        // PARADO por padrão: a fila é uma tela de leitura, e vídeo tocando
-        // sozinho em vários cards ao mesmo tempo pisca e rouba atenção.
-        // Mostra o frame de pôster e só toca enquanto o ponteiro está em
-        // cima — ao sair, volta pro início.
+        // Só existe durante o hover, então toca sozinho: quem decide
+        // reproduzir foi o ponteiro chegar no card.
         preload="metadata"
         aria-hidden
         className="absolute object-cover"
@@ -128,23 +152,10 @@ export function PreviewFrame({
   alt: string;
   className?: string;
 }) {
-  // Vídeo entra junto do fundo: o SVG do layout vem por cima e é ele que
-  // recorta a moldura (buraco transparente) ou desenha o véu de leitura.
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  /** Toca os vídeos da página enquanto o ponteiro está em cima. */
-  function playVideos() {
-    rootRef.current?.querySelectorAll("video").forEach((v) => {
-      void v.play().catch(() => {});
-    });
-  }
-
-  function stopVideos() {
-    rootRef.current?.querySelectorAll("video").forEach((v) => {
-      v.pause();
-      v.currentTime = 0;
-    });
-  }
+  // Enquanto false, as camadas de vídeo desenham só o PÔSTER — nenhum
+  // <video> existe no DOM. Ao sair, o elemento é desmontado e o card
+  // volta ao frame parado, sem estado de reprodução pra limpar.
+  const [playing, setPlaying] = useState(false);
 
   // Post anterior à migration 040: não há foto crua pra desenhar por
   // cima, só a arte que já foi composta um dia. Mostra ela como está e
@@ -175,16 +186,15 @@ export function PreviewFrame({
     <div
       role="img"
       aria-label={alt}
-      ref={rootRef}
       // O SVG do layout cobre o quadro inteiro, então o mouse nunca chega
       // no <video>: quem controla a reprodução é o container.
-      onMouseEnter={playVideos}
-      onMouseLeave={stopVideos}
+      onMouseEnter={() => setPlaying(true)}
+      onMouseLeave={() => setPlaying(false)}
       className={`relative h-full w-full overflow-hidden bg-surface-2 ${className}`}
       style={{ containerType: "inline-size" }}
     >
       {photos.map((l, i) => (
-        <Layer key={`bg-${i}`} layer={l} />
+        <Layer key={`bg-${i}`} layer={l} playing={playing} />
       ))}
       <div
         aria-hidden
