@@ -46,17 +46,31 @@ function textAnchor(anchor: TemplateAnchor): "start" | "middle" | "end" {
   return "middle";
 }
 
-/** Resolve uma cor do estilo: auto/accent/bg/text ou hex literal. */
+/**
+ * Resolve uma cor do estilo: auto/accent/bg/text ou hex literal.
+ *
+ * `isMark` marca os elementos de MARCA (wordmark, divisor, rótulo do @).
+ * Neles, "accent" passa a significar a cor do wordmark escolhida no post
+ * (migration 043) em vez do realce cru do Brand Kit — sem isso, quem tem
+ * template do Template Studio selecionado (o caso do cliente ativo, que
+ * usa template em cover_image/carousel_page/carousel_last) via a escolha
+ * de "Cor da marca na arte" não surtir efeito nenhum no carrossel,
+ * enquanto os formatos que não passam por template obedeciam.
+ */
 function resolveColor(
   color: string | undefined,
   brand: CardBrand,
-  legibility?: LegibilityResult
+  legibility?: LegibilityResult,
+  isMark = false
 ): string {
   if (!color || color === "auto") {
     if (legibility) return legibility.textColor === "dark" ? "#111111" : "#FFFFFF";
     return brand.colorText || "#FFFFFF";
   }
-  if (color === "accent") return brand.colorAccent || "#7C5CFF";
+  if (color === "accent") {
+    if (isMark && brand.markColor) return brand.markColor;
+    return brand.colorAccent || "#7C5CFF";
+  }
   if (color === "bg") return brand.colorBackground || "#0B0B12";
   if (color === "text") return brand.colorText || "#FFFFFF";
   return color; // hex
@@ -105,7 +119,7 @@ function renderTextElement(
   const lineH = Math.round(fontSize * (el.style?.lineHeight ?? 1.15));
   const lines = wrapText(text, maxChars).slice(0, 6);
   const family = el.style?.font === "heading" ? brand.fontFamily : brand.fontFamily;
-  const color = resolveColor(el.style?.color, brand, legibility);
+  const color = resolveColor(el.style?.color, brand, legibility, isMarkElement(el.type));
   const anchor = textAnchor(el.anchor);
   const weight = el.style?.weight ?? 400;
   const tracking = el.style?.tracking != null ? ` letter-spacing="${el.style.tracking * fontSize}"` : "";
@@ -128,7 +142,9 @@ function renderDivider(
   const y = Math.round((el.offset?.y ?? 0.22) * H);
   const family = brand.fontFamily;
   const rule = resolveColor(el.style?.color ?? "text", brand, legibility);
-  const accent = brand.colorAccent || "#7C5CFF";
+  // O TEXTO do divisor é o wordmark: segue a cor da marca do post (043),
+  // não o realce cru. Os filetes continuam na cor de texto.
+  const accent = brand.markColor || brand.colorAccent || "#7C5CFF";
   const halfText = (wm.length * 22) / 2 + 28;
   const ruleLen = 150;
   return `<line x1="${cx - halfText - ruleLen}" y1="${y}" x2="${cx - halfText}" y2="${y}" stroke="${rule}" stroke-opacity="0.45" stroke-width="1.5"/>
@@ -190,10 +206,20 @@ export function renderFromSpec(
     ? `<rect width="${W}" height="${H}" fill="${opts.overlay.theme === "dark" ? "#000000" : "#FFFFFF"}" fill-opacity="${opts.overlay.alpha}"/>`
     : "";
 
+  // Rótulo do topo (046) não é elemento do Template Studio — nenhuma spec
+  // tem esse tipo, e criar um exigiria mexer no editor. Como é decisão do
+  // POST (não do modelo), entra como camada fixa no topo-esquerdo, e só
+  // quando existe: sem rótulo, o template sai exatamente como antes.
+  const eyebrowText = (brand.eyebrow ?? "").trim().toUpperCase();
+  const eyebrowSvg = eyebrowText
+    ? `<text x="${Math.round(W * 0.074)}" y="${Math.round(H * 0.068)}" font-family="${brand.fontFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${resolveColor("auto", brand, legibility)}" fill-opacity="0.8">${escapeXml(eyebrowText)}</text>`
+    : "";
+
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   ${bgRect}
   <rect x="0" y="0" width="${W}" height="14" fill="${accent}"/>
   ${overlayRect}
+  ${eyebrowSvg}
   ${body}
 </svg>`;
 }
@@ -207,6 +233,11 @@ export interface TemplateCardOverride {
 }
 
 const MARK_ELEMENT_TYPES: TemplateElementType[] = ["wordmark", "divider", "handleLabel"];
+
+/** Elemento de MARCA? Decide se "accent" vira a cor do wordmark (043). */
+function isMarkElement(type: TemplateElementType): boolean {
+  return MARK_ELEMENT_TYPES.includes(type);
+}
 
 /** Clona a spec escondendo os elementos de marca (showLabel:false do override). */
 function hideMarkElements(spec: TemplateSpec): TemplateSpec {

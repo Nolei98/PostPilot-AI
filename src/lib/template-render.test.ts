@@ -140,3 +140,60 @@ describe("renderTemplateCardPng", () => {
     expect(meta.height).toBe(1920);
   });
 });
+
+// Cliente com template do Template Studio selecionado (o caso do cliente
+// ativo) via a escolha de "Cor da marca na arte" (043) não surtir efeito:
+// o template resolvia "accent" sempre pro realce cru do Brand Kit.
+describe("cor da marca no template (043)", () => {
+  const comMarca = { ...brand, wordmark: "MARCA®", markColor: "#00FF88" };
+
+  it("elemento de marca com color:accent usa a cor do wordmark", () => {
+    const spec = {
+      surface: "carousel_page" as const,
+      canvas: { w: 1080, h: 1350 },
+      elements: [
+        { id: "w", type: "wordmark" as const, anchor: "top-center" as const, offset: { x: 0.5, y: 0.2 }, bind: "brand.wordmark", style: { color: "accent" } },
+      ],
+    };
+    const svg = renderFromSpec(spec, comMarca, {});
+    expect(svg).toContain("#00FF88");
+  });
+
+  it("o divisor pinta o wordmark com a cor da marca", () => {
+    const spec = {
+      surface: "cover_image" as const,
+      canvas: { w: 1080, h: 1350 },
+      elements: [{ id: "d", type: "divider" as const, anchor: "top-center" as const, offset: { x: 0.5, y: 0.22 } }],
+    };
+    expect(renderFromSpec(spec, comMarca, {})).toContain("#00FF88");
+  });
+
+  it("elemento que NÃO é de marca continua no realce do kit", () => {
+    const spec = {
+      surface: "carousel_page" as const,
+      canvas: { w: 1080, h: 1350 },
+      elements: [
+        { id: "h", type: "headline" as const, anchor: "center" as const, offset: { x: 0.5, y: 0.5 }, bind: "content.headline", style: { color: "accent" } },
+      ],
+    };
+    const svg = renderFromSpec(spec, comMarca, { headline: "Oi" });
+    expect(svg).toContain(comMarca.colorAccent);
+    expect(svg).not.toContain("#00FF88");
+  });
+
+  it("rótulo do topo (046) aparece mesmo com template selecionado", () => {
+    const spec = {
+      surface: "cover_image" as const,
+      canvas: { w: 1080, h: 1350 },
+      elements: [{ id: "h", type: "headline" as const, anchor: "center" as const, offset: { x: 0.5, y: 0.5 }, bind: "content.headline" }],
+    };
+    const semRotulo = renderFromSpec(spec, comMarca, { headline: "Oi" });
+    const comRotulo = renderFromSpec(
+      spec,
+      { ...comMarca, eyebrow: "Edição 12" },
+      { headline: "Oi" }
+    );
+    expect(comRotulo).toContain("EDIÇÃO 12");
+    expect(semRotulo).not.toContain("EDIÇÃO 12");
+  });
+});

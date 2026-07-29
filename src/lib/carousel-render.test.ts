@@ -223,3 +223,23 @@ describe("buildCoverSvg", () => {
     expect(svg).toContain(">R<"); // "R" dentro do círculo
   });
 });
+
+// O editorial-noir (preset PADRÃO, e o de todos os clientes hoje) não
+// tinha meta-linha no topo — escolher rótulo (046) não mudava nada.
+describe("rótulo do topo no editorial-noir (046)", () => {
+  it("desenha o rótulo do post na capa", () => {
+    const { svg } = buildCoverSvg(
+      { idx: 0, role: "hook", headline: "Título", body: "" },
+      { ...brand, eyebrow: "Edição 12" },
+      false,
+      {}
+    );
+    expect(svg).toContain("EDIÇÃO 12");
+  });
+
+  it("sem rótulo, a capa sai exatamente como antes", () => {
+    const card = { idx: 0, role: "hook" as const, headline: "Título", body: "" };
+    const semRotulo = buildCoverSvg(card, brand, false, {}).svg;
+    expect(semRotulo).not.toContain("EDIÇÃO");
+  });
+});

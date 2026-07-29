@@ -304,9 +304,21 @@ export function buildCoverSvg(
       ? buildOverlayGradientSvg("overlay-noir", overlayBandY, CARD_H - overlayBandY, CARD_W, opts.overlay.theme, opts.overlay.alpha)
       : "";
 
+  // Rótulo do topo (migration 046). Os quatro presets alternativos já
+  // tinham uma meta-linha no topo; o editorial-noir (o PADRÃO, e o preset
+  // de todos os clientes hoje) não tinha nenhuma — então escolher um
+  // rótulo não mudava nada na arte, que foi o que apareceu no teste de
+  // 29/07. Só desenha quando o post TEM rótulo próprio: nulo mantém a
+  // capa exatamente como sempre foi.
+  const eyebrowText = (brand.eyebrow ?? "").trim().toUpperCase();
+  const eyebrowSvg = eyebrowText
+    ? `<text x="${pad}" y="92" font-family="${family}" font-weight="400" font-size="24" letter-spacing="2" fill="${text}" fill-opacity="0.8">${escapeXml(eyebrowText)}</text>`
+    : "";
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
   ${bgRect}
   ${overlayRect}
+  ${eyebrowSvg}
   ${headlineSvg}
   ${bodySvg}
   ${divider}

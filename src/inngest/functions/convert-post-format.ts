@@ -40,14 +40,29 @@ export const convertPostFormat = inngest.createFunction(
         .maybeSingle();
       return data;
     });
-    if (!post) return { skipped: "post não encontrado" };
-    if (post.status !== "pending_approval") return { skipped: "post não está mais na fila" };
-    if (post.format === target) return { skipped: "já está nesse formato" };
-
     /** Devolve o post pro estado normal da fila, com ou sem sucesso. */
     async function finish(patch: Record<string, unknown>) {
       await supabase.from("posts").update({ ...patch, convert_status: "idle" }).eq("id", postId);
     }
+
+    /**
+     * Desiste, mas DESTRAVA o post. Os três casos abaixo saíam com um
+     * `return` seco, deixando `convert_status='pending'` gravado pelo
+     * Server Action — e a fila trava os controles enquanto está pending.
+     * Resultado: post que "não converteu" ficava com os botões desligados
+     * pra sempre, sem erro em lugar nenhum (visto em 29/07).
+     */
+    async function skip(motivo: string) {
+      await finish({});
+      return { skipped: motivo };
+    }
+
+    if (!post) {
+      // Sem linha não há o que destravar — nem `finish` funcionaria.
+      return { skipped: "post não encontrado" };
+    }
+    if (post.status !== "pending_approval") return await skip("post não está mais na fila");
+    if (post.format === target) return await skip("já está nesse formato");
 
     try {
       if (target === "carousel") {

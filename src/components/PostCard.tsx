@@ -249,11 +249,23 @@ export function PostCard({
    * e só o cliente sabe se ele é o gancho (capa) ou a explicação (miolo). */
   const [videoDestino, setVideoDestino] = useState(false);
 
+  // Trava LOCAL do clique: `convertendo` vem do servidor e só chega no
+  // próximo refresh, então dois cliques rápidos enfileiravam dois jobs
+  // pro mesmo post (aconteceu em 29/07 — dois runs, e o segundo deixava
+  // o post preso em 'pending' até o conserto do job).
+  const [convertPedido, setConvertPedido] = useState(false);
+
   function convertFormat(target: "single" | "carousel", videoOn?: "cover" | "interior") {
+    if (convertPedido || convertendo) return;
+    setConvertPedido(true);
     setVideoDestino(false);
     startTransition(async () => {
-      await convertPostFormat(post.id, target, videoOn);
-      router.refresh();
+      try {
+        await convertPostFormat(post.id, target, videoOn);
+        router.refresh();
+      } finally {
+        setConvertPedido(false);
+      }
     });
   }
 
@@ -524,7 +536,7 @@ export function PostCard({
             <button
               type="button"
               onClick={pedirConversao}
-              disabled={convertendo}
+              disabled={convertendo || convertPedido}
               title={
                 isCarousel
                   ? "Transformar em post único"
@@ -579,7 +591,15 @@ export function PostCard({
                 alt={post.hook}
                 className="aspect-[4/5] w-full"
               />
-              {(uploading || uploadingVideo || post.video_status === "processing") && <LoadingOrb />}
+              {/* Conversão de formato (044) roda em job: sem o orbe, o
+                  card ficava parado com os botões apagados e nenhuma
+                  pista de que algo estava acontecendo — o `router.refresh`
+                  não dispara o loading.tsx da rota. */}
+              {convertendo ? (
+                <LoadingOrb label={isCarousel ? "virando post único" : "virando carrossel"} />
+              ) : (
+                (uploading || uploadingVideo || post.video_status === "processing") && <LoadingOrb />
+              )}
             </div>
           )}
 
