@@ -339,3 +339,42 @@ describe("preview de vídeo usa sempre o arquivo BRUTO", () => {
     expect(video?.url).not.toContain("composto.mp4");
   });
 });
+
+// Trocar o vídeo grava por cima do MESMO caminho no Storage (upsert), e
+// sem carimbo de versão o navegador/CDN continuava servindo o arquivo
+// antigo: pôster novo, vídeo velho embaixo (relatado em 29/07).
+describe("URL do vídeo carrega a versão do upload", () => {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://projeto.supabase.test";
+
+  it("usa o carimbo ?v= do pôster, que é regravado a cada upload", async () => {
+    const pages = await buildPostPreview(
+      {
+        ...post,
+        format: "video",
+        video_shape: "reels",
+        video_status: "ready",
+        video_poster_url: "https://exemplo.test/poster.jpg?v=1785352702365",
+      },
+      spec({ format: "video", videoShape: "reels" }),
+      []
+    );
+    const video = pages[0].layers.find((l) => l.kind === "video");
+    expect(video?.url).toContain("-video-source.mp4?v=1785352702365");
+  });
+
+  it("sem carimbo no pôster, a URL sai limpa em vez de quebrada", async () => {
+    const pages = await buildPostPreview(
+      {
+        ...post,
+        format: "video",
+        video_shape: "reels",
+        video_status: "ready",
+        video_poster_url: null,
+      },
+      spec({ format: "video", videoShape: "reels" }),
+      []
+    );
+    const video = pages[0].layers.find((l) => l.kind === "video");
+    expect(video?.url).toMatch(/-video-source\.mp4$/);
+  });
+});

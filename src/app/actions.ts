@@ -629,6 +629,40 @@ export async function createVideoUploadTicket(input: {
  * `video_status` vira 'processing' na hora; a Fila mostra isso e
  * atualiza sozinha quando o job terminar.
  */
+/**
+ * Troca só o ENQUADRAMENTO de um vídeo que já está anexado.
+ *
+ * O quadro (Reels 9:16, feed 4:5, feed borrado) é uma coluna do post e o
+ * arquivo fonte serve aos três — mas os ícones da fila são inputs de
+ * arquivo, então mudar de enquadramento exigia subir o vídeo DE NOVO.
+ * Pior: como o caminho no Storage é fixo, reenviar sobrescrevia o
+ * arquivo, e era fácil achar que o vídeo tinha "sumido" (relatado em
+ * 29/07). Com o vídeo pronto, agora é só um update.
+ */
+export async function savePostVideoShape(
+  postId: string,
+  shape: "reels" | "feed" | "feed-blur"
+) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  // O formato acompanha o quadro: 'reels' é post de Reels, os outros dois
+  // são post de vídeo no feed. Sem isso a tela de Prontos e a publicação
+  // olhariam pro formato errado.
+  const { error } = await supabase
+    .from("posts")
+    .update({ video_shape: shape, format: shape === "reels" ? "video" : "video_feed" })
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .eq("status", "pending_approval")
+    .eq("video_status", "ready"); // sem vídeo pronto não há o que reenquadrar
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+}
+
 export async function attachUploadedPostVideo(
   postId: string,
   shape: "reels" | "feed" | "feed-blur"

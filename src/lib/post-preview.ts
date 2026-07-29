@@ -329,12 +329,21 @@ const REELS_H = 1920;
  * uploadCarouselCardVideo) — não existe coluna pra ele porque o vídeo
  * COMPOSTO, esse sim gravado em video_url, só nasce na aprovação.
  */
-function sourceVideoUrl(postId: string, cardIdx?: number): string | null {
+function sourceVideoUrl(postId: string, cardIdx?: number, posterUrl?: string | null): string | null {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!base) return null;
   const name =
     cardIdx == null ? `${postId}-video-source.mp4` : `${postId}-card-${cardIdx}-video-source.mp4`;
-  return `${base}/storage/v1/object/public/post-images/${name}`;
+  // O caminho é FIXO e o upload é upsert: trocar o vídeo do post grava
+  // por cima do mesmo nome, então navegador e CDN continuavam servindo o
+  // arquivo antigo — o card mostrava o pôster novo com o vídeo velho
+  // embaixo (relatado em 29/07, depois de três trocas seguidas).
+  // O pôster é regravado a cada upload com `?v=<timestamp>`; reusar esse
+  // mesmo carimbo aqui identifica a VERSÃO do vídeo sem coluna nova.
+  const version = posterUrl?.match(/[?&]v=(\d+)/)?.[1];
+  return version
+    ? `${base}/storage/v1/object/public/post-images/${name}?v=${version}`
+    : `${base}/storage/v1/object/public/post-images/${name}`;
 }
 
 /** Moldura do render (px no quadro) → fração, que é o que o preview usa. */
@@ -376,7 +385,7 @@ function buildCardWithVideo(
   // colocava uma página dentro do buraco 16:9 da outra — foi o que
   // aconteceu com carrossel aprovado que voltou pra fila (29/07). O
   // composto continua sendo o que a tela Prontos e a publicação usam.
-  const url = sourceVideoUrl(postId, card.idx);
+  const url = sourceVideoUrl(postId, card.idx, card.video_poster_url);
   const layers: PreviewLayer[] = url
     ? [{ kind: "video", url, poster: card.video_poster_url, frame: frameToFrac(frame, canvas) }]
     : [];
@@ -392,7 +401,7 @@ function buildCardWithVideo(
 function buildVideoPage(post: PreviewPostInput, spec: RenderSpec): PreviewPage | null {
   // Bruto, pelo mesmo motivo do card com vídeo (ver buildCardWithVideo):
   // o overlay é desenhado ao vivo aqui em cima.
-  const url = sourceVideoUrl(post.id);
+  const url = sourceVideoUrl(post.id, undefined, post.video_poster_url);
   if (!url) return null;
   const shape = post.video_shape ?? (post.format === "video_feed" ? "feed" : "reels");
   const poster = post.video_poster_url ?? null;

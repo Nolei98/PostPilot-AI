@@ -23,6 +23,7 @@ import {
   attachUploadedPostVideo,
   createVideoUploadTicket,
   convertPostFormat,
+  savePostVideoShape,
   savePostBackground,
   savePostEyebrow,
   savePostMarkColor,
@@ -275,6 +276,17 @@ export function PostCard({
     else convertFormat(isCarousel ? "single" : "carousel");
   }
 
+  // Reenquadrar (sem reenviar arquivo): só troca video_shape/format.
+  const [reenquadrando, startReenquadrar] = useTransition();
+
+  function trocarEnquadramento(shape: "reels" | "feed" | "feed-blur") {
+    if (videoAtivo === shape) return;
+    startReenquadrar(async () => {
+      await savePostVideoShape(post.id, shape);
+      router.refresh();
+    });
+  }
+
   function handleVideoUpload(shape: "reels" | "feed" | "feed-blur") {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -496,17 +508,34 @@ export function PostCard({
           <div className="flex items-center gap-1.5">
             {VIDEO_SHAPES.map(({ shape, label, icon }) => {
               const ativo = videoAtivo === shape;
+              const classe = `flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors ${
+                ativo ? "bg-content text-surface" : "bg-surface-2 text-muted hover:text-content"
+              } ${videoOcupado ? "pointer-events-none opacity-50" : ""}`;
+
+              // COM vídeo pronto, o ícone só REENQUADRA: o arquivo fonte
+              // serve aos três quadros. Antes todo ícone era input de
+              // arquivo, então trocar de enquadramento pedia subir o
+              // vídeo de novo — e como o caminho no Storage é fixo, o
+              // reenvio sobrescrevia o arquivo.
+              if (videoPronto) {
+                return (
+                  <button
+                    key={shape}
+                    type="button"
+                    title={`${label} — trocar enquadramento`}
+                    aria-label={`${label} — trocar enquadramento`}
+                    aria-pressed={ativo}
+                    disabled={videoOcupado || reenquadrando}
+                    onClick={() => trocarEnquadramento(shape)}
+                    className={classe}
+                  >
+                    {icon}
+                  </button>
+                );
+              }
+
               return (
-                <label
-                  key={shape}
-                  title={label}
-                  aria-label={label}
-                  className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors ${
-                    ativo
-                      ? "bg-content text-surface"
-                      : "bg-surface-2 text-muted hover:text-content"
-                  } ${videoOcupado ? "pointer-events-none opacity-50" : ""}`}
-                >
+                <label key={shape} title={label} aria-label={label} className={classe}>
                   {icon}
                   <input
                     type="file"
@@ -520,8 +549,27 @@ export function PostCard({
             })}
             {videoAtivo && (
               <span className="ml-1 text-micro text-subtle">
-                {VIDEO_SHAPES.find((v) => v.shape === videoAtivo)?.label}
+                {reenquadrando
+                  ? "reenquadrando…"
+                  : VIDEO_SHAPES.find((v) => v.shape === videoAtivo)?.label}
               </span>
+            )}
+            {/* Com vídeo pronto os ícones passam a reenquadrar, então
+                trocar o ARQUIVO ganha entrada própria — antes era o
+                mesmo clique, e não dava pra fazer um sem o outro. */}
+            {videoPronto && !videoOcupado && (
+              <label
+                title="Trocar o arquivo de vídeo"
+                className="ml-1 cursor-pointer text-micro text-subtle underline-offset-2 transition-colors hover:text-content hover:underline"
+              >
+                trocar vídeo
+                <input
+                  type="file"
+                  accept="video/mp4,video/quicktime"
+                  className="hidden"
+                  onChange={handleVideoUpload(videoAtivo ?? "reels")}
+                />
+              </label>
             )}
             {videoOcupado && (
               <span className="ml-1 text-micro text-warning">
