@@ -153,6 +153,39 @@ export async function savePostMarkColor(
   revalidatePath("/");
 }
 
+/** Limite do rótulo do topo: a linha é desenhada em ~24px com
+ * espaçamento de 2 e divide o topo com o @handle. Passando disso ela
+ * encosta no handle em vez de ser cortada com elegância. */
+const EYEBROW_MAX = 28;
+
+/**
+ * Rótulo do TOPO da capa deste post (migration 046). Era constante do
+ * preset — a única linha de texto da arte que o cliente não podia
+ * editar, justamente a que costuma levar edição/seção ("EDIÇÃO 12").
+ *
+ * Vazio grava NULL, e não string vazia: nulo é o que faz cada layout
+ * cair no próprio default, então "apagar" precisa VOLTAR ao padrão em
+ * vez de deixar o topo em branco.
+ */
+export async function savePostEyebrow(postId: string, eyebrow: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const value = eyebrow.trim().slice(0, EYEBROW_MAX);
+
+  const { error } = await supabase
+    .from("posts")
+    .update({ eyebrow: value || null })
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .eq("status", "pending_approval");
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+}
+
 /**
  * Troca o formato do post na fila: único ⇄ carrossel (migration 044).
  *
@@ -262,6 +295,50 @@ const backToQueueRender = {
   render_token: null,
 };
 
+/**
+ * Descongela também o VÍDEO de um post que volta pra fila.
+ *
+ * Zerar só os campos de render não bastava: o vídeo COMPOSTO (página
+ * inteira, com fundo, texto e moldura já queimados) continuava em
+ * `video_url`, e a Fila o encaixava DE NOVO dentro da moldura 16:9 que o
+ * preview desenha — a página inteira aparecia espremida dentro do buraco
+ * do vídeo (bug visto ao vivo em 29/07, no carrossel com vídeo).
+ *
+ * Voltar pro bruto é seguro porque o arquivo fonte
+ * (`{postId}-video-source.mp4` / `{postId}-card-{idx}-video-source.mp4`)
+ * fica guardado no Storage justamente pra isso: a próxima aprovação
+ * recompõe do zero, agora com a spec nova.
+ *
+ * Os filtros `.not(video_url, is, null)` existem pra que post sem vídeo
+ * nenhum não receba um pôster inventado.
+ */
+async function thawRenderedVideo(
+  supabase: ReturnType<typeof createClient>,
+  postId: string
+) {
+  const publicUrl = (name: string) =>
+    `${supabase.storage.from("post-images").getPublicUrl(name).data.publicUrl}?v=${Date.now()}`;
+
+  // Post de vídeo: o pôster gravado na aprovação também é do composto,
+  // então volta pro pôster CRU que o attach-video extraiu.
+  await supabase
+    .from("posts")
+    .update({
+      video_url: null,
+      video_poster_url: publicUrl(`${postId}-video-poster-raw.jpg`),
+    })
+    .eq("id", postId)
+    .not("video_url", "is", null);
+
+  // Card de carrossel: só `video_url` é do composto — o pôster do card
+  // já é o cru (ver attach-card-video), por isso não é tocado aqui.
+  await supabase
+    .from("carousel_cards")
+    .update({ video_url: null })
+    .eq("post_id", postId)
+    .not("video_url", "is", null);
+}
+
 /** Cancela o agendamento (Sprint C) — volta pro estado pré-agendamento (fila). */
 export async function cancelSchedule(postId: string) {
   const supabase = createClient();
@@ -271,6 +348,7 @@ export async function cancelSchedule(postId: string) {
     .eq("id", postId)
     .eq("status", "scheduled");
   if (error) throw new Error(error.message);
+  await thawRenderedVideo(supabase, postId);
   revalidatePath("/");
   revalidatePath("/ready");
 }
@@ -284,6 +362,70 @@ export async function discardPost(postId: string) {
     .eq("id", postId);
   if (error) throw new Error(error.message);
   revalidatePath("/");
+}
+
+/** Teto de uma ação em lote. Não é limite do banco — é o que evita que
+ * um "selecionar tudo" numa fila de centenas dispare centenas de renders
+ * de uma vez (a aprovação enfileira um job por post). */
+const BATCH_MAX = 50;
+
+/**
+ * Descarta VÁRIOS posts de uma vez (seleção na fila). Um único UPDATE
+ * com `in`: descarte não tem efeito colateral nenhum, então não há por
+ * que pagar N viagens ao banco.
+ */
+export async function discardPosts(postIds: string[]) {
+  const ids = postIds.slice(0, BATCH_MAX);
+  if (ids.length === 0) return { discarded: 0 };
+
+  const supabase = createClient();
+  const { error, count } = await supabase
+    .from("posts")
+    .update({ status: "discarded" }, { count: "exact" })
+    .in("id", ids)
+    .eq("status", "pending_approval"); // não mexe no que já saiu da fila
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+  return { discarded: count ?? ids.length };
+}
+
+/**
+ * Aprova VÁRIOS posts de uma vez (seleção na fila).
+ *
+ * Ao contrário do descarte, aprovar tem efeito colateral por post: cada
+ * um precisa do próprio `render_token` e do próprio job de render. Por
+ * isso o status vai num UPDATE só (barato, e o `eq('status')` garante
+ * que só o que estava na fila é aprovado) e o render é pedido post a
+ * post, para os IDs que realmente mudaram de estado.
+ *
+ * Falha de um render não derruba o lote: `requestRender` já enfileira
+ * sem deixar erro escapar, e o post fica em `pending` — a tela Prontos
+ * mostra "montando a arte" e oferece "tentar de novo".
+ */
+export async function approvePosts(postIds: string[]) {
+  const ids = postIds.slice(0, BATCH_MAX);
+  if (ids.length === 0) return { approved: 0 };
+
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { data, error } = await supabase
+    .from("posts")
+    .update({ status: "approved", approved_at: new Date().toISOString() })
+    .in("id", ids)
+    .eq("status", "pending_approval")
+    .select("id");
+  if (error) throw new Error(error.message);
+
+  const aprovados = (data ?? []).map((p) => p.id as string);
+  for (const id of aprovados) await requestRender(id, user.id);
+
+  revalidatePath("/");
+  revalidatePath("/ready");
+  return { approved: aprovados.length };
 }
 
 /**
@@ -1095,6 +1237,9 @@ export async function revertApproval(
     .eq("id", postId)
     .eq("status", "approved"); // só reverte o que está aprovado
   if (error) throw new Error(error.message);
+  // Descartado também descongela: se voltar pra fila depois, o vídeo
+  // composto não pode estar lá esperando pra ser desenhado duas vezes.
+  await thawRenderedVideo(supabase, postId);
   revalidatePath("/");
   revalidatePath("/ready");
 }
@@ -1632,6 +1777,38 @@ export async function saveDefaultFormat(formData: FormData) {
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
   revalidatePath("/settings");
+}
+
+/**
+ * Liga/pausa a geração automática do cliente ativo (migration 047).
+ *
+ * Pausado, o radar continua: as fontes são varridas, as notícias entram
+ * e são pontuadas — só o disparo de generate-post/generate-carousel não
+ * acontece. É por isso que a pausa vive aqui e não no `enabled` das
+ * fontes: desligar fonte apagaria a coleta junto.
+ *
+ * O que já está na fila não é tocado — pausa vale pra criação nova.
+ */
+export async function saveAutoGenerate(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { getActiveClientId } = await import("@/lib/client-context");
+  const clientId = await getActiveClientId();
+  if (!clientId) throw new Error("Nenhum cliente ativo");
+
+  // Checkbox ausente no FormData = desmarcado.
+  const ligado = formData.get("auto_generate") === "on";
+  const { error } = await supabase
+    .from("brand_kits")
+    .update({ auto_generate: ligado })
+    .eq("client_id", clientId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+  revalidatePath("/");
 }
 
 /**

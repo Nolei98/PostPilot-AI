@@ -24,6 +24,7 @@ import {
   createVideoUploadTicket,
   convertPostFormat,
   savePostBackground,
+  savePostEyebrow,
   savePostMarkColor,
 } from "@/app/actions";
 import { Button } from "@/components/ui/Button";
@@ -32,6 +33,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { Modal } from "@/components/ui/Modal";
 import { LoadingOrb } from "@/components/ui/LoadingOrb";
 import { Input, Textarea } from "@/components/ui/Input";
+import { useQueueSelection } from "@/components/QueueSelection";
 import { CarouselPreview } from "@/components/CarouselPreview";
 import { CarouselDownload } from "@/components/CarouselDownload";
 import { CarouselEditor } from "@/components/CarouselEditor";
@@ -217,6 +219,23 @@ export function PostCard({
     });
   }
 
+  // ---- Rótulo do topo (migration 046) ----
+  // Salva no blur/Enter, não a cada tecla: é campo de texto, e um save
+  // por caractere renderizaria o preview do servidor a cada letra.
+  const [eyebrow, setEyebrow] = useState(post.eyebrow ?? "");
+
+  function saveEyebrow() {
+    const value = eyebrow.trim();
+    if (value === (post.eyebrow ?? "")) return;
+    startBgSave(async () => {
+      await savePostEyebrow(post.id, value);
+      router.refresh();
+    });
+  }
+
+  // Seleção múltipla da fila (null fora da grade — ver QueueSelection).
+  const selection = useQueueSelection();
+
   const [advanced, setAdvanced] = useState(false);
   const isVideoPost = post.format === "video" || post.format === "video_feed";
   const videoPronto = post.video_status === "ready";
@@ -389,6 +408,19 @@ export function PostCard({
             {post.news_items.title}
           </a>
           <div className="flex shrink-0 items-center gap-1.5">
+            {/* Seleção múltipla: só aparece dentro da grade da fila (fora
+                dela o contexto é null). Aprovar/descartar em lote ficam
+                na barra do topo — ver QueueSelection. */}
+            {selection && (
+              <input
+                type="checkbox"
+                checked={selection.isSelected(post.id)}
+                disabled={selection.busy}
+                onChange={() => selection.toggle(post.id)}
+                aria-label={`Selecionar post #${String(post.ref ?? 0).padStart(4, "0")}`}
+                className="h-4 w-4 cursor-pointer accent-[rgb(var(--color-primary))]"
+              />
+            )}
             <span
               className="font-mono text-micro text-subtle"
               title="Código deste post — use ele pra falar do post no suporte"
@@ -872,6 +904,27 @@ export function PostCard({
                 </label>
               )}
             </div>
+          </section>
+
+          {/* Rótulo do topo (migration 046) — era constante do preset, e
+              é onde vai edição/seção do conteúdo. Vazio volta ao padrão. */}
+          <section className="space-y-1.5">
+            <span className="text-caption text-muted">🏷 Rótulo do topo</span>
+            <Input
+              value={eyebrow}
+              maxLength={28}
+              placeholder="Nº01 · ENSAIO"
+              aria-label="Rótulo do topo da capa"
+              onChange={(e) => setEyebrow(e.target.value)}
+              onBlur={saveEyebrow}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+            />
+            <p className="text-micro text-subtle">
+              Aparece no canto superior da capa, ao lado do @. Em branco usa o
+              padrão do layout.
+            </p>
           </section>
         </div>
       </Drawer>

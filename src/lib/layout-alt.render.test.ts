@@ -75,3 +75,14 @@ describe.each(LAYOUTS)("render real do layout $name (resvg)", ({ buildCover, bui
     expectValidPng(rasterizeSvg(svg));
   });
 });
+
+// Rótulo do topo por post (migration 046) — os builders já aceitavam
+// `eyebrow`, mas nenhum caminho do app passava valor: era default fixo.
+describe("rótulo do topo (046)", () => {
+  it.each(LAYOUTS)("$name usa o rótulo do post quando existe", ({ buildCover }) => {
+    const comRotulo = buildCover(HEADLINE, brand, false, { eyebrow: "Edição 12" }).svg;
+    const padrao = buildCover(HEADLINE, brand, false, {}).svg;
+    expect(comRotulo).toContain("EDIÇÃO 12");
+    expect(comRotulo).not.toBe(padrao);
+  });
+});

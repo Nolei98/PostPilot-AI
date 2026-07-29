@@ -630,6 +630,9 @@ export async function buildCardSvgPlan(
       const opts = {
         showSwipeHint: pageKind === "cover",
         body: pageKind === "closing" ? card.body : null,
+        // Rótulo do topo (046): só passa quando o post tem o dele —
+        // `undefined` deixa cada preset usar o próprio default.
+        eyebrow: brand.eyebrow ?? undefined,
         eyebrowRight: pageKind === "closing" ? "OBRIGADO" : null,
       };
       if (!hasBg) return { svg: buildCover(card.headline ?? "", brand, false, opts).svg, blurBandTop: null };

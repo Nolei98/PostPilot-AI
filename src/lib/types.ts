@@ -38,6 +38,9 @@ export interface BrandKit {
   text_provider: "claude" | "gemini" | "pollinations";
   image_provider: "fal" | "gemini" | "pollinations" | "stock";
   default_format: "single" | "carousel"; // formato que o pipeline gera
+  /** false pausa a criação automática (migration 047) — a varredura e a
+   * triagem continuam; só o disparo da geração não acontece. */
+  auto_generate: boolean;
   niche: string | null;
   // perfil IG
   ig_handle: string;
@@ -393,6 +396,8 @@ export interface Post {
   /** Cor do wordmark (migration 043) — 'title' acompanha o título. */
   mark_mode: MarkMode;
   mark_color: string | null;
+  /** Rótulo do topo da capa (migration 046). null = padrão do preset. */
+  eyebrow: string | null;
   /** Troca de formato em andamento (migration 044) — só sinal de UI. */
   convert_status: "idle" | "pending";
   convert_error: string | null;

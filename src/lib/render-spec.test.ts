@@ -27,6 +27,7 @@ const {
   resolveBackground,
   applyBackground,
   applyMarkColor,
+  applyEyebrow,
 } = await import("@/lib/render-spec");
 
 const KIT = {
@@ -305,5 +306,29 @@ describe("applyMarkColor (cor do wordmark, migration 043)", () => {
 
   it("'custom' sem cor cai no realce em vez de sumir", () => {
     expect(applyMarkColor(brand, "custom", null).markColor).toBe(brand.colorAccent);
+  });
+});
+
+describe("applyEyebrow (rótulo do topo, migration 046)", () => {
+  const brand = cardBrandFromKit(KIT);
+
+  it("nulo/vazio NÃO grava campo — cada preset mantém o próprio padrão", () => {
+    expect(applyEyebrow(brand, null).eyebrow).toBeUndefined();
+    expect(applyEyebrow(brand, "   ").eyebrow).toBeUndefined();
+  });
+
+  it("valor do post vence, já sem espaço sobrando", () => {
+    expect(applyEyebrow(brand, "  EDIÇÃO 12 ").eyebrow).toBe("EDIÇÃO 12");
+  });
+
+  it("chega na spec do post pelo mesmo caminho do fundo e da marca", () => {
+    const resolved = resolveBackground(brand, {
+      format: "carousel",
+      bg_mode: "light",
+      eyebrow: "GUIA RÁPIDO",
+    });
+    expect(resolved.eyebrow).toBe("GUIA RÁPIDO");
+    // não atropela as outras decisões por post
+    expect(resolved.colorText).toBe("#0A0A0A");
   });
 });

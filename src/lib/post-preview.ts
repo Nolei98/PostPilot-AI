@@ -371,7 +371,12 @@ function buildCardWithVideo(
     applyBackground(spec.cardBrand, override.bgMode, override.bgColor),
     { pageKind, index: card.idx, total }
   );
-  const url = card.video_url ?? sourceVideoUrl(postId, card.idx);
+  // SEMPRE o vídeo BRUTO: o preview desenha a moldura e o texto por cima,
+  // ao vivo. Usar o composto (que já traz a página inteira queimada)
+  // colocava uma página dentro do buraco 16:9 da outra — foi o que
+  // aconteceu com carrossel aprovado que voltou pra fila (29/07). O
+  // composto continua sendo o que a tela Prontos e a publicação usam.
+  const url = sourceVideoUrl(postId, card.idx);
   const layers: PreviewLayer[] = url
     ? [{ kind: "video", url, poster: card.video_poster_url, frame: frameToFrac(frame, canvas) }]
     : [];
@@ -385,7 +390,9 @@ function buildCardWithVideo(
  *  - feed-blur: 4:5 com o próprio vídeo borrado como fundo + moldura.
  */
 function buildVideoPage(post: PreviewPostInput, spec: RenderSpec): PreviewPage | null {
-  const url = post.video_url ?? sourceVideoUrl(post.id);
+  // Bruto, pelo mesmo motivo do card com vídeo (ver buildCardWithVideo):
+  // o overlay é desenhado ao vivo aqui em cima.
+  const url = sourceVideoUrl(post.id);
   if (!url) return null;
   const shape = post.video_shape ?? (post.format === "video_feed" ? "feed" : "reels");
   const poster = post.video_poster_url ?? null;

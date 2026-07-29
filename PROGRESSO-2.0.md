@@ -5,7 +5,7 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga não recebe mais commits.
-**Última atualização:** 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B; **migration 040 ainda não aplicada no Supabase**). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Última atualização:** 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
 ### Bloqueio ativo: Pollinations.ai exige pagamento pra requests multi-mensagem
 Descoberto 2026-07-22 investigando por que a fila não recebia posts novos há dias
@@ -23,6 +23,230 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0-D. Sessão 2026-07-29 (tarde) — verificação em produção, rótulo editável, pausa do piloto e ações em lote
+
+Sessão nascida da verificação de §0-C.6: aprovar um carrossel COM vídeo
+funcionou (a arte saiu certa), e os dois defeitos que apareceram no
+caminho de volta viraram o trabalho abaixo. Migrations **046** e **047**,
+já aplicadas pelo usuário.
+
+### 0-D.1 Vídeo composto voltava pra fila e era desenhado duas vezes
+
+Post aprovado que volta pra fila (`revertApproval`/`cancelSchedule`)
+zerava `render_status`/`render_spec`/`render_token` — mas não o VÍDEO. O
+composto (`carousel_cards.video_url` / `posts.video_url`) já traz a
+página inteira queimada: fundo, texto e moldura. A Fila então encaixava
+essa página dentro da moldura 16:9 que o preview desenha ao vivo — a
+página inteira aparecia espremida dentro do buraco do vídeo.
+
+Corrigido nas duas pontas:
+- `post-preview.ts` passa a usar **sempre o arquivo BRUTO**
+  (`{postId}-video-source.mp4` / `{postId}-card-{idx}-video-source.mp4`).
+  O preview desenha o overlay ao vivo, então usar o composto era dupla
+  composição por definição, não um caso de borda. Isso também cura
+  sozinho os posts que já estavam nesse estado na fila.
+- `thawRenderedVideo` (actions.ts) descongela o vídeo junto com a arte ao
+  voltar pra fila: `video_url` a nulo e, no post de vídeo, o
+  `video_poster_url` de volta pro pôster CRU. Seguro porque o arquivo
+  fonte fica no Storage — a próxima aprovação recompõe do zero com a spec
+  nova.
+
+### 0-D.2 Rótulo do topo editável por post (migration 046)
+
+A meta-linha do topo da capa ("Nº01 · ENSAIO", "01 / ENSAIO", "Nº 01",
+conforme o preset) era CONSTANTE do layout: os builders já aceitavam
+`opts.eyebrow`, mas nenhum caminho do app passava valor. Era a única
+linha de texto da arte que o cliente não conseguia mexer — justamente
+onde vai edição/seção ("EDIÇÃO 12", "GUIA RÁPIDO").
+
+`posts.eyebrow` (NULL = padrão do preset) entra no `CardBrand` via
+`applyEyebrow`, no MESMO ponto de fundo (042) e cor da marca (043), então
+vale no preview ao vivo e no render final pelo mesmo caminho. Consumido
+pelos quatro layouts alternativos (capa do carrossel e página 1 do post
+único) e pela capa com vídeo (`cardVideoLayoutParts`, onde sobe em caixa
+alta como o do preset). Campo no painel "Ajustes avançados", salvando no
+blur/Enter — não a cada tecla, senão cada letra redesenharia o preview.
+
+### 0-D.3 Pausa da criação automática (migration 047)
+
+`brand_kits.auto_generate` (default **true**). Desligado, o `scan-news`
+continua varrendo, inserindo e triando — só não dispara
+`generate-post`/`generate-carousel` pras candidatas daquele cliente. A
+pausa vive no Brand Kit e não no `enabled` das fontes de propósito:
+desligar fonte mataria a coleta junto e perderia o radar.
+
+O contador de `candidates` da rodada continua contando as pausadas (são
+notícias que PASSARAM na triagem; o que mudou foi o disparo). Controle em
+Ajustes → "Criar posts automaticamente", e a Fila mostra um aviso quando
+está pausado — fila parada sem explicação já custou dias no bloqueio de
+provider de julho.
+
+### 0-D.4 Aprovar e descartar em lote
+
+A fila era limpa um card por vez, com animação de saída a cada um —
+inviável depois de alguns dias de varredura. `QueueSelection` (contexto
+client) envolve a grade, o `PostCard` desenha a caixinha quando está
+dentro dele, e a barra sticky do topo aparece só com algo selecionado:
+selecionar todos, aprovar N, descartar N (com segundo clique de
+confirmação) e cancelar.
+
+- `discardPosts` — um UPDATE só com `in`: descarte não tem efeito
+  colateral.
+- `approvePosts` — status num UPDATE só (com `eq('status','pending_approval')`,
+  então só aprova o que estava na fila) e `requestRender` post a post,
+  porque cada um precisa do próprio `render_token` e do próprio job.
+- Teto de **50 posts por lote**: aprovar enfileira um render por post, e
+  um "selecionar todos" numa fila de centenas dispararia tudo de uma vez.
+
+**Estado:** `tsc`, `eslint` e build de produção limpos; **347 testes
+verdes** (+11 nesta sessão: rótulo, preview sempre bruto, e os que já
+existiam).
+
+### 0-D.5 Pendências
+
+- [ ] Verificar em produção o resto de §0-C.6 (fundo custom por post e
+      por card, wordmark em `title`, conversão único⇄carrossel) — o
+      carrossel com vídeo já foi conferido nesta sessão.
+- [ ] `PUT` manual em `/api/inngest` no próximo deploy (continua valendo
+      de §0-C.6 — a 041 removeu função).
+- [ ] Se a pausa (047) ficar ligada por muito tempo, decidir o que fazer
+      com as candidatas acumuladas: hoje elas ficam marcadas e NÃO são
+      geradas retroativamente ao religar.
+
+---
+
+## 0-C. Sessão 2026-07-28/29 — o post ganha decisões próprias (migrations 042–045)
+
+O render-on-approval (§0-B) tirou a arte da geração. Isso abriu espaço
+pro passo seguinte: se nada foi renderizado ainda, o cliente pode decidir
+**por post** o que antes era decidido uma vez só, pro cliente inteiro, em
+Ajustes. Cinco decisões novas, todas valendo no preview ao vivo E no
+render final pelo MESMO caminho — nunca duas verdades sobre a mesma arte.
+
+### 0-C.1 Fundo por post e por card (migrations 042 + `layout` jsonb)
+
+`posts.bg_mode` (`brand | light | dark | custom`) + `posts.bg_color`,
+aplicados em `resolveBackground` — por isso valem de uma vez pros cinco
+presets e todos os formatos (carrossel, post único, vídeo feed, card de
+vídeo). A cor do TEXTO **não** é gravada: sai da luminância do fundo
+escolhido (`pickTheme`/`textColorForTheme`). Guardar as duas deixaria
+montar arte ilegível (texto branco em fundo branco), e o sistema já sabe
+decidir sozinho.
+
+Fundo por CARD sobrepõe o do post, dentro do jsonb `layout` do card
+(junto de `showLabel`/`textColor`/`imagePosition`) — **sem coluna nova**.
+Uma página escura no meio de um carrossel claro é decisão de ritmo, não
+de identidade. "Do post" (padrão) herda; claro, escuro e cor livre
+sobrepõem. Mesma função (`applyBackground`) nos dois lados, inclusive no
+card com vídeo.
+
+Junto veio uma correção que vale pro app inteiro: o `<select>` nativo
+abria com popup CLARO do sistema enquanto as `<option>` herdavam o texto
+quase branco da página — ilegível. Faltava `color-scheme: dark` no
+`:root` (mais regra explícita de background/cor nas `<option>` pro
+Firefox). Corrige TODOS os selects, não só o de "Posição da imagem".
+
+### 0-C.2 Cor do wordmark por post (migration 043 + `boostAccent`)
+
+O wordmark (`——— MARCA® ———` da capa e a assinatura de marca dos
+overlays de vídeo) sempre saía na cor de REALCE do Brand Kit. Em fundo
+claro, ou com realce muito saturado, ele briga com o título em vez de
+acompanhá-lo. Agora: `posts.mark_mode` (`accent | title | custom`) +
+`posts.mark_color`, entrando no `CardBrand` como `markColor`.
+
+`title` é resolvido **depois** do fundo, de propósito: se o fundo do post
+(042) virou claro, o título ficou escuro, e a marca precisa ir junto —
+resolver antes deixaria a marca na cor do título anterior.
+
+E o "Realce" passou a realçar de verdade: a cor de realce é escolhida
+contra o fundo padrão do kit, então com fundo trocado ela some (magenta
+dá 6.6:1 no escuro do kit, mas 2.97:1 sobre branco — e o wordmark tem
+26px em 1080, entre dois filetes). `boostAccent` empurra a cor até bater
+**4.5:1** contra o fundo resolvido, de 10% em 10% rumo ao branco/preto,
+mantendo o matiz — verde continua verde — e devolve intacta a cor que já
+contrasta, então marca bem escolhida não é alterada. Meta de texto
+(4.5:1), não de texto grande (3:1): a 3:1 o wordmark ainda saía apagado
+no tamanho em que é desenhado. Os 3 testes que afirmavam "`accent` não
+mexe em nada" foram reescritos — esse contrato mudou de propósito.
+
+### 0-C.3 Troca de formato na fila (migration 044)
+
+O formato vem do `default_format` do Brand Kit, escolhido ANTES de o
+cliente ver qualquer coisa. Agora ele corrige na fila:
+- **único → carrossel** gera a estrutura dos cards com a MESMA função do
+  `generate-carousel` (não uma versão pobre) e a capa herda a imagem base
+  que ele já aprovou visualmente;
+- **carrossel → único** não gasta IA nenhuma — promove a capa a imagem
+  base.
+
+Barato justamente porque nada foi renderizado ainda (040). `convert_status`
+trava os botões enquanto roda.
+
+### 0-C.4 Card da fila minimalista, vídeo em carrossel e código do post (migration 045)
+
+A fila é onde o cliente OLHA e DECIDE — mas o card tinha 8 controles
+empilhados antes da prévia (prompt, upload, 4 chips de fundo, 3 de
+wordmark, 3 botões de vídeo em texto corrido), e a plataforma vai ser
+usada por gente que não é de tecnologia. Agora a fila mostra só decisão:
+três ícones de enquadramento de vídeo (Reels 9:16, feed 4:5, feed com
+fundo borrado, com o atual marcado e nome em `title`/`aria`), troca de
+formato, e **"Ajustes avançados"** — painel com prompt, imagem manual,
+fundo e cor da marca. Em post de vídeo o painel deixa de mostrar "prompt
+de imagem" (não descreve nada do que se vê num Reels) e explica o que
+gravar.
+
+**Vídeo dentro de carrossel:** não havia motivo pra bloquear. O vídeo
+vira o vídeo de UM card, e quem escolhe onde é o cliente — na capa é
+gancho, no miolo explica um ponto. O job copia o arquivo fonte pro
+caminho do card escolhido, marca o card como pronto e LIMPA os campos de
+vídeo do POST (senão Prontos trataria o carrossel como post de vídeo).
+Card com vídeo fica sem foto de fundo: o fundo dele é a cor sólida da
+marca com a moldura 16:9 no meio.
+
+**Código curto (migration 045):** o `id` é UUID — serve pro sistema, não
+pra pessoa. Quem usa precisa dizer "o post 128 saiu errado" num print ou
+no suporte, sem colar um UUID. `posts.ref bigint` com sequência GLOBAL
+(dois clientes nunca repetem número, então o código identifica o post
+sozinho) + índice único, exibido como `#0128`. O painel avançado ganhou a
+seção "Este post" no topo: código, formato atual em português e
+contra-capa.
+
+### 0-C.5 Motor de vídeo — correções de produção
+
+Fora das migrations, quatro consertos no caminho de vídeo:
+- **vídeo grande voltou a subir** — envio direto pro Storage, sem passar
+  pela função serverless (o corpo estourava o teto da função);
+- **encode compartilhado em preset `veryfast`**, pra vídeo grande caber
+  no tempo/limite da função;
+- **vídeo aparece no lugar certo**, no preview e na arte final;
+- **preview da fila não toca sozinho** — vídeo fica parado, toca só no
+  hover;
+- `scripts/` ganhou seeds cobrindo o caso que quebrava o vídeo.
+
+### 0-C.6 Estado e pendências
+
+**Estado:** `tsc`, `eslint` e build de produção limpos; **336 testes
+verdes**. Working tree limpa em `870f45f`.
+
+- [x] **Migrations 041, 042, 043, 044 e 045 aplicadas no Supabase em
+      29/07.** O `setval` final da 045 retornou **582**, ou seja, ~581
+      posts existentes receberam `ref` e a sequência segue a partir daí.
+- [ ] **`PUT` manual em `/api/inngest`** depois do deploy da 041 — ela
+      REMOVE o `resync-layout-preset`, e sem a integração Vercel↔Inngest
+      (§0-A.6) todo deploy que adiciona/remove função exige o registro à
+      mão (`curl -X PUT https://<app>/api/inngest`).
+- [ ] **Verificar em produção com a conta real** (herdado de §0-B.2, agora
+      com mais superfície): aprovar um post de cada formato (single,
+      carrossel, Reels, vídeo feed) e conferir `render_status='ready'` +
+      arte igual ao preview. Cobrir também o que entrou nesta sessão:
+      fundo custom por post e por card, wordmark em `title`, conversão
+      único⇄carrossel, e carrossel com vídeo em card do miolo.
+- [ ] Clientes `GetKoda` (`191a7460…`) e `TesteVIVO` (`933d1644…`) seguem
+      em `pollinations` nos dois providers — continuam sob o 402. O
+      cliente ativo não está afetado (§0-B, correção de §0-A.7).
 
 ---
 
@@ -109,9 +333,9 @@ background de minutos, com spinner" pra instantâneo.
       a cada deploy que adicione/remova função enquanto não houver
       integração Vercel↔Inngest (ver §0-A.6) — o deploy da 041, que
       REMOVE o `resync-layout-preset`, precisa do mesmo PUT.
-- [ ] **Aplicar a migration 041 no Supabase** — só dropa
-      `posts.rerender_status`. Não é pré-requisito do deploy: o código já
-      não lê nem escreve a coluna.
+- [x] **Migration 041 aplicada no Supabase em 29/07** (junto de 042–045 —
+      ver §0-C.5). Só dropa `posts.rerender_status`; não era pré-requisito
+      do deploy, o código já não lia nem escrevia a coluna.
 - [ ] Verificar em produção com a conta real: aprovar um post de cada
       formato (single, carrossel, Reels, vídeo feed) e conferir
       `render_status='ready'` + arte igual ao preview.

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { FirstScanKickoff } from "@/components/FirstScanKickoff";
 import { PostCard } from "@/components/PostCard";
+import { QueueSelection } from "@/components/QueueSelection";
 import { ScanButton } from "@/components/ScanButton";
 import { AppShell } from "@/components/ui/AppShell";
 import { getShellData } from "@/lib/shell";
@@ -130,6 +131,24 @@ export default async function DashboardPage() {
         <ScanButton />
       </div>
 
+      {/* Piloto pausado (migration 047): sem este aviso, fila parada
+          parece defeito — foi exatamente o que aconteceu no bloqueio de
+          provider de julho, com dias perdidos até alguém investigar. */}
+      {config?.auto_generate === false && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-card border border-dashed border-line px-4 py-3">
+          <p className="text-caption text-muted">
+            ⏸ Criação automática pausada. As fontes continuam sendo varridas;
+            nenhum post novo é criado até você religar.
+          </p>
+          <Link
+            href="/settings"
+            className="text-caption text-subtle underline-offset-2 transition-colors hover:text-muted hover:underline"
+          >
+            Religar em Ajustes →
+          </Link>
+        </div>
+      )}
+
       {posts.length === 0 && isNewUser ? (
         /* ===== Usuário novo: dispara o 1º scan e acompanha ao vivo ===== */
         <FirstScanKickoff />
@@ -159,6 +178,7 @@ export default async function DashboardPage() {
         </div>
       ) : (
         /* ===== Fila: cards entram escalonados ===== */
+        <QueueSelection postIds={posts.map((p) => p.id)}>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
           {posts.map((post, i) => (
             <div key={post.id} style={{ animationDelay: `${i * 60}ms` }} className="animate-fade-up">
@@ -173,6 +193,7 @@ export default async function DashboardPage() {
             </div>
           ))}
         </div>
+        </QueueSelection>
       )}
     </AppShell>
   );

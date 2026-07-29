@@ -956,8 +956,12 @@ export function cardVideoLayoutParts(
     const headStart = brandY + 58 + Math.round(headSize * 0.6);
 
     const handle = cardBrand.handle ? `@${cardBrand.handle}`.toUpperCase() : "";
+    // Rótulo do topo (046): o do POST vence o default do preset. Sobe em
+    // caixa alta como o do preset, senão a capa com vídeo sairia com uma
+    // meta-linha em caixa diferente da capa estática do mesmo carrossel.
+    const eyebrowText = (cardBrand.eyebrow || identity.eyebrow).toUpperCase();
     const eyebrowSvg =
-      `<text x="${pad}" y="${eyebrowY}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${text}" fill-opacity="0.8">${escapeXmlLocal(identity.eyebrow)}</text>` +
+      `<text x="${pad}" y="${eyebrowY}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${text}" fill-opacity="0.8">${escapeXmlLocal(eyebrowText)}</text>` +
       (handle
         ? `<text x="${WIDTH - pad}" y="${eyebrowY}" font-family="${labelFamily}" font-weight="400" font-size="24" letter-spacing="2" fill="${text}" fill-opacity="0.8" text-anchor="end">${escapeXmlLocal(handle)}</text>`
         : "");

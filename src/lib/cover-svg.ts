@@ -70,7 +70,14 @@ export function buildPageOneCoverSvg(
   // dos 4 layouts alternativos (overlay presente + sem swipe hint) confunde
   // a página 1 com a CONTRA-CAPA (mesma condição, papel diferente) e
   // desenha os ícones de ação indevidamente.
-  if (alt) return alt(headline, cardBrand, transparent, { ...opts, showActionIcons: false });
+  // eyebrow: o rótulo do POST (046) vence o default do preset; ausente
+  // deixa `undefined`, que é o que faz cada layout usar o próprio.
+  if (alt)
+    return alt(headline, cardBrand, transparent, {
+      ...opts,
+      eyebrow: cardBrand.eyebrow ?? undefined,
+      showActionIcons: false,
+    });
   // align NÃO é forçado aqui de propósito — herda o default de buildCoverSvg
   // ("bottom"), pra ficar EXATAMENTE igual à capa do carrossel (post único
   // e vídeo/Reels usam este mesmo builder).

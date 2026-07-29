@@ -232,17 +232,32 @@ export const scanNews = inngest.createFunction(
       const clientIds = [...new Set(sources.map((s) => s.client_id))];
       const { data, error } = await supabase
         .from("brand_kits")
-        .select("client_id, default_format")
+        .select("client_id, default_format, auto_generate")
         .in("client_id", clientIds);
       if (error) {
         console.warn("[scan] default_format indisponível (migration 026?):", error.message);
-        return [] as { client_id: string; default_format: string | null }[];
+        return [] as { client_id: string; default_format: string | null; auto_generate: boolean | null }[];
       }
-      return (data ?? []) as { client_id: string; default_format: string | null }[];
+      return (data ?? []) as {
+        client_id: string;
+        default_format: string | null;
+        auto_generate: boolean | null;
+      }[];
     });
     const clientFormat = new Map(
       clientFormatRows.map((c) => [c.client_id, c.default_format === "carousel" ? "carousel" : "single"])
     );
+    /** Geração pausada em Ajustes (migration 047). Ausente = ligado: a
+     * coluna é nova, e cliente sem linha lida não pode virar pausado por
+     * acidente. A varredura e a triagem seguem normalmente — só o
+     * disparo da geração não acontece. */
+    const autoGenerate = new Map(
+      clientFormatRows.map((c) => [c.client_id, c.auto_generate !== false])
+    );
+    const geracaoLigada = (sourceId: string) => {
+      const clientId = sourceClient.get(sourceId);
+      return clientId ? autoGenerate.get(clientId) !== false : true;
+    };
     const nicheOf = (sourceId: string) =>
       clientNiche.get(sourceClient.get(sourceId) ?? "") ?? null;
 
@@ -316,11 +331,18 @@ export const scanNews = inngest.createFunction(
       });
 
       // 5. Cada candidata dispara a geração — single ou carrossel conforme
-      //    o default_format do cliente dono da fonte.
-      if (newCandidates.length > 0) {
+      //    o default_format do cliente dono da fonte. Cliente com a
+      //    geração PAUSADA em Ajustes (047) fica de fora: a notícia
+      //    continua marcada como candidata, só não vira post.
+      const paraGerar = newCandidates.filter((c) => geracaoLigada(c.sourceId));
+      const pausadas = newCandidates.length - paraGerar.length;
+      if (pausadas > 0) {
+        console.info(`[scan] ${pausadas} candidata(s) sem geração: piloto pausado em Ajustes`);
+      }
+      if (paraGerar.length > 0) {
         await step.sendEvent(
           `dispatch-generate-${idx}`,
-          newCandidates.map((c) => {
+          paraGerar.map((c) => {
             const fmt = clientFormat.get(sourceClient.get(c.sourceId) ?? "");
             const name =
               fmt === "carousel"
@@ -335,8 +357,10 @@ export const scanNews = inngest.createFunction(
             };
           })
         );
-        candidates += newCandidates.length;
       }
+      // Conta a candidata mesmo pausada: o número relatado é de notícias
+      // que PASSARAM na triagem, não de jobs disparados.
+      candidates += newCandidates.length;
     }
     }
 

@@ -166,6 +166,10 @@ export interface CardBrand {
   /** Cor do WORDMARK (migration 043). Ausente = cor de realce, que era o
    * comportamento antes de existir escolha. */
   markColor?: string | null;
+  /** Rótulo do TOPO da capa (migration 046). Ausente/nulo = o padrão do
+   * preset ("Nº01 · ENSAIO" e companhia), que era o único valor possível
+   * antes de existir escolha. */
+  eyebrow?: string | null;
   layoutPreset?: LayoutPreset; // preset de layout (Fase 3); default "editorial-noir"
   singlePostStyle?: SinglePostStyle; // variação da página 1 do post único; default "cover"
 }

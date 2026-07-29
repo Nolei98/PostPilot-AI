@@ -286,3 +286,56 @@ describe("buildPostPreview — carrossel", () => {
     expect(await buildPostPreview({ ...post, format: "carousel" }, spec(), [])).toEqual([]);
   });
 });
+
+// Post aprovado que volta pra fila: o vídeo COMPOSTO (página inteira já
+// queimada) não pode virar a fonte do preview, senão ele é encaixado de
+// novo dentro da moldura 16:9 que o preview desenha — a página aparecia
+// espremida dentro do buraco do vídeo (visto ao vivo em 29/07).
+describe("preview de vídeo usa sempre o arquivo BRUTO", () => {
+  // O caminho do bruto é derivado da URL pública do Storage (não existe
+  // coluna pra ele) — sem a env não há camada de vídeo pra conferir.
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://projeto.supabase.test";
+
+  function cardComVideo(): EmbeddedCarouselCard {
+    return {
+      id: "c1",
+      idx: 1,
+      role: "value",
+      headline: "Card com vídeo",
+      body: "corpo",
+      image_url: null,
+      bg_url: null,
+      bg_luminance: null,
+      layout: null,
+      video_url: "https://exemplo.test/composto-card.mp4",
+      video_poster_url: "https://exemplo.test/poster.jpg",
+      video_status: "ready",
+      video_error: null,
+    };
+  }
+
+  it("card do carrossel ignora o composto e aponta pro -video-source.mp4", async () => {
+    const cards = [cardComVideo()];
+    const pages = await buildPostPreview({ ...post, format: "carousel" }, spec(), cards);
+    const video = pages[0].layers.find((l) => l.kind === "video");
+    expect(video?.url).toContain("-card-1-video-source.mp4");
+    expect(video?.url).not.toContain("composto-card.mp4");
+  });
+
+  it("post de vídeo idem", async () => {
+    const pages = await buildPostPreview(
+      {
+        ...post,
+        format: "video",
+        video_shape: "reels",
+        video_status: "ready",
+        video_url: "https://exemplo.test/composto.mp4",
+      },
+      spec({ format: "video", videoShape: "reels" }),
+      []
+    );
+    const video = pages[0].layers.find((l) => l.kind === "video");
+    expect(video?.url).toContain("-video-source.mp4");
+    expect(video?.url).not.toContain("composto.mp4");
+  });
+});

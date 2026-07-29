@@ -111,11 +111,24 @@ const SYSTEM_BACKGROUNDS = { light: "#FFFFFF", dark: "#0B0B12" } as const;
  * luminância vem da própria cor, não de uma medição.
  */
 export function resolveBackground(brand: CardBrand, post: RenderSpecPostInput): CardBrand {
-  return applyMarkColor(
-    applyBackground(brand, post.bg_mode, post.bg_color),
-    post.mark_mode,
-    post.mark_color
+  return applyEyebrow(
+    applyMarkColor(
+      applyBackground(brand, post.bg_mode, post.bg_color),
+      post.mark_mode,
+      post.mark_color
+    ),
+    post.eyebrow
   );
+}
+
+/**
+ * Rótulo do topo da capa (046). Só entra na marca quando o post tem um
+ * valor próprio: nulo (ou vazio) deixa o campo ausente, e cada layout cai
+ * no default do seu preset — que é o que o app sempre desenhou.
+ */
+export function applyEyebrow(brand: CardBrand, eyebrow: string | null | undefined): CardBrand {
+  const value = typeof eyebrow === "string" ? eyebrow.trim() : "";
+  return value ? { ...brand, eyebrow: value } : brand;
 }
 
 /**
@@ -168,6 +181,8 @@ export interface RenderSpecPostInput {
   bg_color?: string | null;
   mark_mode?: MarkMode | null;
   mark_color?: string | null;
+  /** Rótulo do topo da capa (migration 046); nulo = padrão do preset. */
+  eyebrow?: string | null;
   template_applied?: boolean | null;
   video_shape?: VideoShape | null;
   tpl_keyword?: string | null;

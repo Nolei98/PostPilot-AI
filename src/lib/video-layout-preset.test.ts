@@ -222,3 +222,28 @@ describe("card com vídeo: capa x interior", () => {
     }
   });
 });
+
+// Rótulo do topo por post (migration 046): era constante do preset, a
+// única linha de texto da arte que o cliente não conseguia trocar.
+describe("rótulo do topo por post (046)", () => {
+  const card = { headline: "2026: MCPs que aguentam o tranco!", body: "Chegou a hora de separar o que funciona." };
+
+  it("o rótulo do post substitui o padrão do preset na capa com vídeo", () => {
+    const capa = cardVideoLayoutParts(
+      { ...card },
+      { ...brandWith("serif-luxe"), eyebrow: "Edição 12" },
+      { pageKind: "cover", index: 0, total: 10 }
+    );
+    expect(capa.headlineSvg).toContain("EDIÇÃO 12"); // sobe em caixa alta, como o do preset
+    expect(capa.headlineSvg).not.toContain("ENSAIO");
+  });
+
+  it("sem rótulo próprio, o preset segue mandando", () => {
+    const capa = cardVideoLayoutParts(card, brandWith("serif-luxe"), {
+      pageKind: "cover",
+      index: 0,
+      total: 10,
+    });
+    expect(capa.headlineSvg).toContain("ENSAIO");
+  });
+});

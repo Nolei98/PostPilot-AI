@@ -9,6 +9,7 @@ import {
   addSource,
   disconnectInstagram,
   saveBrandTemplate,
+  saveAutoGenerate,
   saveDefaultFormat,
   saveIgProfile,
   saveLayoutPreset,
@@ -545,6 +546,36 @@ export default async function SettingsPage({
       <section className="mb-8">
         <h2 className="mb-3 text-title text-muted">Geração &amp; notificações</h2>
         <div className="space-y-4">
+          {/* Pausa da criação automática (migration 047). Fica ANTES do
+              formato: com o piloto pausado, o resto desta seção só vale
+              pra quando ele voltar. */}
+          <Card className="p-4">
+            <form action={saveAutoGenerate} className="space-y-3">
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  name="auto_generate"
+                  defaultChecked={brandKit?.auto_generate !== false}
+                  className="mt-0.5 h-4 w-4 accent-[rgb(var(--color-primary))]"
+                />
+                <span className="space-y-1">
+                  <span className="block text-caption text-muted">
+                    Criar posts automaticamente
+                  </span>
+                  <span className="block text-micro text-subtle">
+                    Desmarcado, o piloto PARA de criar posts novos. As fontes
+                    continuam sendo varridas e as notícias pontuadas, então nada
+                    do radar se perde — e a fila atual continua intacta,
+                    aprovável normalmente.
+                  </span>
+                </span>
+              </label>
+              <SubmitButton savingLabel="Salvando...">
+                Salvar geração automática
+              </SubmitButton>
+            </form>
+          </Card>
+
           <Card className="p-4">
             <form action={saveDefaultFormat} className="space-y-3">
               <div className="space-y-1.5">
