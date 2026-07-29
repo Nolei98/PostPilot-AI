@@ -46,6 +46,10 @@ export function QueueSelection({
   const toast = useToast();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
+  // QUAL ação está rodando. Sem isso, os dois botões liam o mesmo
+  // `pending` e o de aprovar entrava em "Aprovando…" durante um DESCARTE
+  // (visto em 29/07) — o rótulo dizia o oposto do que estava acontecendo.
+  const [rodando, setRodando] = useState<"approve" | "discard" | null>(null);
   // Descarte em lote pede um segundo clique: é a única ação daqui que
   // tira conteúdo da frente do cliente sem ele ter olhado post a post.
   const [confirmarDescarte, setConfirmarDescarte] = useState(false);
@@ -65,7 +69,8 @@ export function QueueSelection({
     setConfirmarDescarte(false);
   }
 
-  function run(action: () => Promise<{ ok: string } | void>) {
+  function run(qual: "approve" | "discard", action: () => Promise<{ ok: string } | void>) {
+    setRodando(qual);
     startTransition(async () => {
       try {
         const result = await action();
@@ -74,6 +79,8 @@ export function QueueSelection({
         router.refresh();
       } catch (err) {
         toast(err instanceof Error ? err.message : "Não foi possível concluir.");
+      } finally {
+        setRodando(null);
       }
     });
   }
@@ -110,14 +117,14 @@ export function QueueSelection({
               type="button"
               disabled={pending}
               onClick={() =>
-                run(async () => {
+                run("approve", async () => {
                   const { approved } = await approvePosts(ids);
                   return { ok: `${approved} ${approved === 1 ? "post aprovado" : "posts aprovados"} — montando a arte.` };
                 })
               }
               className="rounded-full bg-content px-3 py-1.5 text-micro text-surface transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {pending ? "Aprovando…" : `✓ Aprovar ${total}`}
+              {rodando === "approve" ? "Aprovando…" : `✓ Aprovar ${total}`}
             </button>
             <button
               type="button"
@@ -127,7 +134,7 @@ export function QueueSelection({
                   setConfirmarDescarte(true);
                   return;
                 }
-                run(async () => {
+                run("discard", async () => {
                   const { discarded } = await discardPosts(ids);
                   return { ok: `${discarded} ${discarded === 1 ? "post descartado" : "posts descartados"}.` };
                 });
@@ -138,7 +145,11 @@ export function QueueSelection({
                   : "bg-surface text-muted hover:text-content"
               }`}
             >
-              {confirmarDescarte ? `Confirmar descarte de ${total}?` : `✕ Descartar ${total}`}
+              {rodando === "discard"
+                ? "Descartando…"
+                : confirmarDescarte
+                  ? `Confirmar descarte de ${total}?`
+                  : `✕ Descartar ${total}`}
             </button>
             <button
               type="button"

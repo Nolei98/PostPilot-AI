@@ -34,7 +34,7 @@ export const convertPostFormat = inngest.createFunction(
       const { data } = await supabase
         .from("posts")
         .select(
-          "id, client_id, news_item_id, format, hook, caption, hashtags, base_image_url, status, video_status, video_poster_url"
+          "id, client_id, news_item_id, format, hook, image_prompt, caption, hashtags, base_image_url, status, video_status, video_poster_url"
         )
         .eq("id", postId)
         .maybeSingle();
@@ -237,10 +237,47 @@ export const convertPostFormat = inngest.createFunction(
 
       const base = await step.run("promote-cover-to-base", async () => {
         const url = post.base_image_url ?? cover?.bg_url ?? null;
-        if (!url) return { baseUrl: null as string | null, grid: null as unknown };
-        const r = await fetch(url);
-        if (!r.ok) throw new Error(`imagem da capa não pôde ser baixada (HTTP ${r.status})`);
-        const buf = Buffer.from(await r.arrayBuffer());
+        let buf: Buffer;
+
+        if (url) {
+          const r = await fetch(url);
+          if (!r.ok) throw new Error(`imagem da capa não pôde ser baixada (HTTP ${r.status})`);
+          buf = Buffer.from(await r.arrayBuffer());
+        } else {
+          // Capa SEM foto (carrossel de texto sobre o fundo da marca):
+          // promover "nada" deixava o post único sem imagem nenhuma, e a
+          // conversão parecia não ter acontecido (relatado em 29/07).
+          // Busca uma base pela MESMA regra da geração — imagem da
+          // matéria, senão foto de banco, senão IA — em vez de inventar
+          // um caminho novo. Só roda neste caso, então a conversão comum
+          // continua sem custo de API.
+          const { data: news } = await supabase
+            .from("news_items")
+            .select("image_url")
+            .eq("id", post.news_item_id)
+            .maybeSingle();
+          const { data: kit } = await supabase
+            .from("brand_kits")
+            .select("image_provider")
+            .eq("client_id", post.client_id)
+            .maybeSingle();
+
+          const { resolveBaseImage } = await import("@/lib/image");
+          const resolved = await resolveBaseImage({
+            imagePrompt: post.image_prompt || post.hook || "",
+            sourceImageUrl: news?.image_url ?? null,
+            imageProvider: (kit?.image_provider as "fal" | "gemini" | "pollinations" | "stock") ?? "stock",
+          });
+          buf = resolved.buffer;
+          // Crédito da foto de banco: Unsplash EXIGE atribuição visível, e
+          // o card já sabe mostrar quando o campo está preenchido.
+          if (resolved.stock) {
+            await supabase
+              .from("posts")
+              .update({ stock_photo_id: resolved.stock.id, stock_photo_credit: resolved.stock.credit })
+              .eq("id", postId);
+          }
+        }
 
         const { buildLuminanceGrid } = await import("@/lib/contrast");
         const sharp = (await import("sharp")).default;
