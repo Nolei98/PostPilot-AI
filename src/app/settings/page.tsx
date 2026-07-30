@@ -70,6 +70,13 @@ export default async function SettingsPage({
     .eq("client_id", shell.activeClientId ?? "")
     .order("created_at");
 
+  // Teto de fontes do plano, por CLIENTE (o custo de varredura é por
+  // fonte de cada cliente). `quota.plan` já foi resolvido acima.
+  const planoAtual = quota.plan;
+  const limiteFontes = PLANS[planoAtual].maxSources;
+  const fontesNoLimite =
+    Number.isFinite(limiteFontes) && (sources?.length ?? 0) >= limiteFontes;
+
   const { data: notif } = await supabase
     .from("notification_configs")
     .select("*")
@@ -821,7 +828,27 @@ export default async function SettingsPage({
           ))}
         </div>
 
-        {/* Adicionar fonte (form nativo + server action) */}
+        {/* Adicionar fonte (form nativo + server action).
+            O teto do plano (auditoria §2.1) é aplicado na action, que é a
+            guarda de verdade — mas descobrir o limite por mensagem de erro
+            depois de preencher o formulário é péssimo. Quando estoura, o
+            formulário dá lugar ao aviso. */}
+        {fontesNoLimite ? (
+          <Card className="border-dashed p-4">
+            <p className="text-body font-medium">Limite de fontes atingido</p>
+            <p className="mt-1 text-caption text-muted">
+              O plano {PLANS[planoAtual].label} permite {limiteFontes}{" "}
+              {limiteFontes === 1 ? "fonte" : "fontes"} por cliente. Remova uma
+              fonte acima ou mude de plano para monitorar mais.
+            </p>
+            <Link
+              href="/pricing"
+              className="mt-3 inline-block text-caption text-subtle underline-offset-2 transition-colors hover:text-muted hover:underline"
+            >
+              Ver planos →
+            </Link>
+          </Card>
+        ) : (
         <Card className="p-4">
           <form action={addSource} className="space-y-3">
             <p className="text-body font-medium">Adicionar fonte</p>
@@ -857,6 +884,7 @@ export default async function SettingsPage({
             </SubmitButton>
           </form>
         </Card>
+        )}
       </section>
     </AppShell>
   );

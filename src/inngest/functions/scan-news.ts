@@ -10,6 +10,7 @@ import { inngest } from "@/inngest/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { triageNews, type TriageInput } from "@/lib/ai/triage";
 import { checkImageLicenseHint } from "@/lib/image-license";
+import { assertPublicHost } from "@/lib/feed-url";
 import type { SourceConfig } from "@/lib/types";
 
 // media:content não é um campo padrão do rss-parser — precisa
@@ -139,6 +140,17 @@ export const scanNews = inngest.createFunction(
           timeout: 15000,
           customFields: { item: ["media:content"] },
         });
+        // Segunda camada da checagem de SSRF (a primeira é no cadastro,
+        // em addSource). Precisa existir aqui porque toda fonte gravada
+        // antes de 30/07 entrou sem validação nenhuma, e porque o DNS de
+        // um domínio pode passar a apontar pra rede interna depois do
+        // cadastro. Ver src/lib/feed-url.ts.
+        const seguro = await assertPublicHost(source.feed_url);
+        if (!seguro.ok) {
+          console.error(`[scan] fonte recusada (${seguro.error}): ${source.feed_url}`);
+          return 0;
+        }
+
         let feed;
         try {
           feed = await parser.parseURL(source.feed_url);

@@ -32,3 +32,27 @@ describe("PLANS", () => {
     expect(Object.keys(STRIPE_PRICES).sort()).toEqual(["criador", "pro"]);
   });
 });
+
+// Limites que passaram a ser APLICADOS em 30/07 (auditoria §2.1–2.2).
+// Antes maxSources existia só aqui e no teste: nenhum código lia o valor,
+// então o plano grátis dizia 2 e aceitava 200.
+describe("tetos de custo por plano", () => {
+  it("o grátis tem UM cliente — senão o teto de fontes não segura nada", () => {
+    expect(PLANS.free.maxClients).toBe(1);
+    expect(PLANS.free.maxSources).toBe(2);
+  });
+
+  it("os pagos sobem o teto, e o Pro não tem", () => {
+    expect(PLANS.criador.maxClients).toBe(3);
+    expect(PLANS.criador.maxSources).toBe(5);
+    expect(PLANS.pro.maxClients).toBe(Infinity);
+    expect(PLANS.pro.maxSources).toBe(Infinity);
+  });
+
+  it("teto de cliente nunca é menor que 1 (senão ninguém usa o produto)", () => {
+    for (const plano of Object.values(PLANS)) {
+      expect(plano.maxClients).toBeGreaterThanOrEqual(1);
+      expect(plano.maxSources).toBeGreaterThanOrEqual(1);
+    }
+  });
+});

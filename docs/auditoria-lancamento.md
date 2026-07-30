@@ -79,7 +79,7 @@ isola fila e fontes.
 
 Ordenado por gravidade para um lançamento público.
 
-### 🔴 2.1 O limite de fontes do plano nunca é aplicado
+### ✅ 2.1 O limite de fontes do plano nunca é aplicado — CORRIGIDO 30/07
 
 `PLANS.free.maxSources = 2` existe em `src/lib/plans.ts` e é afirmado no
 teste — mas **nenhum código lê esse valor**. `addSource`
@@ -87,7 +87,7 @@ teste — mas **nenhum código lê esse valor**. `addSource`
 
 Um usuário do plano grátis pode cadastrar 200 fontes.
 
-### 🔴 2.2 Não há limite de clientes (tenants) por usuário
+### ✅ 2.2 Não há limite de clientes (tenants) por usuário — CORRIGIDO 30/07
 
 `createClientTenant` insere em `clients` sem checar plano nem contagem.
 Combinado com 2.1: N clientes × N fontes, tudo no plano grátis.
@@ -105,8 +105,16 @@ zero (§0-F.5 do PROGRESSO) assume.
 
 > Os três acima são o mesmo buraco econômico visto de três ângulos. É o
 > que eu trataria antes de qualquer divulgação.
+>
+> **Correção aplicada em 30/07 (commit da mesma sessão):** `addSource`
+> passou a contar as fontes do cliente contra `PLANS[plano].maxSources`, e
+> `createClientTenant` a contar os clientes do dono contra o novo
+> `maxClients` (free 1, criador 3, pro sem teto). O teto de fontes também
+> aparece na UI de Ajustes antes de a pessoa preencher o formulário. 2.3
+> (custo de triagem) segue ABERTO, mas deixou de ser ilimitado: agora é
+> 2 fontes × 1 cliente no plano grátis.
 
-### 🟠 2.4 Cota estourada é silenciosa na fila
+### ✅ 2.4 Cota estourada é silenciosa na fila — CORRIGIDO 30/07
 
 Quando `quota.remaining <= 0`, `generate-post` para e grava o motivo no
 log do job. A tela `/fila` **não mostra nada** — não há menção a cota,
@@ -117,7 +125,7 @@ para de encher. É exatamente o modo de falha que custou dias em julho no
 bloqueio da Pollinations, e que motivou o aviso de piloto pausado (047) —
 só que agora embutido no plano grátis por desenho.
 
-### 🟠 2.5 `feed_url` entra sem validação (SSRF)
+### ✅ 2.5 `feed_url` entra sem validação (SSRF) — CORRIGIDO 30/07
 
 `addSource` grava a URL crua e `scan-news` faz
 `parser.parseURL(source.feed_url)` no servidor. Não há allowlist de

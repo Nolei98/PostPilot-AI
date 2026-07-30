@@ -21,6 +21,9 @@ import type {
 } from "@/lib/types";
 import type { CardBrand } from "@/lib/carousel-render";
 import { resolvePostFontFamily } from "@/lib/font-data";
+import { PLANS } from "@/lib/plans";
+import { getUserPlan } from "@/lib/subscription";
+import { assertPublicHost } from "@/lib/feed-url";
 
 /**
  * A Fila mora em `/fila`. `/` é a landing ESTÁTICA (src/app/route.ts, um
@@ -944,11 +947,38 @@ export async function addSource(formData: FormData) {
   const clientId = await getActiveClientId();
   if (!clientId) throw new Error("Nenhum cliente ativo");
 
+  const feedUrl = String(formData.get("feed_url") ?? "").trim();
+
+  // SSRF: o scan-news busca esta URL no SERVIDOR. Sem isto, "fonte RSS"
+  // vira requisição pra qualquer endereço que a pessoa digitar, incluindo
+  // rede interna e endpoint de metadados de nuvem. A checagem de DNS
+  // (assertPublicHost) pega o domínio público que aponta pra 127.0.0.1 —
+  // o que a inspeção do texto sozinha nunca pegaria.
+  const urlOk = await assertPublicHost(feedUrl);
+  if (!urlOk.ok) throw new Error(urlOk.error ?? "Endereço de feed inválido.");
+
+  // Teto de fontes do plano. Existia em plans.ts desde sempre e NUNCA era
+  // lido — free dizia 2 e aceitava 200 (auditoria §2.1). O teto é por
+  // CLIENTE porque o custo de varredura é por fonte de cada cliente.
+  const plano = await getUserPlan(user.id);
+  const limite = PLANS[plano].maxSources;
+  if (Number.isFinite(limite)) {
+    const { count } = await supabase
+      .from("source_configs")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", clientId);
+    if ((count ?? 0) >= limite) {
+      throw new Error(
+        `Seu plano (${PLANS[plano].label}) permite ${limite} ${limite === 1 ? "fonte" : "fontes"} por cliente. Remova uma fonte ou mude de plano.`
+      );
+    }
+  }
+
   const { error } = await supabase.from("source_configs").insert({
     user_id: user.id,
     client_id: clientId,
     name: String(formData.get("name") ?? "").trim(),
-    feed_url: String(formData.get("feed_url") ?? "").trim(),
+    feed_url: feedUrl,
     threshold: Number(formData.get("threshold") ?? 70),
   });
   if (error) throw new Error(error.message);
@@ -2104,6 +2134,24 @@ export async function createClientTenant(formData: FormData) {
   if (!user) throw new Error("Não autenticado");
 
   const name = String(formData.get("name") ?? "").trim() || "Nova Marca";
+
+  // Teto de clientes do plano (auditoria §2.2). Sem ele, o teto de FONTES
+  // não segura nada: bastava criar uma marca nova pra ganhar mais fontes,
+  // e cada marca é varrida a cada 3h com triagem paga por notícia.
+  const plano = await getUserPlan(user.id);
+  const limite = PLANS[plano].maxClients;
+  if (Number.isFinite(limite)) {
+    const { count } = await supabase
+      .from("clients")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_user_id", user.id);
+    if ((count ?? 0) >= limite) {
+      throw new Error(
+        `Seu plano (${PLANS[plano].label}) permite ${limite} ${limite === 1 ? "cliente" : "clientes"}. Mude de plano para adicionar outra marca.`
+      );
+    }
+  }
+
   const { data: client, error } = await supabase
     .from("clients")
     .insert({ owner_user_id: user.id, name })

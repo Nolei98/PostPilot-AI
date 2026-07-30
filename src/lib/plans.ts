@@ -9,8 +9,17 @@ export type PlanId = "free" | "criador" | "pro";
 export interface PlanLimits {
   /** posts gerados por mês (ciclo = mês calendário) */
   postsPerMonth: number;
-  /** fontes RSS ativas */
+  /** fontes RSS ativas POR CLIENTE (o custo de varredura é por fonte) */
   maxSources: number;
+  /**
+   * Clientes (marcas) que o dono pode ter.
+   *
+   * Existe porque `maxSources` sozinho não segura nada: sem teto de
+   * cliente, criar N marcas multiplica as fontes e a triagem — e a
+   * triagem gasta IA por notícia a cada 3h, ANTES do teto de posts, que
+   * só vale na geração. Ver docs/auditoria-lancamento.md §2.1–2.3.
+   */
+  maxClients: number;
   /** contra-capa sem marca "feito com PostPilot" */
   customClosingPage: boolean;
   /** re-render automático da fila ao salvar Ajustes */
@@ -25,6 +34,7 @@ export const PLANS: Record<PlanId, PlanLimits & { label: string; priceBRL: numbe
     priceBRL: 0,
     postsPerMonth: 5,
     maxSources: 2,
+    maxClients: 1,
     customClosingPage: false,
     autoSync: false,
     multiLanguage: false,
@@ -34,6 +44,7 @@ export const PLANS: Record<PlanId, PlanLimits & { label: string; priceBRL: numbe
     priceBRL: 79,
     postsPerMonth: 30,
     maxSources: 5,
+    maxClients: 3,
     customClosingPage: true,
     autoSync: true,
     multiLanguage: true,
@@ -43,6 +54,7 @@ export const PLANS: Record<PlanId, PlanLimits & { label: string; priceBRL: numbe
     priceBRL: 149,
     postsPerMonth: 90,
     maxSources: Infinity,
+    maxClients: Infinity,
     customClosingPage: true,
     autoSync: true,
     multiLanguage: true,

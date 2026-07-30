@@ -17,6 +17,22 @@ export const E2E_PASSWORD = "e2e-Test-123456";
 
 const IMG = (n: number) => `https://picsum.photos/seed/pp-e2e-${n}/300/375`;
 
+/**
+ * Coloca o usuário de teste num plano PAGO.
+ *
+ * Desde 30/07 o plano grátis tem teto de 1 cliente (auditoria §2.2), e o
+ * spec de multi-tenant precisa criar um SEGUNDO cliente pra provar que a
+ * fila e as fontes ficam isoladas. Sem isto o teste passaria a medir o
+ * gating de plano em vez do isolamento, que é o que ele existe pra
+ * garantir. O teto em si tem teste próprio em src/lib/plans.test.ts.
+ */
+async function seedPlanoPago(admin: SupabaseClient, userId: string): Promise<void> {
+  const { error } = await admin
+    .from("subscriptions")
+    .upsert({ user_id: userId, plan: "pro", status: "active" }, { onConflict: "user_id" });
+  if (error) throw new Error(`e2e: falha ao dar plano pago ao usuário: ${error.message}`);
+}
+
 /** Cria um post format='carousel' com 3 cards no cliente do usuário. */
 async function seedCarousel(admin: SupabaseClient, userId: string): Promise<void> {
   const { data: client } = await admin
@@ -93,6 +109,7 @@ export default async function globalSetup() {
   // Semeia 1 post carrossel (3 cards) no cliente do signup, para o e2e da
   // UI de carrossel. Usa service role (ignora RLS). URLs de imagem são
   // placeholders — o teste checa a estrutura da galeria, não o pixel.
+  await seedPlanoPago(admin, userId);
   await seedCarousel(admin, userId);
 
   // Login pela UI real → cookies de sessão válidos no storageState.

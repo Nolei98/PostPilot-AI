@@ -11,6 +11,8 @@ import { QueueSelection } from "@/components/QueueSelection";
 import { ScanButton } from "@/components/ScanButton";
 import { AppShell } from "@/components/ui/AppShell";
 import { getShellData } from "@/lib/shell";
+import { getMonthlyQuota } from "@/lib/subscription";
+import { PLANS } from "@/lib/plans";
 import { resolveRenderSpec, withPost } from "@/lib/render-spec";
 import { buildPostPreview, type PreviewPage } from "@/lib/post-preview";
 import type { IgProfile, PostWithNews, VisualIdentity } from "@/lib/types";
@@ -38,6 +40,17 @@ export default async function DashboardPage() {
     .select("id", { count: "exact", head: true })
     .eq("client_id", clientId ?? "");
   const isNewUser = (totalPosts ?? 0) === 0;
+
+  // Cota do plano (auditoria §2.4). Sem este aviso, quem estoura o teto
+  // do mês vê a fila simplesmente parar de encher: o generate-post grava
+  // o motivo no log do job e mais nada. É o mesmo modo de falha que custou
+  // dias no bloqueio de provider de julho, e no plano grátis (5 posts) ele
+  // acontece por DESENHO todo mês.
+  const {
+    data: { user: quotaUser },
+  } = await supabase.auth.getUser();
+  const quota = quotaUser ? await getMonthlyQuota(quotaUser.id) : null;
+  const quotaEstourada = !!quota && !quota.unlimited && quota.remaining <= 0;
 
   // Perfil do IG exibido no header dos previews — brand_kit do cliente ativo
   const { data: config } = await supabase
@@ -145,6 +158,26 @@ export default async function DashboardPage() {
             className="text-caption text-subtle underline-offset-2 transition-colors hover:text-muted hover:underline"
           >
             Religar em Ajustes →
+          </Link>
+        </div>
+      )}
+
+      {/* Cota do mês estourada: mesma faixa do piloto pausado, pelo mesmo
+          motivo — fila que para sem explicação parece defeito. A diferença
+          é que aqui a saída é mudar de plano, não religar um botão. */}
+      {quotaEstourada && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-card border border-dashed border-warning/50 bg-warning/5 px-4 py-3">
+          <p className="text-caption text-muted">
+            🚦 Você usou os {quota!.limit} posts do plano{" "}
+            {PLANS[quota!.plan].label} este mês. As fontes continuam sendo
+            varridas e as notícias ficam guardadas; nenhum post novo é criado
+            até virar o mês.
+          </p>
+          <Link
+            href="/pricing"
+            className="text-caption text-subtle underline-offset-2 transition-colors hover:text-muted hover:underline"
+          >
+            Ver planos →
           </Link>
         </div>
       )}
