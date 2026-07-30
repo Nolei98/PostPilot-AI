@@ -24,6 +24,7 @@ import {
   videoIdentityFor,
   MONO_FONT,
   wordmarkToHeadlineGap,
+  labelToHeadlineGap,
   svgLocalId,
   type BrandRowKind,
   type CoverPageKind,
@@ -1208,7 +1209,10 @@ export function cardVideoLayoutParts(
     ? `<text x="${anchorX}" y="${numeralY}" font-family="${family}" font-weight="${displayWeight}" font-size="44" fill="${accent}" text-anchor="${identity.anchor}">${String(idx).padStart(2, "0")}</text>`
     : "";
 
-  const headStartY = idx ? 200 : 160;
+  // Numeral → título pela folga padrão (30/07). Era 200 fixo: 92px de
+  // vão pro numeral, contra os 162 que um título de corpo 104 pede. O
+  // "01" encostava no título exatamente nos casos de fonte maior.
+  const headStartY = idx ? numeralY + labelToHeadlineGap(headSize) : 160;
   const frame: FeedVideoFrame = {
     x: pad,
     y: headStartY + (headlineLines.length - 1) * headLineH + Math.round(headSize * 0.6) + CARD_VIDEO_GAP_HEAD_TO_FRAME,

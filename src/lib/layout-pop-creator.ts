@@ -13,7 +13,14 @@
 // drop-in compatível no seletor de layout.
 // ============================================================
 import { buildOverlayGradientSvg } from "@/lib/contrast";
-import { CARD_W, CARD_H, actionIconsRail, CLOSING_CORNER_MARGIN, type CardBrand } from "@/lib/render-shared";
+import {
+  CARD_W,
+  CARD_H,
+  actionIconsRail,
+  CLOSING_CORNER_MARGIN,
+  labelToHeadlineGap,
+  type CardBrand,
+} from "@/lib/render-shared";
 
 const DISPLAY_FONT = "Varela Round";
 const MONO_FONT = "IBM Plex Mono";
@@ -238,7 +245,9 @@ export function buildPopCreatorCardSvg(
   const pillW = approxTextWidth(idxLabel, 22) + 44;
   const pillY = 130;
   const pillH = 44;
-  const headStartY = pillY + pillH + 96;
+  // Da BASE da pílula, com o piso comum de rótulo→título (30/07): 96
+  // fixo apertava quando o título vinha em corpo grande.
+  const headStartY = pillY + pillH + Math.max(96, labelToHeadlineGap(headSize));
 
   const signature = brand.handle
     ? `@${brand.handle}${brand.keywords?.length ? " · " + brand.keywords.join(", ") : ""}`

@@ -13,7 +13,14 @@
 // drop-in compatível no seletor de layout.
 // ============================================================
 import { buildOverlayGradientSvg } from "@/lib/contrast";
-import { CARD_W, CARD_H, actionIconsRail, CLOSING_CORNER_MARGIN, type CardBrand } from "@/lib/render-shared";
+import {
+  CARD_W,
+  CARD_H,
+  actionIconsRail,
+  CLOSING_CORNER_MARGIN,
+  labelToHeadlineGap,
+  type CardBrand,
+} from "@/lib/render-shared";
 
 const DISPLAY_FONT = "DM Serif Display";
 const MONO_FONT = "IBM Plex Mono";
@@ -221,7 +228,9 @@ export function buildSerifLuxeCardSvg(
 
   const idxY = 200;
   const ruleY = idxY + 40;
-  const headStartY = ruleY + Math.round(headSize * 1.15);
+  // Piso comum de rótulo→título (30/07): 1,15× ficava abaixo do vão
+  // padrão do produto nos títulos de corpo maior.
+  const headStartY = ruleY + Math.max(Math.round(headSize * 1.15), labelToHeadlineGap(headSize));
 
   const signature = brand.handle
     ? `@${brand.handle}${brand.keywords?.length ? " · " + brand.keywords.join(", ") : ""}`

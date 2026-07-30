@@ -15,7 +15,14 @@
 import { buildOverlayGradientSvg } from "@/lib/contrast";
 // drop-in compatível no seletor de layout.
 // ============================================================
-import { CARD_W, CARD_H, actionIconsRail, CLOSING_CORNER_MARGIN, type CardBrand } from "@/lib/render-shared";
+import {
+  CARD_W,
+  CARD_H,
+  actionIconsRail,
+  CLOSING_CORNER_MARGIN,
+  labelToHeadlineGap,
+  type CardBrand,
+} from "@/lib/render-shared";
 
 const DISPLAY_FONT = "Inter";
 const MONO_FONT = "IBM Plex Mono";
@@ -217,7 +224,9 @@ export function buildSwissMonoCardSvg(
   const bodyLines = body ? wrapText(stripEmoji(body), bodyMaxChars).slice(0, 5) : [];
 
   const topY = 110;
-  const headStartY = topY + Math.round(headSize * 1.05);
+  // Piso comum de rótulo→título (30/07) — 1,05× era o mais apertado
+  // dos presets.
+  const headStartY = topY + Math.max(Math.round(headSize * 1.05), labelToHeadlineGap(headSize));
 
   const signature = brand.handle
     ? `@${brand.handle}${brand.keywords?.length ? " · " + brand.keywords.join(", ") : ""}`

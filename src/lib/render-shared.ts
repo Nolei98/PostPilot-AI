@@ -333,3 +333,22 @@ function hashParts(parts: (string | number | null | undefined)[]): string {
 export function svgLocalId(prefix: string, ...parts: (string | number | null | undefined)[]): string {
   return `${prefix}-${hashParts(parts)}`;
 }
+
+/**
+ * Folga MÍNIMA entre um rótulo curto e a primeira linha do título logo
+ * abaixo dele (2026-07-30).
+ *
+ * Mesma razão do wordmark: onde dois tipos de texto se encontram — o
+ * numeral "01", a meta-linha, a etiqueta de seção — o vão é o mesmo do
+ * resto do produto. Antes cada layout tinha o seu número escolhido à
+ * mão (92px no card com vídeo, 1,05× no Swiss, 96 fixo no Pop), e o "01"
+ * encostava no título justamente onde a fonte é maior.
+ *
+ * É PISO, não valor fixo: quem já respira mais continua respirando mais.
+ * Onde o rótulo tem caixa (pílula, cápsula, etiqueta), a medida sai da
+ * base da caixa — sobra um pouco mais que baseline-a-baseline, que é o
+ * lado seguro de errar.
+ */
+export function labelToHeadlineGap(headlineSize: number): number {
+  return wordmarkToHeadlineGap(headlineSize);
+}

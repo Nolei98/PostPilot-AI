@@ -22,7 +22,14 @@
 // Mesmo contrato {svg, blurBandTop} dos demais layouts.
 // ============================================================
 import { buildOverlayGradientSvg } from "@/lib/contrast";
-import { CARD_W, CARD_H, actionIconsRail, CLOSING_CORNER_MARGIN, type CardBrand } from "@/lib/render-shared";
+import {
+  CARD_W,
+  CARD_H,
+  actionIconsRail,
+  CLOSING_CORNER_MARGIN,
+  labelToHeadlineGap,
+  type CardBrand,
+} from "@/lib/render-shared";
 
 const DISPLAY_FONT = "DM Serif Display";
 const LABEL_FONT = "IBM Plex Mono";
@@ -246,7 +253,8 @@ export function buildTribunaCardSvg(
 
   const artLabel = `ART. ${String(opts.index).padStart(2, "0")}`;
   const etiquetaY = 130;
-  const headStartY = etiquetaY + 62 + 100;
+  // Da base da etiqueta, com o piso comum de rótulo→título (30/07).
+  const headStartY = etiquetaY + 62 + Math.max(100, labelToHeadlineGap(headSize));
 
   const signature = brand.handle
     ? `@${brand.handle}${brand.keywords?.length ? "  ·  " + brand.keywords.join(" · ") : ""}`

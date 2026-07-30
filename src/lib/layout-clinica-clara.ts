@@ -17,7 +17,14 @@
 // Mesmo contrato {svg, blurBandTop} dos demais layouts.
 // ============================================================
 import { buildOverlayGradientSvg } from "@/lib/contrast";
-import { CARD_W, CARD_H, actionIconsRail, CLOSING_CORNER_MARGIN, type CardBrand } from "@/lib/render-shared";
+import {
+  CARD_W,
+  CARD_H,
+  actionIconsRail,
+  CLOSING_CORNER_MARGIN,
+  labelToHeadlineGap,
+  type CardBrand,
+} from "@/lib/render-shared";
 
 const DISPLAY_FONT = "Sora";
 const LABEL_FONT = "Sora";
@@ -252,7 +259,8 @@ export function buildClinicaClaraCardSvg(
 
   const idxLabel = `PASSO ${String(opts.index).padStart(2, "0")}`;
   const capsulaY = 132;
-  const headStartY = capsulaY + 62 + 96;
+  // Da base da cápsula, com o piso comum de rótulo→título (30/07).
+  const headStartY = capsulaY + 62 + Math.max(96, labelToHeadlineGap(headSize));
 
   const signature = brand.handle
     ? `@${brand.handle}${brand.keywords?.length ? " · " + brand.keywords.join(" · ") : ""}`

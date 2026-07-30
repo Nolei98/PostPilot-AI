@@ -13,7 +13,14 @@
 // padrão — drop-in compatível quando o seletor de layout for ligado.
 // ============================================================
 import { buildOverlayGradientSvg } from "@/lib/contrast";
-import { CARD_W, CARD_H, actionIconsRail, CLOSING_CORNER_MARGIN, type CardBrand } from "@/lib/render-shared";
+import {
+  CARD_W,
+  CARD_H,
+  actionIconsRail,
+  CLOSING_CORNER_MARGIN,
+  labelToHeadlineGap,
+  type CardBrand,
+} from "@/lib/render-shared";
 
 const DISPLAY_FONT = "Anton";
 const MONO_FONT = "IBM Plex Mono";
@@ -235,7 +242,8 @@ export function buildBrutalismCardSvg(
   // Gap proporcional ao tamanho do título — título "nível capa" (até
   // 130px) precisa de mais respiro abaixo do índice do que o antigo
   // tamanho fixo (80px) precisava.
-  const headStartY = idxY + Math.round(headSize * 1.6);
+  // 1,6× já respeitava o piso comum; o Math.max deixa isso explícito.
+  const headStartY = idxY + Math.max(Math.round(headSize * 1.6), labelToHeadlineGap(headSize));
 
   const signature = brand.handle
     ? `@${brand.handle}${brand.keywords?.length ? " · " + brand.keywords.join(", ") : ""}`

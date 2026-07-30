@@ -18,7 +18,14 @@
 // seletor de preset.
 // ============================================================
 import { buildOverlayGradientSvg } from "@/lib/contrast";
-import { CARD_W, CARD_H, actionIconsRail, CLOSING_CORNER_MARGIN, type CardBrand } from "@/lib/render-shared";
+import {
+  CARD_W,
+  CARD_H,
+  actionIconsRail,
+  CLOSING_CORNER_MARGIN,
+  labelToHeadlineGap,
+  type CardBrand,
+} from "@/lib/render-shared";
 
 const DISPLAY_FONT = "DM Serif Display";
 /** Rótulos arredondados — é o que separa esta vitrine do Serif Luxe. */
@@ -259,7 +266,8 @@ export function buildDoceVitrineCardSvg(
 
   const idxLabel = String(opts.index).padStart(2, "0");
   const seloCy = 168;
-  const headStartY = seloCy + 150;
+  // Do centro do selo, com o piso comum de rótulo→título (30/07).
+  const headStartY = seloCy + Math.max(150, labelToHeadlineGap(headSize));
 
   const signature = brand.handle
     ? `@${brand.handle}${brand.keywords?.length ? " · " + brand.keywords.join(" · ") : ""}`

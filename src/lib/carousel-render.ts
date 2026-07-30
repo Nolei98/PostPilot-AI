@@ -22,6 +22,7 @@ import {
   CLOSING_CORNER_MARGIN,
   actionIconsRail,
   wordmarkToHeadlineGap,
+  labelToHeadlineGap,
   type CoverPageKind,
   type CardBrand,
   type LayoutPreset,
@@ -495,7 +496,9 @@ export function buildCardSvgHalfImage(
   const label = brandLabelText(brand);
   const labelAtTop = textTop === 0;
   const labelY = labelAtTop ? 90 : textBottom - 70;
-  const headStartY = labelAtTop ? labelY + 70 : textTop + 110;
+  // Rótulo → título pelo piso comum (30/07): 70 fixo ficava abaixo do vão
+  // padrão do produto quando o título vem em corpo 56.
+  const headStartY = labelAtTop ? labelY + Math.max(70, labelToHeadlineGap(headSize)) : textTop + 110;
   const bodyStartY = headStartY + headLineH * headlineLines.length + Math.round(headSize * 0.6);
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
