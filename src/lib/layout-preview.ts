@@ -19,6 +19,7 @@ import {
   CLOSING_CORNER_MARGIN,
   videoIdentityFor,
   MONO_FONT,
+  svgLocalId,
   type CardBrand,
   type LayoutPreset,
 } from "@/lib/render-shared";
@@ -236,14 +237,15 @@ function wrapAsReelsFrame(headline: string, brand: CardBrand): string {
   const playR = 60;
   const safeTop = 300;
   const safeH = REELS_H - REELS_SAFE_BOTTOM - safeTop + 80;
+  const hatchId = svgLocalId("video-hatch", brand.layoutPreset);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${REELS_W}" height="${REELS_H}" viewBox="0 0 ${REELS_W} ${REELS_H}">
   <defs>
-    <pattern id="video-hatch" width="28" height="28" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+    <pattern id="${hatchId}" width="28" height="28" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
       <rect width="28" height="28" fill="#15151a"/>
       <line x1="0" y1="0" x2="0" y2="28" stroke="#26262e" stroke-width="14"/>
     </pattern>
   </defs>
-  <rect width="${REELS_W}" height="${REELS_H}" fill="url(#video-hatch)"/>
+  <rect width="${REELS_W}" height="${REELS_H}" fill="url(#${hatchId})"/>
   <rect x="${REELS_SAFE_MARGIN_X - 20}" y="${safeTop}" width="${REELS_W - REELS_SAFE_MARGIN_X - REELS_SAFE_MARGIN_RIGHT + 20}" height="${safeH}" fill="none" stroke="#ff4646" stroke-opacity="0.6" stroke-width="3" stroke-dasharray="14 10" rx="12"/>
   <text x="${REELS_SAFE_MARGIN_X}" y="130" font-family="${labelFamily}" font-weight="600" font-size="24" letter-spacing="4" fill="${text}" fill-opacity="0.85">${escapeXml(wm)}</text>
   <text x="${REELS_W - 24}" y="60" font-family="IBM Plex Mono" font-weight="700" font-size="24" letter-spacing="2" fill="#fff" text-anchor="end">REELS</text>
@@ -273,7 +275,7 @@ export function buildFeedVideoPreview(preset: LayoutPreset, brand: CardBrand): s
   const playCx = frame.x + frame.w / 2;
   const playCy = frame.y + frame.h / 2;
   const playR = 54;
-  const patchId = "video-feed-hatch";
+  const patchId = svgLocalId("video-feed-hatch", preset, frame.x, frame.y, frame.w, frame.h);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
   <defs><pattern id="${patchId}" width="28" height="28" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
     <rect width="28" height="28" fill="#15151a"/>
@@ -321,9 +323,9 @@ export function buildFeedVideoPhotoPreview(preset: LayoutPreset, brand: CardBran
   const playCx = frame.x + frame.w / 2;
   const playCy = frame.y + frame.h / 2;
   const playR = 54;
-  const holeId = "feed-photo-hole";
-  const fotoId = "feed-photo-bg";
-  const patchId = "feed-photo-hatch";
+  const holeId = svgLocalId("feed-photo-hole", preset, frame.x, frame.y, frame.w, frame.h);
+  const fotoId = svgLocalId("feed-photo-bg", preset);
+  const patchId = svgLocalId("feed-photo-hatch", preset);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
   <defs>
     <linearGradient id="${fotoId}" x1="0" y1="0" x2="0" y2="1">
@@ -364,7 +366,7 @@ export function buildInteriorVideoPreview(preset: LayoutPreset, brand: CardBrand
   const playCx = frame.x + frame.w / 2;
   const playCy = frame.y + frame.h / 2;
   const playR = 48;
-  const patchId = "video-card-hatch";
+  const patchId = svgLocalId("video-card-hatch", preset, frame.x, frame.y, frame.w, frame.h);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
   <defs><pattern id="${patchId}" width="28" height="28" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
     <rect width="28" height="28" fill="#15151a"/>

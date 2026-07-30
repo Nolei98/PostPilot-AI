@@ -78,7 +78,7 @@ describe("placa de leitura cobre as duas faixas de texto", () => {
     // Uma superfície só, com o mesmo recorte do fundo sólido — nada de
     // faixas parciais, que deixavam o título sem placa e pintavam
     // manchas claras no card quando o tema era claro.
-    expect(svg).toContain('fill="#000000" fill-opacity="0.55" mask="url(#card-video-hole)"');
+    expect(svg).toMatch(/fill="#000000" fill-opacity="0\.55" mask="url\(#card-video-hole-\w+\)"/);
   });
 
   // Contrato REESCRITO em 30/07. Antes este teste exigia que os dois
@@ -117,7 +117,7 @@ describe("placa de leitura cobre as duas faixas de texto", () => {
       index: 4,
       total: 10,
     });
-    expect(svg).toContain('mask="url(#card-video-hole)"');
+    expect(svg).toMatch(/mask="url\(#card-video-hole-\w+\)"/);
     expect(svg).not.toContain("card-video-band-top");
   });
 
@@ -129,6 +129,6 @@ describe("placa de leitura cobre as duas faixas de texto", () => {
       photoBg: { theme: "dark", alpha: 0 },
     });
     expect(svg).not.toContain("card-video-band");
-    expect(svg).not.toContain('mask="url(#card-video-hole)"');
+    expect(svg).not.toMatch(/mask="url\(#card-video-hole-\w+\)"/);
   });
 });

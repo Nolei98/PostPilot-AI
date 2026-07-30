@@ -24,6 +24,7 @@ import {
   videoIdentityFor,
   MONO_FONT,
   wordmarkToHeadlineGap,
+  svgLocalId,
   type BrandRowKind,
   type CoverPageKind,
 } from "@/lib/render-shared";
@@ -889,6 +890,8 @@ export function buildFeedVideoOverlaySvg(
     : cardBrand;
   const { bg, frame, dividerSvg, headlineSvg } = feedVideoLayoutParts(headline, brand);
 
+  const feedHoleId = svgLocalId("feed-video-hole", frame.x, frame.y, frame.w, frame.h, frame.radius);
+
   // Placa contínua com o mesmo recorte do fundo sólido — ver
   // buildCardVideoOverlaySvg: preta e branca são a mesma placa, muda a
   // cor dela e a do texto; nunca um degradê parcial, que sobre foto
@@ -897,13 +900,13 @@ export function buildFeedVideoOverlaySvg(
     ? photoBg.alpha > 0
       ? `<rect width="${WIDTH}" height="${HEIGHT}" fill="${
           photoBg.theme === "dark" ? "#000000" : "#FFFFFF"
-        }" fill-opacity="${photoBg.alpha}" mask="url(#feed-video-hole)"/>`
+        }" fill-opacity="${photoBg.alpha}" mask="url(#${feedHoleId})"/>`
       : ""
-    : `<rect width="${WIDTH}" height="${HEIGHT}" fill="${bg}" mask="url(#feed-video-hole)"/>`;
+    : `<rect width="${WIDTH}" height="${HEIGHT}" fill="${bg}" mask="url(#${feedHoleId})"/>`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
   <defs>
-    <mask id="feed-video-hole">
+    <mask id="${feedHoleId}">
       <rect width="100%" height="100%" fill="#fff"/>
       <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="#000"/>
     </mask>
@@ -1039,15 +1042,16 @@ export function buildFeedVideoBlurBgOverlaySvg(
   // Mesma placa contínua dos outros formatos de vídeo (ver
   // buildCardVideoOverlaySvg): cobre tudo menos a moldura, onde o vídeo
   // nítido entra. O fundo borrado continua aparecendo por baixo dela.
+  const blurHoleId = svgLocalId("blurbg-hole", frame.x, frame.y, frame.w, frame.h, frame.radius);
   const plate =
     contrast.alpha > 0
-      ? `<defs><mask id="blurbg-hole">
+      ? `<defs><mask id="${blurHoleId}">
       <rect width="100%" height="100%" fill="#fff"/>
       <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="#000"/>
     </mask></defs>
   <rect width="${WIDTH}" height="${HEIGHT}" fill="${
     contrast.theme === "dark" ? "#000000" : "#FFFFFF"
-  }" fill-opacity="${contrast.alpha}" mask="url(#blurbg-hole)"/>`
+  }" fill-opacity="${contrast.alpha}" mask="url(#${blurHoleId})"/>`
       : "";
   return { svg: feedVideoBlurBgSvg(plate, dividerSvg, headlineSvg), frame };
 }
@@ -1306,6 +1310,11 @@ export function buildCardVideoOverlaySvg(
     : cardBrand;
   const { bg, frame, headlineSvg, bodySvg, labelSvg } = cardVideoLayoutParts(card, brand, opts);
 
+  // Id por conteúdo: vários cards convivem na mesma página da Fila e um
+  // id fixo fazia todos apontarem pra máscara do primeiro (ver
+  // svgLocalId em render-shared).
+  const holeId = svgLocalId("card-video-hole", frame.x, frame.y, frame.w, frame.h, frame.radius);
+
   // A placa de leitura é UMA superfície contínua sobre a foto, com o
   // mesmo recorte do fundo sólido: o quadro inteiro menos o buraco da
   // moldura, onde quem manda é o vídeo. Foi assim que virou em 29/07 —
@@ -1318,13 +1327,13 @@ export function buildCardVideoOverlaySvg(
     ? opts.photoBg.alpha > 0
       ? `<rect width="${WIDTH}" height="${HEIGHT}" fill="${
           opts.photoBg.theme === "dark" ? "#000000" : "#FFFFFF"
-        }" fill-opacity="${opts.photoBg.alpha}" mask="url(#card-video-hole)"/>`
+        }" fill-opacity="${opts.photoBg.alpha}" mask="url(#${holeId})"/>`
       : ""
-    : `<rect width="${WIDTH}" height="${HEIGHT}" fill="${bg}" mask="url(#card-video-hole)"/>`;
+    : `<rect width="${WIDTH}" height="${HEIGHT}" fill="${bg}" mask="url(#${holeId})"/>`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
   <defs>
-    <mask id="card-video-hole">
+    <mask id="${holeId}">
       <rect width="100%" height="100%" fill="#fff"/>
       <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="#000"/>
     </mask>

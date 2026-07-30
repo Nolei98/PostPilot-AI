@@ -430,8 +430,8 @@ describe("feed 4:5 com foto de fundo escolhida", () => {
     );
     // 'auto' desenha a placa translúcida; 'off' não desenha placa nenhuma
     // (a foto fica limpa) — nos dois casos o buraco da moldura continua.
-    expect(auto[0].svg).toMatch(/fill-opacity="0\.\d+" mask="url\(#feed-video-hole\)"/);
-    expect(off[0].svg).not.toMatch(/fill-opacity="0\.\d+" mask="url\(#feed-video-hole\)"/);
+    expect(auto[0].svg).toMatch(/fill-opacity="0\.\d+" mask="url\(#feed-video-hole-\w+\)"/);
+    expect(off[0].svg).not.toMatch(/fill-opacity="0\.\d+" mask="url\(#feed-video-hole-\w+\)"/);
   });
 });
 
@@ -455,7 +455,7 @@ describe("feed borrado no preview", () => {
       spec({ format: "video_feed", videoShape: "feed-blur" }),
       []
     );
-    expect(page.svg).not.toContain('mask="url(#feed-video-hole)"');
+    expect(page.svg).not.toMatch(/mask="url\(#feed-video-hole-\w+\)"/);
     const videos = page.layers.filter((l) => l.kind === "video");
     expect(videos).toHaveLength(2);
     expect(videos[0]).toMatchObject({ blurredBackdrop: true, frame: null });
@@ -467,7 +467,7 @@ describe("feed borrado no preview", () => {
       spec({ format: "video_feed", videoShape: "feed" }),
       []
     );
-    expect(page.svg).toContain('mask="url(#feed-video-hole)"');
+    expect(page.svg).toMatch(/mask="url\(#feed-video-hole-\w+\)"/);
     expect(page.layers.filter((l) => l.kind === "video")).toHaveLength(1);
   });
 });
@@ -504,14 +504,14 @@ describe("card com vídeo aceita foto de fundo", () => {
     });
     // O recorte da moldura continua (é por onde o vídeo aparece); o que
     // muda é o preenchimento: placa translúcida em vez da cor da marca.
-    expect(page.svg).toContain('mask="url(#card-video-hole)"');
-    expect(page.svg).toMatch(/fill-opacity="0\.\d+" mask="url\(#card-video-hole\)"/);
+    expect(page.svg).toMatch(/mask="url\(#card-video-hole-\w+\)"/);
+    expect(page.svg).toMatch(/fill-opacity="0\.\d+" mask="url\(#card-video-hole-\w+\)"/);
   });
 
   it("sem foto, o card com vídeo segue no fundo sólido da marca", async () => {
     const [page] = await buildPostPreview({ ...post, format: "carousel" }, spec(), [cardVideo()]);
     expect(page.layers.some((l) => l.kind === "photo")).toBe(false);
-    expect(page.svg).toContain('mask="url(#card-video-hole)"');
+    expect(page.svg).toMatch(/mask="url\(#card-video-hole-\w+\)"/);
   });
 });
 

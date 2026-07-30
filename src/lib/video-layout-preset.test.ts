@@ -296,8 +296,8 @@ describe("feed 4:5 com foto de fundo", () => {
     const comFoto = buildFeedVideoOverlaySvg(HEADLINE, brand, { theme: "dark", alpha: 0.4 }).svg;
     // Os dois recortam o buraco da moldura — o que muda é o que preenche
     // o resto: cor da marca opaca vs. placa translúcida sobre a foto.
-    expect(solido).toContain('mask="url(#feed-video-hole)"');
-    expect(comFoto).toContain('mask="url(#feed-video-hole)"');
+    expect(solido).toMatch(/mask="url\(#feed-video-hole-\w+\)"/);
+    expect(comFoto).toMatch(/mask="url\(#feed-video-hole-\w+\)"/);
     expect(comFoto).toContain('fill-opacity="0.4"');
     expect(comFoto).not.toContain(brand.colorBackground);
   });

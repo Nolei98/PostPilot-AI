@@ -296,3 +296,40 @@ export const WORDMARK_TO_HEADLINE_RATIO =
 export function wordmarkToHeadlineGap(headlineSize: number): number {
   return Math.round(headlineSize * WORDMARK_TO_HEADLINE_RATIO);
 }
+
+// ============================================================
+// IDs LOCAIS DE SVG (2026-07-30)
+//
+// `id` em SVG inline é GLOBAL no documento HTML. A Fila desenha dezenas
+// de prévias na mesma página, e todas usavam ids fixos ("card-video-hole",
+// "feed-video-hole", "video-hatch"…) — então `url(#card-video-hole)`
+// resolvia pro PRIMEIRO do documento, que é a máscara de OUTRO card. O
+// buraco do vídeo saía no lugar e no tamanho errados: um bloco do fundo
+// do container aparecendo colado no título, e a moldura do vídeo com
+// medida alheia (relatado no #0585 em 30/07).
+//
+// No render final isso nunca apareceu porque o resvg rasteriza cada SVG
+// isolado — é um defeito que só existe no browser, onde eles convivem.
+//
+// O sufixo vem do CONTEÚDO, não de contador nem de random: estes
+// builders rodam no servidor (RSC) E no cliente (LayoutPreview é client
+// component), e um id que mudasse entre as duas passadas quebraria a
+// hidratação. Mesma geometria ⇒ mesmo id ⇒ máscaras idênticas, que é
+// justamente o caso em que compartilhar não faz mal.
+// ============================================================
+
+/** djb2 — curto, estável e suficiente pra distinguir geometrias. */
+function hashParts(parts: (string | number | null | undefined)[]): string {
+  let h = 5381;
+  const s = parts.map((p) => (p == null ? "" : String(p))).join("|");
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+/**
+ * Id único por conteúdo pra `<mask>`, `<pattern>`, `<linearGradient>` e
+ * afins dentro de um SVG que pode conviver com outros na mesma página.
+ */
+export function svgLocalId(prefix: string, ...parts: (string | number | null | undefined)[]): string {
+  return `${prefix}-${hashParts(parts)}`;
+}
