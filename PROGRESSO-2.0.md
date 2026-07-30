@@ -169,10 +169,21 @@ desde §0-D).
 
 ### 0-E.7 Pendências
 
+> ⏸ **Os três presets de nicho estão em STANDBY (decisão do usuário,
+> 2026-07-30).** O código está pronto e commitado; o que falta é decidir
+> COMO tratá-los — preset de Brand Kit como os outros 5, pacote por ramo,
+> nicho no onboarding, ou catálogo separado. Os 5 originais se separam por
+> estilo editorial; estes se separam por RAMO, que é outro eixo e talvez
+> não caiba no mesmo seletor. **Nada de trabalho novo neles até isso ser
+> decidido.** Hoje eles APARECEM no seletor de Ajustes, porque a lista sai
+> de `PREVIEW_LAYOUTS` (`src/lib/layout-preview.ts`) — se o standby tiver
+> que ser invisível pro cliente, é ali que se filtra (uma linha).
+
 - [ ] **Rodar `repair-orphan-cards.ts` em produção** — o job já não cria
       mais órfãos, mas os antigos seguem no banco travando conversão.
-- [ ] Conferir os três presets novos em arte final (não só no painel):
-      aprovar um carrossel em cada, com foto de fundo e sem.
+- [ ] **Decidir o destino dos presets de nicho** (ver nota acima) — e só
+      então conferir em arte final: aprovar um carrossel em cada, com foto
+      de fundo e sem.
 - [ ] Regenerar `docs/layouts.html` na próxima mudança de geometria — a
       spec depende dele pra não voltar a envelhecer calada.
 
