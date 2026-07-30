@@ -712,5 +712,12 @@ class Component extends DCLogic {
   }
 }
 </script>
+<!-- Vercel Analytics (2026-07-30). Precisa estar AQUI, e não só no
+     layout.tsx do app: esta landing é um arquivo estático servido por
+     src/app/route.ts, que devolve o HTML cru e nunca passa pelo layout
+     React — sem esta linha, a página mais importante do funil (visitante
+     que ainda não tem conta) ficava fora da medição. Fora da Vercel o
+     caminho dá 404 e o script não faz nada. -->
+<script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>
