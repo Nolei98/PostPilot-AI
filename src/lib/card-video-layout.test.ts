@@ -81,7 +81,13 @@ describe("placa de leitura cobre as duas faixas de texto", () => {
     expect(svg).toContain('fill="#000000" fill-opacity="0.55" mask="url(#card-video-hole)"');
   });
 
-  it("placa preta e branca são a MESMA placa, só a cor muda", () => {
+  // Contrato REESCRITO em 30/07. Antes este teste exigia que os dois
+  // temas gerassem o MESMO svg fora a cor da placa — e passava só porque
+  // o texto saía branco nos dois casos, que é exatamente o defeito do
+  // #0585 (placa branca + texto branco = título invisível). O que tem
+  // que ser igual é a GEOMETRIA; a cor do texto é obrigada a virar junto
+  // com a placa.
+  it("placa preta e branca têm a MESMA geometria, com cores opostas", () => {
     const opts = { pageKind: "interior" as const, index: 4, total: 10 };
     const preta = buildCardVideoOverlaySvg(card, brand("editorial-noir"), {
       ...opts,
@@ -91,7 +97,18 @@ describe("placa de leitura cobre as duas faixas de texto", () => {
       ...opts,
       photoBg: { theme: "light", alpha: 0.55 },
     }).svg;
-    expect(preta.replace('fill="#000000"', "COR")).toBe(branca.replace('fill="#FFFFFF"', "COR"));
+
+    // Geometria idêntica: tudo que não é cor bate byte a byte.
+    const semCor = (s: string) => s.replace(/#[0-9a-fA-F]{3,6}/g, "COR");
+    expect(semCor(preta)).toBe(semCor(branca));
+
+    // E as cores são opostas, não iguais.
+    expect(preta).toContain('fill="#000000" fill-opacity="0.55"');
+    expect(branca).toContain('fill="#FFFFFF" fill-opacity="0.55"');
+    const textoDe = (s: string) =>
+      [...s.matchAll(/<text[^>]*fill="(#[0-9a-fA-F]{3,6})"/g)].map((m) => m[1].toUpperCase());
+    expect(textoDe(preta)).toContain("#FFFFFF");
+    expect(textoDe(branca)).not.toContain("#FFFFFF");
   });
 
   it("sem foto, o fundo sólido da marca cobre tudo (nenhuma banda)", () => {

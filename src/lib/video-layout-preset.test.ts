@@ -302,14 +302,20 @@ describe("feed 4:5 com foto de fundo", () => {
     expect(comFoto).not.toContain(brand.colorBackground);
   });
 
-  it("placa preta e branca são a MESMA placa, só a cor muda", () => {
+  // Reescrito em 30/07 junto com a correção do #0585: quando o chamador
+  // não manda `textColor`, o builder passou a derivar a cor do texto do
+  // TEMA em vez de cair na cor da marca. Antes, os dois temas geravam
+  // svg idêntico fora a placa — e era esse "idêntico" que escondia o
+  // título branco sobre placa branca.
+  it("placa preta e branca têm a MESMA geometria, com cores opostas", () => {
     const brand = brandWith("editorial-noir");
     const preta = buildFeedVideoOverlaySvg(HEADLINE, brand, { theme: "dark", alpha: 0.55 }).svg;
     const branca = buildFeedVideoOverlaySvg(HEADLINE, brand, { theme: "light", alpha: 0.55 }).svg;
     expect(preta).toContain('fill="#000000" fill-opacity="0.55"');
     expect(branca).toContain('fill="#FFFFFF" fill-opacity="0.55"');
     // Mesma geometria: trocar a cor não pode mexer no recorte.
-    expect(preta.replace('fill="#000000"', "COR")).toBe(branca.replace('fill="#FFFFFF"', "COR"));
+    const semCor = (s: string) => s.replace(/#[0-9a-fA-F]{3,6}/g, "COR");
+    expect(semCor(preta)).toBe(semCor(branca));
   });
 
   it("a moldura do vídeo não muda de lugar por causa do fundo", () => {

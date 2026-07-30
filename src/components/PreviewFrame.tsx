@@ -77,8 +77,14 @@ function Layer({ layer, playing = false }: { layer: PreviewLayer; playing?: bool
           width: `${layer.frame.wFrac * 100}%`,
           height: `${layer.frame.hFrac * 100}%`,
           borderRadius: `${layer.frame.radiusFrac * 100}cqw`,
+          // Fundo PRÓPRIO do slot de vídeo. Enquanto o pôster não chega, o
+          // buraco que o SVG abre mostrava a cor do container (lilás do
+          // tema) num retângulo chapado logo abaixo do título — lido como
+          // defeito de layout, não como mídia carregando (relatado em
+          // 30/07). Preto é o que o vídeo vai ser.
+          backgroundColor: "#0B0B0E",
         }
-      : { inset: 0, width: "100%", height: "100%" };
+      : { inset: 0, width: "100%", height: "100%", backgroundColor: "#0B0B0E" };
 
     // PARADO = imagem, não vídeo pausado. O <video> parado ainda decodifica
     // e repinta, e no Reels (quadro inteiro, 9:16) isso aparecia como um
@@ -98,9 +104,10 @@ function Layer({ layer, playing = false }: { layer: PreviewLayer; playing?: bool
           }}
         />
       ) : (
-        // Sem pôster: um retângulo neutro no lugar do vídeo — melhor que
-        // um quadro preto piscando enquanto o arquivo carrega.
-        <div aria-hidden className="absolute bg-surface-2" style={style} />
+        // Sem pôster: o slot escuro do próprio `style` já diz "aqui é
+        // vídeo" — antes era `bg-surface-2`, a cor do tema, que num card
+        // claro virava um bloco lilás solto no meio da arte.
+        <div aria-hidden className="absolute" style={style} />
       );
     }
 

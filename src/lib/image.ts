@@ -47,8 +47,21 @@ import {
   overlayAlphaFor,
   buildOverlayGradientSvg,
   buildLuminanceGrid,
+  boostAccent,
   type LumGrid,
 } from "@/lib/contrast";
+
+/**
+ * Luminância aproximada da PLACA de leitura, pra decidir contraste do que
+ * é desenhado sobre ela. A placa é translúcida, então o valor exato
+ * depende da foto embaixo; o que importa aqui é o lado — placa clara puxa
+ * pra 1, escura pra 0 — e é isso que decide se o realce precisa ser
+ * empurrado. Usar o valor da foto seria pior: é a placa que fica ENTRE a
+ * foto e o texto.
+ */
+function plateLuminance(theme: "light" | "dark"): number {
+  return theme === "light" ? 0.92 : 0.08;
+}
 
 /** Template de marca default (posts antigos / config ausente) */
 const DEFAULT_BRAND: BrandTemplate = { logoUrl: null, showLogo: true, fontFamily: FONT_FAMILY };
@@ -862,7 +875,18 @@ export function buildFeedVideoOverlaySvg(
   // manda. Sem isto, foto clara + colorText branco dava título invisível
   // — visto na fila em 29/07, e o render real tinha o mesmo defeito
   // porque os dois passam por aqui.
-  const brand = photoBg?.textColor ? { ...cardBrand, colorText: photoBg.textColor } : cardBrand;
+  //
+  // O `?? textColorForTheme` é a rede (30/07): antes, chamador que
+  // passasse a placa e esquecesse o textColor caía silenciosamente na cor
+  // da marca — exatamente o que aconteceu no card com vídeo. A placa e o
+  // texto passam a ser decididos sempre juntos.
+  const brand = photoBg
+    ? {
+        ...cardBrand,
+        colorText: photoBg.textColor ?? textColorForTheme(photoBg.theme),
+        colorAccent: boostAccent(cardBrand.colorAccent || "#7C5CFF", plateLuminance(photoBg.theme)),
+      }
+    : cardBrand;
   const { bg, frame, dividerSvg, headlineSvg } = feedVideoLayoutParts(headline, brand);
 
   // Placa contínua com o mesmo recorte do fundo sólido — ver
@@ -1257,10 +1281,30 @@ export function buildCardVideoOverlaySvg(
      * mudava nada na prévia, porque o retângulo sólido cobria tudo menos
      * o buraco da moldura. Com foto, o retângulo dá lugar ao véu.
      */
-    photoBg?: { theme: "light" | "dark"; alpha: number };
+    photoBg?: { theme: "light" | "dark"; alpha: number; textColor?: string };
   } = {}
 ): { svg: string; frame: FeedVideoFrame } {
-  const { bg, frame, headlineSvg, bodySvg, labelSvg } = cardVideoLayoutParts(card, cardBrand, opts);
+  // A cor do texto é decidida AQUI, junto com a placa, e não pelo
+  // chamador: a placa clara com o texto branco da marca por cima deixou
+  // título e corpo invisíveis no card com foto (visto no #0585 em
+  // 30/07). Quem escolhe a placa tem que escolher o texto no mesmo
+  // ponto, senão a próxima chamada esquece de novo — foi assim que o
+  // caminho do preview e o do render erraram os dois igual.
+  const brand = opts.photoBg
+    ? {
+        ...cardBrand,
+        colorText: opts.photoBg.textColor ?? textColorForTheme(opts.photoBg.theme),
+        // O numeral, o contador e a assinatura saem no REALCE, e realce
+        // é escolhido contra o fundo do kit — sobre a placa clara ele
+        // some pelo mesmo motivo que o texto sumia. Mesma rede do
+        // wordmark (boostAccent, §0-C.2).
+        colorAccent: boostAccent(
+          cardBrand.colorAccent || "#7C5CFF",
+          plateLuminance(opts.photoBg.theme)
+        ),
+      }
+    : cardBrand;
+  const { bg, frame, headlineSvg, bodySvg, labelSvg } = cardVideoLayoutParts(card, brand, opts);
 
   // A placa de leitura é UMA superfície contínua sobre a foto, com o
   // mesmo recorte do fundo sólido: o quadro inteiro menos o buraco da
@@ -1321,7 +1365,7 @@ export async function buildCardVideoOverlayPhotoBg(
 
   const { svg } = buildCardVideoOverlaySvg(card, cardBrand, {
     ...opts,
-    photoBg: { theme, alpha },
+    photoBg: { theme, alpha, textColor: textColorForTheme(theme) },
   });
   const overlayPng = await sharp(covered)
     .composite([

@@ -435,7 +435,12 @@ function buildCardWithVideo(
       pageKind,
       index: card.idx,
       total,
-      photoBg: c ? { theme: c.theme, alpha: Math.max(0.32, c.alpha) } : undefined,
+      // textColor explícito: o builder já tem a rede que deriva do tema,
+      // mas mandar o valor medido aqui mantém prévia e render dizendo a
+      // MESMA coisa, que é o contrato do render-on-approval.
+      photoBg: c
+        ? { theme: c.theme, alpha: Math.max(0.32, c.alpha), textColor: textColorForTheme(c.theme) }
+        : undefined,
     }
   );
   // SEMPRE o vídeo BRUTO: o preview desenha a moldura e o texto por cima,
