@@ -42,6 +42,18 @@ async function fetchBg(url: string | null | undefined): Promise<Buffer | null> {
 }
 
 /** Baixa um arquivo do Storage do post (vídeo fonte, base). */
+/** Baixa uma URL pública; null se falhar (fundo é opcional, não pode
+ * derrubar o render por causa de uma foto que sumiu do Storage). */
+async function fetchOptional(url: string): Promise<Buffer | null> {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    return Buffer.from(await r.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
 /** Baixa se existir; null quando o arquivo não está lá (fundo opcional). */
 async function downloadOptional(path: string): Promise<Buffer | null> {
   const supabase = createAdminClient();
@@ -79,7 +91,9 @@ export async function renderSinglePost(
   // atualizada em vez de perder as duas.
   let imageUrl: string | null = null;
   try {
-    const base = await download(`${postId}-base.jpg`);
+    // Foto de fundo escolhida (048) vence a base gerada — mesma regra do
+    // preview, senão a arte final sairia diferente do que a fila mostrou.
+    const base = (await downloadOptional(`${postId}-bg.jpg`)) ?? (await download(`${postId}-base.jpg`));
     imageUrl = await upload(`${postId}.jpg`, await composeFromSpec(base, hook, spec), "image/jpeg");
   } catch (err) {
     console.error(`[post-render] página 1 do post ${postId} não pôde ser composta:`, err);
@@ -284,7 +298,7 @@ export async function renderCardVideo(
   const supabase = createAdminClient();
   const { data: card } = await supabase
     .from("carousel_cards")
-    .select("id, post_id, idx, headline, body, layout")
+    .select("id, post_id, idx, headline, body, layout, bg_url")
     .eq("id", cardId)
     .maybeSingle();
   if (!card) throw new Error(`card ${cardId} não encontrado`);
@@ -297,14 +311,20 @@ export async function renderCardVideo(
 
   const source = await download(`${card.post_id}-card-${card.idx}-video-source.mp4`);
   const { composeFeedVideo } = await import("@/lib/video");
-  const { buildCardVideoOverlay } = await import("@/lib/image");
+  const { buildCardVideoOverlay, buildCardVideoOverlayPhotoBg } = await import("@/lib/image");
 
   const override = (card.layout as CardLayoutOverride | null) ?? {};
-  const { overlayPng, frame } = buildCardVideoOverlay(
-    { headline: card.headline, body: card.body },
-    applyBackground(spec.cardBrand, override.bgMode, override.bgColor),
-    { pageKind: pageKindForCard(card.idx, total), index: card.idx, total }
-  );
+  const brand = applyBackground(spec.cardBrand, override.bgMode, override.bgColor);
+  const conteudo = { headline: card.headline, body: card.body };
+  const geometria = { pageKind: pageKindForCard(card.idx, total), index: card.idx, total };
+
+  // Foto do card vira o fundo do card com vídeo (2026-07-29) — mesma
+  // regra do preview, senão a arte final ignoraria a foto que a fila
+  // mostrou. Sem foto, segue o fundo sólido da marca.
+  const photo = card.bg_url ? await fetchOptional(card.bg_url as string) : null;
+  const { overlayPng, frame } = photo
+    ? await buildCardVideoOverlayPhotoBg(conteudo, brand, photo, geometria)
+    : buildCardVideoOverlay(conteudo, brand, geometria);
   const finalVideo = await composeFeedVideo(source, overlayPng, frame);
   const videoUrl = await upload(
     `${card.post_id}-card-${card.idx}-video.mp4`,

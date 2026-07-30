@@ -30,6 +30,8 @@ import { getShellData } from "@/lib/shell";
 import { Card } from "@/components/ui/Card";
 import { DeleteSourceButton } from "@/components/DeleteSourceButton";
 import { SubmitButton } from "@/components/SubmitButton";
+import { SaveLockForm } from "@/components/SaveLockForm";
+import { TemplatePickButton } from "@/components/TemplatePickButton";
 import { getMonthlyQuota } from "@/lib/subscription";
 import { PLANS } from "@/lib/plans";
 import { POST_FONTS, resolvePostFontFamily } from "@/lib/font-data";
@@ -173,6 +175,7 @@ export default async function SettingsPage({
       <section className="mb-8">
         <h2 className="mb-3 text-title text-muted">Marca &amp; Visual</h2>
         <SectionTabs
+          storageKey="marca-visual"
           panels={[
             {
               id: "perfil",
@@ -399,7 +402,11 @@ export default async function SettingsPage({
               content: (
                 <>
                   <Card className="p-4">
-                    <form action={saveLayoutPreset} className="space-y-3">
+                    <SaveLockForm
+                      action={saveLayoutPreset}
+                      label="Salvar layout"
+                      savingLabel="Aplicando layout..."
+                    >
                       <div className="space-y-1.5">
                         <label htmlFor="layout_preset" className="block text-caption text-muted">
                           Estilo visual dos cards (capa, interior e fechamento)
@@ -417,17 +424,19 @@ export default async function SettingsPage({
                           <option value="pop-creator">Pop Creator</option>
                         </select>
                         <p className="text-micro text-subtle">
-                          Salvar re-renderiza na hora os carrosséis e fechamentos já na fila com o novo layout.
+                          Vale pra fila inteira assim que o botão destravar — a arte
+                          final só é montada quando você aprova ou agenda o post.
                         </p>
                       </div>
-                      <SubmitButton savingLabel="Salvando layout...">
-                        Salvar layout
-                      </SubmitButton>
-                    </form>
+                    </SaveLockForm>
                   </Card>
 
                   <Card className="p-4">
-                    <form action={saveSinglePostStyle} className="space-y-3">
+                    <SaveLockForm
+                      action={saveSinglePostStyle}
+                      label="Salvar estilo"
+                      savingLabel="Aplicando estilo..."
+                    >
                       <div className="space-y-1.5">
                         <label htmlFor="single_post_style" className="block text-caption text-muted">
                           Como a página 1 (foto + título) é composta
@@ -442,13 +451,10 @@ export default async function SettingsPage({
                           <option value="centered">Fonte no meio (minimalista, sem marca)</option>
                         </select>
                         <p className="text-micro text-subtle">
-                          &quot;Fonte no meio&quot; usa a mesma tipografia do layout escolhido acima, só centralizada e sem wordmark — deixa a foto respirar. Salvar re-renderiza a página 1 dos posts únicos já na fila.
+                          &quot;Fonte no meio&quot; usa a mesma tipografia do layout escolhido acima, só centralizada e sem wordmark — deixa a foto respirar.
                         </p>
                       </div>
-                      <SubmitButton savingLabel="Salvando estilo...">
-                        Salvar estilo
-                      </SubmitButton>
-                    </form>
+                    </SaveLockForm>
                   </Card>
 
                   {/* Previews (kit v2 §7.7): 5 layouts × 4 formatos, com a cor/fonte
@@ -502,29 +508,14 @@ export default async function SettingsPage({
                           <div className="flex gap-3 overflow-x-auto pb-1">
                             {options.map((tpl) => (
                               <div key={tpl.id} className="shrink-0">
-                                <form action={saveTemplateSelection}>
-                                  <input type="hidden" name="surface" value={surface} />
-                                  <input type="hidden" name="template_id" value={tpl.id} />
-                                  <button
-                                    type="submit"
-                                    className={`block w-32 overflow-hidden rounded-control border-2 text-left transition-colors ${
-                                      selectedId === tpl.id ? "border-primary" : "border-line hover:border-subtle"
-                                    }`}
-                                  >
-                                    {tpl.thumbnail_url ? (
-                                      // eslint-disable-next-line @next/next/no-img-element
-                                      <img src={tpl.thumbnail_url} alt={tpl.name} className="aspect-[4/5] w-full object-cover" />
-                                    ) : (
-                                      <div className="flex aspect-[4/5] w-full items-center justify-center bg-surface-2 text-micro text-subtle">
-                                        sem preview
-                                      </div>
-                                    )}
-                                    <p className="truncate px-2 py-1.5 text-micro text-content">
-                                      {tpl.name}
-                                      {selectedId === tpl.id && " ✓"}
-                                    </p>
-                                  </button>
-                                </form>
+                                <TemplatePickButton
+                                  action={saveTemplateSelection}
+                                  surface={surface}
+                                  templateId={tpl.id}
+                                  name={tpl.name}
+                                  thumbnailUrl={tpl.thumbnail_url ?? null}
+                                  selected={selectedId === tpl.id}
+                                />
                                 <div className="mt-1">
                                   <EditTemplateButton templateId={tpl.id} isSystem={tpl.is_system} />
                                 </div>

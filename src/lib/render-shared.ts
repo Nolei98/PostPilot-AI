@@ -20,7 +20,15 @@ export type CoverPageKind = "cover" | "closing" | "interior";
  * ao preset de cores/identidade da marca (Fase 3, postpilot-layouts.html).
  * 'editorial-noir' é o padrão (carousel-render.ts); os demais vivem em
  * layout-*.ts próprios. */
-export type LayoutPreset = "editorial-noir" | "brutalism" | "serif-luxe" | "swiss-mono" | "pop-creator";
+export type LayoutPreset =
+  | "editorial-noir"
+  | "brutalism"
+  | "serif-luxe"
+  | "swiss-mono"
+  | "pop-creator"
+  | "doce-vitrine"
+  | "clinica-clara"
+  | "tribuna";
 
 /**
  * Tipografia de destaque de cada preset — a MESMA que layout-*.ts usa no
@@ -42,6 +50,12 @@ const PRESET_DISPLAY_FONT: Record<LayoutPreset, { family: string; weight: number
   "serif-luxe": { family: "DM Serif Display", weight: 400 },
   "swiss-mono": { family: "Inter", weight: 800 },
   "pop-creator": { family: "Varela Round", weight: 400 },
+  // Confeitaria: serifa de vitrine no título; o arredondado fica nos rótulos.
+  "doce-vitrine": { family: "DM Serif Display", weight: 400 },
+  // Saúde: Sora — geométrica e limpa, ainda não usada por outro preset.
+  "clinica-clara": { family: "Sora", weight: 600 },
+  // Advocacia: a serifa do Serif Luxe; o que muda é a estrutura.
+  tribuna: { family: "DM Serif Display", weight: 400 },
 };
 
 /**
@@ -69,9 +83,21 @@ export const MONO_FONT = "IBM Plex Mono";
  *    (Brutalism);
  *  - "bar": barra vertical de destaque à esquerda do texto (Swiss Mono);
  *  - "pill": cápsula arredondada preenchida com a cor de destaque
- *    (Pop Creator).
+ *    (Pop Creator);
+ *  - "scallop": barra ondulada, a "bandeja rendada" da confeitaria
+ *    (Doce Vitrine);
+ *  - "pulse": filete com um pico de batimento no meio (Clínica Clara);
+ *  - "double-rule": régua dupla, o traço de papelaria jurídica
+ *    (Tribuna).
  */
-export type BrandRowKind = "rule" | "block" | "bar" | "pill";
+export type BrandRowKind =
+  | "rule"
+  | "block"
+  | "bar"
+  | "pill"
+  | "scallop"
+  | "pulse"
+  | "double-rule";
 
 export interface VideoIdentity {
   /** Tipografia do título. */
@@ -123,6 +149,29 @@ const PRESET_VIDEO_IDENTITY: Record<LayoutPreset, Omit<VideoIdentity, "display">
     labelFont: "mono",
     eyebrow: "Nº 01",
     swipeHint: "Deslize para ver mais →",
+  },
+  tribuna: {
+    brandRow: "double-rule",
+    anchor: "start",
+    labelFont: "mono",
+    eyebrow: "DIREITO NA PRÁTICA",
+    swipeHint: "Deslize para os pontos",
+  },
+  "clinica-clara": {
+    brandRow: "pulse",
+    anchor: "start",
+    labelFont: "display",
+    eyebrow: "SAÚDE EM DIA",
+    swipeHint: "Deslize para entender",
+  },
+  "doce-vitrine": {
+    brandRow: "scallop",
+    anchor: "middle",
+    // Rótulo arredondado, não mono: é o que separa esta vitrine do
+    // Serif Luxe, que usa a mesma serifa no título.
+    labelFont: "display",
+    eyebrow: "FRESQUINHO DO DIA",
+    swipeHint: "Deslize e escolha o seu",
   },
 };
 
@@ -205,4 +254,45 @@ export function actionIconsRail(centerX: number, bottomCenterY: number, color: s
     icon(ICON_SHARE, bottomCenterY - gap) +
     icon(ICON_BOOKMARK, bottomCenterY)
   );
+}
+
+// ============================================================
+// AFASTAMENTO WORDMARK → TÍTULO (2026-07-29)
+//
+// Sempre que a assinatura da marca (o divisor ———WORDMARK®——— ou a
+// linha de marca de um preset) fica logo ACIMA do título, a distância
+// entre as duas é a mesma em todo o produto: a que o Reels já usava e
+// que ficou visualmente certa. Antes cada formato tinha o seu número
+// (Reels 50, feed 4:5 36, capa com vídeo 58, capa estática 130) e o
+// mesmo carrossel parecia respirar diferente em cada peça.
+//
+// A distância NÃO é fixa em pixels: a posição do texto é dada pela
+// BASELINE, então título grande "come" o espaço por cima. O termo
+// proporcional ao corpo da fonte mantém a folga ÓTICA parecida entre
+// título curto (fonte grande) e longo (fonte pequena).
+// ============================================================
+/** Parte fixa da distância, como o Reels sempre usou. */
+export const WORDMARK_TO_HEADLINE_GAP = 50;
+/** Parte proporcional ao corpo da fonte do título, como no Reels. */
+export const WORDMARK_TO_HEADLINE_SCALE = 0.6;
+/** Corpo do título do Reels — a peça em que essa folga foi calibrada. */
+const REELS_HEADLINE_SIZE = 52;
+
+/**
+ * A folga é PROPORCIONAL ao corpo do título, calibrada pelo Reels.
+ *
+ * Copiar os 50px crus pra uma capa (corpo 104) daria metade da folga
+ * ótica do Reels (corpo 52) — em pixels bate, aos olhos não: o que se
+ * enxerga é o vão entre o filete e o topo das letras, e letra grande come
+ * esse vão. Então o que se propaga é a RAZÃO folga/corpo do Reels
+ * (~1,56×), não o número absoluto. No próprio Reels o resultado é
+ * idêntico ao de antes.
+ */
+export const WORDMARK_TO_HEADLINE_RATIO =
+  (WORDMARK_TO_HEADLINE_GAP + REELS_HEADLINE_SIZE * WORDMARK_TO_HEADLINE_SCALE) /
+  REELS_HEADLINE_SIZE;
+
+/** Distância baseline-a-baseline entre o wordmark e a 1ª linha do título. */
+export function wordmarkToHeadlineGap(headlineSize: number): number {
+  return Math.round(headlineSize * WORDMARK_TO_HEADLINE_RATIO);
 }

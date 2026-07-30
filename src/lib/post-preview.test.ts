@@ -428,7 +428,138 @@ describe("feed 4:5 com foto de fundo escolhida", () => {
       spec({ format: "video_feed", videoShape: "feed" }),
       []
     );
-    expect(auto[0].svg).toContain("feed-photo-band");
-    expect(off[0].svg).not.toContain("stop-opacity=\"0.3");
+    // 'auto' desenha a placa translúcida; 'off' não desenha placa nenhuma
+    // (a foto fica limpa) — nos dois casos o buraco da moldura continua.
+    expect(auto[0].svg).toMatch(/fill-opacity="0\.\d+" mask="url\(#feed-video-hole\)"/);
+    expect(off[0].svg).not.toMatch(/fill-opacity="0\.\d+" mask="url\(#feed-video-hole\)"/);
+  });
+});
+
+// O feed BORRADO estava sendo desenhado na fila com o overlay do feed
+// SÓLIDO: aquele markup pinta o quadro com a cor da marca e abre só o
+// buraco da moldura, então a cópia borrada do vídeo ficava escondida e os
+// dois enquadramentos pareciam iguais (relatado em 29/07).
+describe("feed borrado no preview", () => {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://projeto.supabase.test";
+
+  const baseVideo = {
+    ...post,
+    format: "video_feed" as const,
+    video_status: "ready" as const,
+    video_poster_url: "https://exemplo.test/poster.jpg?v=1",
+  };
+
+  it("não pinta retângulo de fundo — o fundo é o vídeo borrado", async () => {
+    const [page] = await buildPostPreview(
+      { ...baseVideo, video_shape: "feed-blur" },
+      spec({ format: "video_feed", videoShape: "feed-blur" }),
+      []
+    );
+    expect(page.svg).not.toContain('mask="url(#feed-video-hole)"');
+    const videos = page.layers.filter((l) => l.kind === "video");
+    expect(videos).toHaveLength(2);
+    expect(videos[0]).toMatchObject({ blurredBackdrop: true, frame: null });
+  });
+
+  it("o feed SÓLIDO continua com o retângulo de fundo", async () => {
+    const [page] = await buildPostPreview(
+      { ...baseVideo, video_shape: "feed" },
+      spec({ format: "video_feed", videoShape: "feed" }),
+      []
+    );
+    expect(page.svg).toContain('mask="url(#feed-video-hole)"');
+    expect(page.layers.filter((l) => l.kind === "video")).toHaveLength(1);
+  });
+});
+
+// Card de carrossel COM vídeo era obrigado a fundo sólido: subir foto
+// nele não mudava nada, porque o retângulo cobria a foto toda.
+describe("card com vídeo aceita foto de fundo", () => {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://projeto.supabase.test";
+
+  function cardVideo(over: Partial<EmbeddedCarouselCard> = {}): EmbeddedCarouselCard {
+    return {
+      id: "cv",
+      idx: 1,
+      role: "value",
+      headline: "Card com vídeo",
+      body: "corpo",
+      image_url: null,
+      bg_url: null,
+      bg_luminance: null,
+      layout: null,
+      video_url: null,
+      video_poster_url: "https://exemplo.test/card-poster.jpg?v=9",
+      video_status: "ready",
+      video_error: null,
+      ...over,
+    };
+  }
+
+  it("com foto, entra a camada de foto e o fundo vira placa translúcida", async () => {
+    const cards = [cardVideo({ bg_url: "https://exemplo.test/foto-card.jpg" })];
+    const [page] = await buildPostPreview({ ...post, format: "carousel" }, spec(), cards);
+    expect(page.layers.find((l) => l.kind === "photo")).toMatchObject({
+      url: "https://exemplo.test/foto-card.jpg",
+    });
+    // O recorte da moldura continua (é por onde o vídeo aparece); o que
+    // muda é o preenchimento: placa translúcida em vez da cor da marca.
+    expect(page.svg).toContain('mask="url(#card-video-hole)"');
+    expect(page.svg).toMatch(/fill-opacity="0\.\d+" mask="url\(#card-video-hole\)"/);
+  });
+
+  it("sem foto, o card com vídeo segue no fundo sólido da marca", async () => {
+    const [page] = await buildPostPreview({ ...post, format: "carousel" }, spec(), [cardVideo()]);
+    expect(page.layers.some((l) => l.kind === "photo")).toBe(false);
+    expect(page.svg).toContain('mask="url(#card-video-hole)"');
+  });
+});
+
+// O véu de leitura (048) nasceu no vídeo em feed 4:5, mas a foto de fundo
+// vale no post único também — e até 29/07 escolher 'on'/'off' na página 1
+// não mudava nada: só a foto era respeitada, o véu ficava sempre em 'auto'.
+describe("véu da foto de fundo vale na página 1 do post único", () => {
+  function alphaDoVeu(svg: string): number {
+    // O véu é um gradiente/retângulo com fill-opacity; pega o maior valor
+    // desenhado — é o da placa de leitura.
+    const valores = [...svg.matchAll(/(?:fill|stop)-opacity="([\d.]+)"/g)].map((m) => Number(m[1]));
+    return valores.length ? Math.max(...valores) : 0;
+  }
+
+  const comFoto = {
+    ...post,
+    bg_image_url: "https://exemplo.test/p1-bg.jpg",
+  };
+
+  it("'on' escurece mais que 'auto'", async () => {
+    const g = await grid(120);
+    const [auto] = await buildPostPreview(
+      { ...comFoto, bg_image_luminance: g, bg_overlay: "auto" },
+      spec()
+    );
+    const [on] = await buildPostPreview(
+      { ...comFoto, bg_image_luminance: g, bg_overlay: "on" },
+      spec()
+    );
+    expect(alphaDoVeu(on.svg)).toBeGreaterThanOrEqual(0.55);
+    expect(alphaDoVeu(on.svg)).toBeGreaterThan(alphaDoVeu(auto.svg));
+  });
+
+  it("'off' não desenha véu nenhum", async () => {
+    const [off] = await buildPostPreview(
+      { ...comFoto, bg_image_luminance: await grid(120), bg_overlay: "off" },
+      spec()
+    );
+    expect(alphaDoVeu(off.svg)).toBe(0);
+  });
+
+  it("sem foto escolhida, a escolha é ignorada (a base gerada segue em 'auto')", async () => {
+    const g = await grid(120);
+    const [semFoto] = await buildPostPreview(
+      { ...post, base_luminance: g, bg_overlay: "on" },
+      spec()
+    );
+    const [padrao] = await buildPostPreview({ ...post, base_luminance: g }, spec());
+    expect(alphaDoVeu(semFoto.svg)).toBe(alphaDoVeu(padrao.svg));
   });
 });

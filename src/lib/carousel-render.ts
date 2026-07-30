@@ -21,6 +21,7 @@ import {
   CARD_H,
   CLOSING_CORNER_MARGIN,
   actionIconsRail,
+  wordmarkToHeadlineGap,
   type CoverPageKind,
   type CardBrand,
   type LayoutPreset,
@@ -29,11 +30,15 @@ import { buildBrutalismCoverSvg, buildBrutalismCardSvg } from "@/lib/layout-brut
 import { buildSerifLuxeCoverSvg, buildSerifLuxeCardSvg } from "@/lib/layout-serif-luxe";
 import { buildSwissMonoCoverSvg, buildSwissMonoCardSvg } from "@/lib/layout-swiss-mono";
 import { buildPopCreatorCoverSvg, buildPopCreatorCardSvg } from "@/lib/layout-pop-creator";
+import { buildDoceVitrineCoverSvg, buildDoceVitrineCardSvg } from "@/lib/layout-doce-vitrine";
+import { buildClinicaClaraCoverSvg, buildClinicaClaraCardSvg } from "@/lib/layout-clinica-clara";
+import { buildTribunaCoverSvg, buildTribunaCardSvg } from "@/lib/layout-tribuna";
 import type { CarouselCard } from "@/lib/ai/carousel";
 import type { IgProfile } from "@/lib/types";
 
 /** Builders de um preset de layout ALTERNATIVO (Fase 3) — mesma forma
- * pros 4 presets (brutalism/serif-luxe/swiss-mono/pop-creator), o que
+ * pros 5 presets alternativos (brutalism/serif-luxe/swiss-mono/
+ * pop-creator/doce-vitrine), o que
  * permite despachar por tabela em vez de repetir a lógica de render. */
 interface AltLayoutBuilders {
   buildCover: typeof buildBrutalismCoverSvg;
@@ -45,6 +50,9 @@ const ALT_LAYOUTS: Partial<Record<LayoutPreset, AltLayoutBuilders>> = {
   "serif-luxe": { buildCover: buildSerifLuxeCoverSvg, buildCard: buildSerifLuxeCardSvg },
   "swiss-mono": { buildCover: buildSwissMonoCoverSvg, buildCard: buildSwissMonoCardSvg },
   "pop-creator": { buildCover: buildPopCreatorCoverSvg, buildCard: buildPopCreatorCardSvg },
+  "doce-vitrine": { buildCover: buildDoceVitrineCoverSvg, buildCard: buildDoceVitrineCardSvg },
+  "clinica-clara": { buildCover: buildClinicaClaraCoverSvg, buildCard: buildClinicaClaraCardSvg },
+  tribuna: { buildCover: buildTribunaCoverSvg, buildCard: buildTribunaCardSvg },
 };
 
 // Reexportados — quem já importava CARD_W/CARD_H/CoverPageKind/CardBrand
@@ -240,12 +248,21 @@ export function buildCoverSvg(
       cursor = bodyStartY - 66;
     }
     const headStartY = cursor - (lines.length - 1) * lineH;
-    // Gap ESCALA com o tamanho da fonte do título: um valor fixo (90)
-    // ficava colado em títulos grandes (size~104) — a altura das letras
-    // "come" parte do espaço já que a posição é pela BASELINE, não pelo
-    // topo do glifo. size*0.6 mantém a folga visual (não a distância de
-    // baseline) parecida entre título curto/grande.
-    cursor = headStartY - Math.round(90 + size * 0.6);
+    // Gap ESCALA com o tamanho da fonte do título: um valor fixo ficava
+    // colado em títulos grandes (size~104) — a altura das letras "come"
+    // parte do espaço já que a posição é pela BASELINE, não pelo topo do
+    // glifo. O fator sobre `size` mantém a folga ÓTICA parecida entre
+    // título curto/grande.
+    //
+    // COM wordmark a distância é a padrão do produto
+    // (wordmarkToHeadlineGap): o Reels já usava essa medida e é a que
+    // ficou certa; manter um número só aqui fazia a mesma marca respirar
+    // diferente na capa e no vídeo. SEM wordmark não há assinatura pra
+    // evitar, então a folga antiga continua valendo — mexer nela mudaria
+    // capas que já estavam boas.
+    cursor = wm
+      ? headStartY - wordmarkToHeadlineGap(size)
+      : headStartY - Math.round(90 + size * 0.6);
     const dividerY = cursor;
     return { dividerY, headStartY, bodyStartY, swipeY };
   };

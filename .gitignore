@@ -45,5 +45,10 @@ next-env.d.ts
 # imagens geradas pelos scripts de teste visual (não faz parte do app)
 /scripts/out/
 
+# painel visual dos layouts: 2 MB de SVG + fontes embutidas, gerado do
+# código (npx tsx scripts/build-layouts-html.ts). Versionar mandaria um
+# blob novo a cada mudança de geometria — o script É a fonte.
+/docs/layouts.html
+
 .vercel
 .env*

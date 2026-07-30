@@ -28,6 +28,9 @@ import { buildBrutalismCoverSvg, buildBrutalismCardSvg } from "@/lib/layout-brut
 import { buildSerifLuxeCoverSvg, buildSerifLuxeCardSvg } from "@/lib/layout-serif-luxe";
 import { buildSwissMonoCoverSvg, buildSwissMonoCardSvg } from "@/lib/layout-swiss-mono";
 import { buildPopCreatorCoverSvg, buildPopCreatorCardSvg } from "@/lib/layout-pop-creator";
+import { buildDoceVitrineCoverSvg, buildDoceVitrineCardSvg } from "@/lib/layout-doce-vitrine";
+import { buildClinicaClaraCoverSvg, buildClinicaClaraCardSvg } from "@/lib/layout-clinica-clara";
+import { buildTribunaCoverSvg, buildTribunaCardSvg } from "@/lib/layout-tribuna";
 
 export const PREVIEW_LAYOUTS: { key: LayoutPreset; label: string }[] = [
   { key: "editorial-noir", label: "Editorial Noir" },
@@ -35,6 +38,9 @@ export const PREVIEW_LAYOUTS: { key: LayoutPreset; label: string }[] = [
   { key: "serif-luxe", label: "Serif Luxe" },
   { key: "swiss-mono", label: "Swiss Mono" },
   { key: "pop-creator", label: "Pop Creator" },
+  { key: "doce-vitrine", label: "Doce Vitrine (confeitaria)" },
+  { key: "clinica-clara", label: "Clínica Clara (saúde)" },
+  { key: "tribuna", label: "Tribuna (advocacia)" },
 ];
 
 export type PreviewFormat = "cover" | "carousel" | "video" | "hybrid" | "video-feed" | "video-interior";
@@ -91,6 +97,9 @@ function previewCoverRender(
     "serif-luxe": buildSerifLuxeCoverSvg,
     "swiss-mono": buildSwissMonoCoverSvg,
     "pop-creator": buildPopCreatorCoverSvg,
+    "doce-vitrine": buildDoceVitrineCoverSvg,
+    "clinica-clara": buildClinicaClaraCoverSvg,
+    tribuna: buildTribunaCoverSvg,
   } as const;
   const build = builders[preset];
   return build(headline, brand, false, {
@@ -123,6 +132,9 @@ function previewCardSvg(
     "serif-luxe": buildSerifLuxeCardSvg,
     "swiss-mono": buildSwissMonoCardSvg,
     "pop-creator": buildPopCreatorCardSvg,
+    "doce-vitrine": buildDoceVitrineCardSvg,
+    "clinica-clara": buildClinicaClaraCardSvg,
+    tribuna: buildTribunaCardSvg,
   } as const;
   return builders[preset](headline, body, brand, { index, total });
 }

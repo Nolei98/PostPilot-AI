@@ -22,6 +22,15 @@ import type {
 import type { CardBrand } from "@/lib/carousel-render";
 import { resolvePostFontFamily } from "@/lib/font-data";
 
+/**
+ * A Fila mora em `/fila`. `/` é a landing ESTÁTICA (src/app/route.ts, um
+ * Route Handler que só serve public/index.html) — revalidar "/" nunca
+ * invalidou o cache da fila, e era por isso que trocar o layout em
+ * Ajustes "só pegava depois de salvar de novo": o que fazia a arte nova
+ * aparecer era o Router Cache expirando por tempo, não o save.
+ */
+const QUEUE_PATH = "/fila";
+
 /** Monta o CardBrand (render de carrossel) a partir de uma linha de brand_kits. */
 function buildCardBrand(bk: Record<string, unknown> | null): CardBrand {
   return {
@@ -120,7 +129,7 @@ export async function savePostBackground(
     .eq("user_id", user.id)
     .eq("status", "pending_approval");
   if (error) throw new Error(error.message);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
 }
 
 /**
@@ -150,7 +159,7 @@ export async function savePostMarkColor(
     .eq("user_id", user.id)
     .eq("status", "pending_approval");
   if (error) throw new Error(error.message);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
 }
 
 /** Limite do rótulo do topo: a linha é desenhada em ~24px com
@@ -183,7 +192,7 @@ export async function savePostEyebrow(postId: string, eyebrow: string) {
     .eq("user_id", user.id)
     .eq("status", "pending_approval");
   if (error) throw new Error(error.message);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
 }
 
 /**
@@ -216,7 +225,7 @@ export async function convertPostFormat(
     name: "post/convert-format.requested",
     data: { postId, target, videoOn },
   });
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
 }
 
 /** Aprova um post → vai para a tela "post pronto" */
@@ -235,7 +244,7 @@ export async function approvePost(postId: string) {
   if (error) throw new Error(error.message);
 
   await requestRender(postId, user.id);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   revalidatePath("/ready");
 }
 
@@ -278,7 +287,7 @@ export async function schedulePost(postId: string, scheduledForIso: string) {
   // Agendar também sai da fila, então também congela a arte agora. O job
   // de publicação só pega post com render_status='ready'.
   await requestRender(postId, user.id);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   revalidatePath("/ready");
 }
 
@@ -349,7 +358,7 @@ export async function cancelSchedule(postId: string) {
     .eq("status", "scheduled");
   if (error) throw new Error(error.message);
   await thawRenderedVideo(supabase, postId);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   revalidatePath("/ready");
 }
 
@@ -361,7 +370,7 @@ export async function discardPost(postId: string) {
     .update({ status: "discarded" })
     .eq("id", postId);
   if (error) throw new Error(error.message);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
 }
 
 /** Teto de uma ação em lote. Não é limite do banco — é o que evita que
@@ -385,7 +394,7 @@ export async function discardPosts(postIds: string[]) {
     .in("id", ids)
     .eq("status", "pending_approval"); // não mexe no que já saiu da fila
   if (error) throw new Error(error.message);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   return { discarded: count ?? ids.length };
 }
 
@@ -423,7 +432,7 @@ export async function approvePosts(postIds: string[]) {
   const aprovados = (data ?? []).map((p) => p.id as string);
   for (const id of aprovados) await requestRender(id, user.id);
 
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   revalidatePath("/ready");
   return { approved: aprovados.length };
 }
@@ -477,7 +486,7 @@ export async function updatePost(
 
   const { error } = await supabase.from("posts").update(updates).eq("id", postId);
   if (error) throw new Error(error.message);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   revalidatePath("/ready");
 }
 
@@ -531,12 +540,18 @@ export async function uploadPostBackgroundImage(
       .jpeg({ quality: 90 })
       .toBuffer();
 
-    const { error: upErr } = await supabase.storage
+    // Storage vai pelo client ADMIN, como todo upload do repo
+    // (uploadCarouselCardImage, attach-video, render): as políticas do
+    // bucket não liberam escrita pro usuário logado, então subir com o
+    // client dele falhava por RLS e a foto nunca chegava — a fila
+    // continuava mostrando só a cor do fundo (relatado em 29/07).
+    const admin = createAdminClient();
+    const { error: upErr } = await admin.storage
       .from("post-images")
       .upload(`${postId}-bg.jpg`, jpeg, { contentType: "image/jpeg", upsert: true });
     if (upErr) return { ok: false, error: upErr.message };
 
-    const { data: pub } = supabase.storage.from("post-images").getPublicUrl(`${postId}-bg.jpg`);
+    const { data: pub } = admin.storage.from("post-images").getPublicUrl(`${postId}-bg.jpg`);
     // `?v=` porque o caminho é fixo e o upload é upsert — sem carimbo, a
     // imagem antiga fica no cache do navegador/CDN (mesma armadilha que
     // segurava o vídeo trocado em 29/07).
@@ -553,7 +568,7 @@ export async function uploadPostBackgroundImage(
     return { ok: false, error: "Não foi possível processar essa imagem. Tente um JPG/PNG." };
   }
 
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   return { ok: true };
 }
 
@@ -572,7 +587,7 @@ export async function removePostBackgroundImage(postId: string) {
     .eq("user_id", user.id)
     .eq("status", "pending_approval");
   if (error) throw new Error(error.message);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
 }
 
 /**
@@ -598,7 +613,7 @@ export async function savePostBackgroundOverlay(
     .eq("user_id", user.id)
     .eq("status", "pending_approval");
   if (error) throw new Error(error.message);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
 }
 
 export async function uploadPostImage(
@@ -667,7 +682,7 @@ export async function uploadPostImage(
     };
   }
 
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   revalidatePath("/ready");
   return { ok: true };
 }
@@ -774,7 +789,7 @@ export async function savePostVideoShape(
     .eq("status", "pending_approval")
     .eq("video_status", "ready"); // sem vídeo pronto não há o que reenquadrar
   if (error) throw new Error(error.message);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
 }
 
 export async function attachUploadedPostVideo(
@@ -802,7 +817,7 @@ export async function attachUploadedPostVideo(
     data: { postId, userId: user.id, shape },
   });
 
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   revalidatePath("/ready");
   return { ok: true };
 }
@@ -833,7 +848,7 @@ export async function attachUploadedCardVideo(
     data: { cardId, userId: user.id },
   });
 
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   revalidatePath("/ready");
   return { ok: true };
 }
@@ -1063,7 +1078,7 @@ export async function saveIgProfile(formData: FormData) {
   if (error) throw new Error(error.message);
 
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
 }
 
 /**
@@ -1137,7 +1152,7 @@ export async function saveVisualIdentity(formData: FormData) {
 
 
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
 }
 
 /**
@@ -1200,7 +1215,7 @@ export async function saveBrandTemplate(formData: FormData) {
 
 
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
 }
 
 /**
@@ -1338,7 +1353,7 @@ export async function applyTemplateToPost(
     })
     .eq("id", postId);
   if (error) throw new Error(error.message);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   revalidatePath("/ready");
 }
 
@@ -1360,7 +1375,7 @@ export async function removeTemplateFromPost(postId: string) {
     .update({ template_applied: false, closing_image_url: null })
     .eq("id", postId);
   if (error) throw new Error(error.message);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   revalidatePath("/ready");
 }
 
@@ -1388,7 +1403,7 @@ export async function revertApproval(
   // Descartado também descongela: se voltar pra fila depois, o vídeo
   // composto não pode estar lá esperando pra ser desenhado duas vezes.
   await thawRenderedVideo(supabase, postId);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   revalidatePath("/ready");
 }
 
@@ -1538,7 +1553,7 @@ export async function updateCarouselCard(
     .update({ headline: fields.headline, body: fields.body, image_url: imageUrl, layout })
     .eq("id", cardId);
   if (error) throw new Error(error.message);
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   revalidatePath("/ready");
 }
 
@@ -1569,7 +1584,7 @@ export async function uploadCarouselCardImage(
 
   const { data: card } = await supabase
     .from("carousel_cards")
-    .select("id, post_id, idx, role, headline, body, layout")
+    .select("id, post_id, idx, role, headline, body, layout, video_status")
     .eq("id", cardId)
     .maybeSingle();
   if (!card) return { ok: false, error: "Card não encontrado." };
@@ -1626,27 +1641,50 @@ export async function uploadCarouselCardImage(
     const { data: bgPub } = admin.storage.from("post-images").getPublicUrl(bgPath);
     const bgUrl = `${bgPub.publicUrl}?v=${Date.now()}`;
 
+    // Luminância da foto, medida UMA vez aqui: é o número que decide o
+    // véu de leitura no preview e no render (mesma régua do resto do
+    // pipeline). Sem ela o card com vídeo assumia "fundo escuro" às
+    // cegas e podia entregar texto claro sobre foto clara.
+    const { buildLuminanceGrid } = await import("@/lib/contrast");
+    const bgLuminance = await buildLuminanceGrid(buf);
+
     const layout = (card.layout as CardLayoutOverride | null) ?? {};
-    const { renderAndUploadCard } = await import("@/lib/carousel-render");
-    const imageUrl = await renderAndUploadCard(
-      card.post_id,
-      {
-        idx: card.idx,
-        role: card.role as "hook" | "value" | "cta",
-        headline: card.headline ?? "",
-        body: card.body ?? "",
-      },
-      cardBrand,
-      pageKind,
-      buf,
-      profile,
-      totalCards ?? 1,
-      layout.imagePosition ?? null
-    );
+
+    // Card com VÍDEO não leva arte estática: a peça dele é montada na
+    // aprovação (renderCardVideo), com a foto entrando como fundo atrás
+    // da moldura. Compor um card normal aqui gastaria sharp pra gerar uma
+    // imagem que ninguém usa — e ainda gravaria image_url, fazendo a tela
+    // de Prontos achar que o card tem arte pronta.
+    const cardComVideo = card.video_status === "ready" || card.video_status === "processing";
+
+    const imageUrl = cardComVideo
+      ? null
+      : await (async () => {
+          const { renderAndUploadCard } = await import("@/lib/carousel-render");
+          return renderAndUploadCard(
+            card.post_id,
+            {
+              idx: card.idx,
+              role: card.role as "hook" | "value" | "cta",
+              headline: card.headline ?? "",
+              body: card.body ?? "",
+            },
+            cardBrand,
+            pageKind,
+            buf,
+            profile,
+            totalCards ?? 1,
+            layout.imagePosition ?? null
+          );
+        })();
 
     const { error } = await supabase
       .from("carousel_cards")
-      .update({ image_url: imageUrl, bg_url: bgUrl })
+      .update({
+        ...(cardComVideo ? {} : { image_url: imageUrl }),
+        bg_url: bgUrl,
+        bg_luminance: bgLuminance,
+      })
       .eq("id", cardId);
     if (error) return { ok: false, error: error.message };
   } catch (err) {
@@ -1657,7 +1695,7 @@ export async function uploadCarouselCardImage(
     };
   }
 
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
   revalidatePath("/ready");
   return { ok: true };
 }
@@ -1694,16 +1732,45 @@ export async function saveBrandLabel(formData: FormData) {
   if (error) throw new Error(error.message);
 
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
+}
+
+/**
+ * Confirma que uma coluna do brand_kit está com o valor esperado ANTES
+ * de a action retornar. Sem isto o botão destravava no instante do
+ * `update`, e uma réplica de leitura ainda atrasada devolvia o valor
+ * velho pro próximo load da fila — a origem do "tive que salvar de novo".
+ * Poucas tentativas curtas: o caso normal acerta na primeira.
+ */
+async function confirmBrandKitValue(
+  clientId: string,
+  column: string,
+  expected: unknown
+): Promise<void> {
+  const supabase = createClient();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data } = await supabase
+      .from("brand_kits")
+      .select(column)
+      .eq("client_id", clientId)
+      .maybeSingle();
+    const got = (data as Record<string, unknown> | null)?.[column];
+    if (JSON.stringify(got) === JSON.stringify(expected)) return;
+    await new Promise((r) => setTimeout(r, 120));
+  }
+  throw new Error("O salvamento não foi confirmado pelo banco. Tente de novo.");
 }
 
 /**
  * Salva o preset de LAYOUT (Fase 3 — Editorial Noir / Brutalismo
- * Editorial / ...) do cliente ativo e re-renderiza tudo que está
- * pendente (carrosséis + fechamento dos posts únicos) pra refletir na
- * hora, sem esperar a próxima geração.
+ * Editorial / ...) do cliente ativo.
+ *
+ * NÃO re-renderiza nada: post na fila não tem arte (migration 040), o que
+ * se vê lá é preview ao vivo. A arte real só nasce ao aprovar/agendar.
+ * Retorna o preset confirmado pra UI destravar só quando o valor já está
+ * de fato no banco.
  */
-export async function saveLayoutPreset(formData: FormData) {
+export async function saveLayoutPreset(formData: FormData): Promise<{ layoutPreset: string }> {
   const supabase = createClient();
   const {
     data: { user },
@@ -1724,8 +1791,11 @@ export async function saveLayoutPreset(formData: FormData) {
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
 
+  await confirmBrandKitValue(clientId, "layout_preset", layoutPreset);
+
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
+  return { layoutPreset };
 }
 
 /**
@@ -1735,7 +1805,7 @@ export async function saveLayoutPreset(formData: FormData) {
  * job de resync em background do layout (fetchCoverBrand já busca
  * single_post_style fresco por post, então o job não precisa mudar).
  */
-export async function saveSinglePostStyle(formData: FormData) {
+export async function saveSinglePostStyle(formData: FormData): Promise<{ singlePostStyle: string }> {
   const supabase = createClient();
   const {
     data: { user },
@@ -1756,8 +1826,11 @@ export async function saveSinglePostStyle(formData: FormData) {
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
 
+  await confirmBrandKitValue(clientId, "single_post_style", singlePostStyle);
+
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
+  return { singlePostStyle };
 }
 
 /**
@@ -1766,12 +1839,12 @@ export async function saveSinglePostStyle(formData: FormData) {
  * merge em brand_kits.template_selection (jsonb), as outras superfícies
  * ficam intactas.
  *
- * Dispara o MESMO resync em background do layout_preset: escolher um
- * modelo e ver a fila continuar na arte antiga lê como "o template não
- * foi aplicado" (reclamação de 2026-07-27). O job já sabe pular o que
- * não muda, e o resync respeita a seleção de modelo desde a mesma data.
+ * Não re-renderiza nada (a fila é preview ao vivo); o que garante que a
+ * escolha apareça é a confirmação no banco + revalidação de /fila.
  */
-export async function saveTemplateSelection(formData: FormData) {
+export async function saveTemplateSelection(
+  formData: FormData
+): Promise<{ surface: string; templateId: string }> {
   const supabase = createClient();
   const {
     data: { user },
@@ -1804,8 +1877,11 @@ export async function saveTemplateSelection(formData: FormData) {
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
 
+  await confirmBrandKitValue(clientId, "template_selection", next);
+
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
+  return { surface, templateId };
 }
 
 /**
@@ -1956,7 +2032,7 @@ export async function saveAutoGenerate(formData: FormData) {
     .eq("client_id", clientId);
   if (error) throw new Error(error.message);
   revalidatePath("/settings");
-  revalidatePath("/");
+  revalidatePath(QUEUE_PATH);
 }
 
 /**

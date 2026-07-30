@@ -8,6 +8,7 @@ import {
   CARD_H,
   type CardBrand,
 } from "@/lib/carousel-render";
+import { wordmarkToHeadlineGap } from "@/lib/render-shared";
 import type { CarouselCard } from "@/lib/ai/carousel";
 
 const brand: CardBrand = {
@@ -241,5 +242,39 @@ describe("rótulo do topo no editorial-noir (046)", () => {
     const card = { idx: 0, role: "hook" as const, headline: "Título", body: "" };
     const semRotulo = buildCoverSvg(card, brand, false, {}).svg;
     expect(semRotulo).not.toContain("EDIÇÃO");
+  });
+});
+
+// Com wordmark, o filete + nome da marca formam uma linha forte logo
+// acima do título. Desde 29/07 a distância entre os dois é a MESMA de
+// todo o produto (wordmarkToHeadlineGap, a medida que o Reels já usava)
+// — antes cada formato tinha o seu número e a mesma marca respirava
+// diferente na capa, no Reels e no feed 4:5.
+describe("folga entre wordmark e título na capa", () => {
+  const TITULO = "Aliança de IA fica sem os maiores laboratórios";
+  const card = { idx: 0, role: "hook" as const, headline: TITULO, body: "" };
+
+  it("usa a distância padrão do produto entre o filete e o título", () => {
+    const { svg } = buildCoverSvg(card, { ...brand, wordmark: "MARCA®" }, false, {});
+    // O divisor é a <line> da esquerda; o título, o primeiro <tspan>.
+    const dividerY = Number(svg.match(/<line x1="\d+" y1="(\d+)"/)?.[1]);
+    const headY = Number(svg.match(/<tspan[^>]*y="(\d+)"/)?.[1]);
+    const size = Number(svg.match(/font-size="(\d+)"[^>]*text-anchor="middle"/)?.[1] ?? 0);
+    expect(dividerY).toBeGreaterThan(0);
+    expect(headY - dividerY).toBe(wordmarkToHeadlineGap(size || 104));
+  });
+
+  it("o título nunca invade o filete do wordmark", () => {
+    const { svg } = buildCoverSvg(card, { ...brand, wordmark: "MARCA®" }, false, {});
+    const dividerY = Number(svg.match(/<line x1="\d+" y1="(\d+)"/)?.[1]);
+    const headY = Number(svg.match(/<tspan[^>]*y="(\d+)"/)?.[1]);
+    // Topo aproximado dos glifos da 1ª linha (ascender ~75% do corpo).
+    const topoDoTitulo = headY - 104 * 0.75;
+    expect(topoDoTitulo).toBeGreaterThan(dividerY);
+  });
+
+  it("sem wordmark não existe filete pra evitar — geometria antiga mantida", () => {
+    const { svg } = buildCoverSvg(card, { ...brand, wordmark: null, brandName: null }, false, {});
+    expect(svg).not.toContain("<line");
   });
 });

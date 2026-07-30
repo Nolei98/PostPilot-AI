@@ -5,9 +5,14 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga não recebe mais commits.
-**Última atualização:** 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Última atualização:** 2026-07-30 — três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
-### Bloqueio ativo: Pollinations.ai exige pagamento pra requests multi-mensagem
+### Bloqueio ENCERRADO em 29/07: Pollinations.ai exigia pagamento pra requests multi-mensagem
+> ✅ Resolvido trocando os dois clientes afetados pra `gemini` (ver §0-C.6).
+> Nenhum cliente em `pollinations` hoje; `GEMINI_API_KEY` responde 200. O
+> diagnóstico fica registrado abaixo porque explica o custo do silêncio —
+> foi ele que motivou o aviso de piloto pausado na Fila (047).
+
 Descoberto 2026-07-22 investigando por que a fila não recebia posts novos há dias
 (246 acumulados, sem erro visível). `generate-carousel` falha em "generate-structure"
 (`src/lib/ai/carousel.ts`) com `Pollinations respondeu 402`. Reproduzido fora do
@@ -23,6 +28,153 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0-E. Sessão 2026-07-29/30 — presets de nicho, painel visual e o "salvei e não mudou nada"
+
+Sessão sem migration nenhuma: tudo aqui é arte e percepção de
+salvamento. Três frentes que nasceram juntas — os cinco presets eram
+todos de "criador de conteúdo genérico", o painel de referência visual
+era um documento em texto, e trocar layout em Ajustes parecia não
+funcionar.
+
+### 0-E.1 Três presets de NICHO (F, G, H)
+
+Os cinco presets existentes se separam por ESTILO editorial (noir,
+brutalista, luxo, suíço, pop). Nenhum se separa por RAMO — e o cliente
+que vende bolo não se reconhece em nenhum deles. Os três novos partem do
+que o público do ramo associa a confiança:
+
+- **Doce Vitrine** (`doce-vitrine`, confeitaria/alimentação) — borda
+  ondulada (a forminha/bandeja rendada), selo redondo, confeitos soltos.
+  DM Serif Display no título + **Varela Round** nos rótulos: é o rótulo
+  arredondado, não a fonte do título, que separa esta peça do Serif Luxe
+  (mesma serifa, outra intenção).
+- **Clínica Clara** (`clinica-clara`, saúde) — o oposto da vitrine:
+  identidade pelo RESPIRO (margem larga, coluna única), mais três sinais
+  discretos — cruz fina no topo, traço de batimento (ECG) entre marca e
+  título, cápsula de contorno nos rótulos. **Sora**, a única fonte já
+  embutida que nenhum preset usava; a mono do Swiss leria como aviso
+  técnico, não como cuidado.
+- **Tribuna** (`tribuna`, advocacia) — o que o público associa a direito
+  é ORDEM, não ornamento: moldura fina por dentro da borda, **régua
+  dupla** (papelaria jurídica), rótulo `ART. 01` em retângulo de cantos
+  VIVOS (arredondar amoleceria o preset inteiro). Mesma serifa do Serif
+  Luxe; o que muda é a estrutura — lá centralizado e contido, aqui à
+  esquerda, emoldurado e numerado.
+
+Todos entregam o mesmo contrato `{svg, blurBandTop}` dos demais, então
+são drop-in: `LayoutPreset` ganhou os três valores, `PRESET_DISPLAY_FONT`
+e `PRESET_VIDEO_IDENTITY` ganharam as entradas (eyebrow e swipe hint
+próprios), e `BrandRowKind` ganhou `scallop` | `pulse` | `double-rule`.
+**Não precisou de migration:** `brand_kits.layout_preset` é `text` sem
+CHECK (030), e Ajustes lista os presets a partir de `PREVIEW_LAYOUTS` —
+os três aparecem no seletor sozinhos.
+
+### 0-E.2 `docs/layouts.html` — painel visual gerado pelo código
+
+`docs/layouts-spec.md` descrevia a arte em prosa pra alimentar uma IA de
+design. Descrição de geometria em texto envelhece calada: a spec dizia um
+número, o código dizia outro. Agora `scripts/build-layouts-html.ts`
+desenha os **8 presets × 6 formatos** com os MESMOS builders do render
+(`layout-preview.ts`, `image.ts`, `cover-svg.ts`) e as fontes reais
+embutidas. Não é mockup — é o render.
+
+Regenerar com `npx tsx scripts/build-layouts-html.ts` sempre que a
+geometria mudar (a spec agora diz isso explicitamente).
+
+### 0-E.3 Folga wordmark → título: uma razão, não quatro números
+
+Cada formato tinha o seu gap entre a assinatura da marca e a primeira
+linha do título: Reels 50, feed 4:5 36, capa com vídeo 58, capa estática
+130. O mesmo carrossel respirava diferente em cada peça.
+
+`wordmarkToHeadlineGap()` (`render-shared.ts`) unifica em **1,56 × o
+corpo do título** — 162px num título de 104, 134px num de 86, 109px num
+de 70. A medida saiu do Reels (a que já estava visualmente certa) e foi
+propagada como RAZÃO de propósito: copiar os pixels crus daria metade da
+folga ótica numa capa, porque o texto é posicionado pela BASELINE e letra
+grande "come" o vão. Vale onde existe assinatura acima do título
+(Editorial Noir, Reels, vídeo no feed 4:5, capa com vídeo); os quatro
+presets alternativos usam régua/barra/pílula e mantêm a folga antiga —
+não há assinatura pra evitar.
+
+Junto: o gap título → moldura do vídeo no card interior subiu de **40
+para 72** (o vídeo parecia grudado embaixo da fonte). `card-video-layout.test.ts`
+existe pra garantir que aumentar essa folga não empurre o corpo por cima
+do rodapé no pior caso.
+
+### 0-E.4 O véu escolhido (048) só valia na prévia
+
+`composeFromSpec` compunha **sempre em `auto`**: quem escolhia véu `on`
+ou `off` na fila via a prévia obedecer e a arte aprovada sair diferente —
+duas verdades sobre a mesma arte, exatamente o que o §0-B tinha ido
+consertar. `cover-veil.render.test.ts` confere por PIXEL, medindo a faixa
+onde o texto senta, com render real (sharp + resvg).
+
+Também nesta frente: `buildFeedVideoBlurBgOverlaySvg` passou a ter
+overlay próprio (a fila desenhava o feed-blur com o overlay do 4:5
+comum) e `buildCardVideoOverlayPhotoBg` compõe a capa com vídeo sobre
+FOTO respeitando o piso de escurecimento (`VIDEO_SCRIM_FLOOR`).
+
+### 0-E.5 "Preciso salvar duas ou três vezes"
+
+Relato do usuário: trocar o layout em Ajustes e não ver a mudança na
+fila. Eram **três** coisas somadas, nenhuma delas o write:
+
+1. **`revalidatePath("/")` em ~20 actions** — `/` é a landing estática. A
+   fila (`/fila`) nunca era invalidada, então o RSC servido depois do
+   save era o cache velho. Todas passaram a revalidar `QUEUE_PATH`.
+2. **Botão destravava antes da árvore nova chegar** — `SaveLockForm` só
+   solta quando a action confirmou no banco **e** o `router.refresh()`
+   terminou de trocar a árvore (a transição do React é quem diz quando).
+   `TemplatePickButton` faz o mesmo na miniatura de modelo — dava pra
+   clicar em três modelos seguidos sem saber qual venceu. `BrandPreloader`
+   (portal pro `<body>`, porque `fixed` é ancorado por ancestral com
+   transform e os cards entram com `animate-fade-up`) trava a TELA quando
+   o que mudou é a fila inteira.
+3. **A aba voltava pro início** — `SectionTabs` guardava a aba ativa só
+   em estado local; o `router.refresh()` remontava a árvore pelo
+   `loading.tsx` e quem estava em "Layouts" era jogado pra "Perfil" logo
+   depois de salvar, o que parecia recarregamento da página. Agora a aba
+   vive em `sessionStorage` (lida no `useEffect`, não no primeiro render —
+   ler antes daria hydration mismatch).
+
+Os textos de ajuda em Ajustes também estavam mentindo desde o §0-B:
+prometiam "salvar re-renderiza na hora os posts já na fila". Não
+re-renderiza mais nada — a arte é montada na aprovação.
+
+### 0-E.6 Conversão pra carrossel batendo na unique
+
+`#0028` quebrava com `duplicate key value violates unique constraint
+"carousel_cards_post_id_idx_key"`. Causa: post que NÃO é carrossel com
+linhas sobrando em `carousel_cards` — resto de conversão anterior, de
+geração que virou post único, ou de job morto no meio. `convert-post-format`
+ganhou o step **`clear-old-cards`** antes do insert, o que também torna o
+job idempotente em retry (o step pode rodar duas vezes depois de falha no
+meio).
+
+`scripts/repair-orphan-cards.ts` limpa o que JÁ está no banco e serve de
+diagnóstico:
+
+```
+npx tsx scripts/repair-orphan-cards.ts            # só lista
+npx tsx scripts/repair-orphan-cards.ts --clean    # apaga os órfãos
+npx tsx scripts/repair-orphan-cards.ts --discard 28
+```
+
+**Estado:** `tsc`, `eslint` e build limpos; **415 testes verdes** (+68
+desde §0-D).
+
+### 0-E.7 Pendências
+
+- [ ] **Rodar `repair-orphan-cards.ts` em produção** — o job já não cria
+      mais órfãos, mas os antigos seguem no banco travando conversão.
+- [ ] Conferir os três presets novos em arte final (não só no painel):
+      aprovar um carrossel em cada, com foto de fundo e sem.
+- [ ] Regenerar `docs/layouts.html` na próxima mudança de geometria — a
+      spec depende dele pra não voltar a envelhecer calada.
 
 ---
 

@@ -13,7 +13,12 @@
 // drop-in compatível no dispatcher de image.ts (buildPageOneCoverSvg).
 // ============================================================
 import { buildOverlayGradientSvg } from "@/lib/contrast";
-import { CARD_W, CARD_H, type CardBrand } from "@/lib/render-shared";
+import {
+  CARD_W,
+  CARD_H,
+  displayFontFor as displayFontForPreset,
+  type CardBrand,
+} from "@/lib/render-shared";
 
 function escapeXml(s: string): string {
   return s
@@ -56,20 +61,14 @@ function tspansCentered(lines: string[], cx: number, startY: number, lineH: numb
 
 /** Fonte de destaque de cada layout — a MESMA usada na headline da capa/
  * interior daquele preset (identidade tipográfica não muda; só a
- * estrutura desta variação é diferente). */
+ * estrutura desta variação é diferente).
+ *
+ * A tabela vive em render-shared: aqui existia uma cópia em `switch`, e
+ * ela ficou para trás quando entrou um preset novo (Doce Vitrine, 29/07)
+ * — a página 1 "fonte no meio" saía na fonte da marca em vez da fonte do
+ * preset. Uma fonte de verdade só, e presets novos entram sozinhos. */
 function displayFontFor(brand: CardBrand): { family: string; weight: number } {
-  switch (brand.layoutPreset) {
-    case "brutalism":
-      return { family: "Anton", weight: 400 };
-    case "serif-luxe":
-      return { family: "DM Serif Display", weight: 400 };
-    case "swiss-mono":
-      return { family: "Inter", weight: 800 };
-    case "pop-creator":
-      return { family: "Varela Round", weight: 400 };
-    default:
-      return { family: brand.fontFamily || "Inter", weight: 800 };
-  }
+  return displayFontForPreset(brand.layoutPreset, brand.fontFamily);
 }
 
 function displaySize(headline: string): { size: number; lineH: number; maxChars: number } {

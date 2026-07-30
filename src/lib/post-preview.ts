@@ -24,6 +24,7 @@ import { buildCardSvgPlan, CARD_W, CARD_H } from "@/lib/carousel-render";
 import { applyBackground } from "@/lib/render-spec";
 import {
   buildCardVideoOverlaySvg,
+  buildFeedVideoBlurBgOverlaySvg,
   buildFeedVideoOverlaySvg,
   buildReelsVideoOverlaySvg,
 } from "@/lib/image";
@@ -151,12 +152,15 @@ function luminanceAt(
  * a arte lavada.
  */
 function veilFor(
-  c: { theme: "light" | "dark"; alpha: number },
+  c: { theme: "light" | "dark"; textColor: string; alpha: number },
   overlay: "auto" | "on" | "off" | null | undefined
-): { theme: "light" | "dark"; alpha: number } | undefined {
-  if (overlay === "off") return { theme: c.theme, alpha: 0 };
-  if (overlay === "on") return { theme: c.theme, alpha: Math.max(0.55, c.alpha) };
-  return { theme: c.theme, alpha: Math.max(0.32, c.alpha) };
+): { theme: "light" | "dark"; textColor: string; alpha: number } | undefined {
+  // textColor SEMPRE vai junto: com foto de fundo quem decide a cor do
+  // texto é a luminância medida, não a cor da marca (buildFeedVideoOverlaySvg).
+  const base = { theme: c.theme, textColor: c.textColor };
+  if (overlay === "off") return { ...base, alpha: 0 };
+  if (overlay === "on") return { ...base, alpha: Math.max(0.55, c.alpha) };
+  return { ...base, alpha: Math.max(0.32, c.alpha) };
 }
 
 function contrastFor(
@@ -226,7 +230,10 @@ function overlaysFor(spec: RenderSpec, canvas: { w: number; h: number }, positio
 /** Página 1 do post único (e o quadro do vídeo feed): foto + título. */
 function buildPageOne(post: PreviewPostInput, spec: RenderSpec, photoUrl: string | null): PreviewPage {
   const canvas = { w: WIDTH, h: HEIGHT };
-  const grid = post.base_luminance;
+  // A grade tem que ser da foto que está DE FATO no fundo: medir a base
+  // gerada e desenhar a foto escolhida daria contraste calculado contra a
+  // imagem errada — texto claro sobre foto clara, por exemplo.
+  const grid = post.bg_image_url ? post.bg_image_luminance : post.base_luminance;
 
   // Duas medições, exatamente como composeCoverStyleContent faz: a banda
   // de identidade (que começa onde o layout disser) e a meta-linha do
@@ -236,14 +243,28 @@ function buildPageOne(post: PreviewPostInput, spec: RenderSpec, photoUrl: string
   });
   const band = contrastFor(grid, { top: probe.blurBandTop, height: canvas.h - probe.blurBandTop }, canvas);
 
+  // O véu escolhido (048) só vale quando há FOTO de fundo — na base
+  // gerada não existe escolha a respeitar. Mesma conta de
+  // composeCoverStyleContent, senão a fila mostraria um véu e a arte
+  // final outro.
+  const veil = (a: number) =>
+    post.bg_image_url
+      ? post.bg_overlay === "off"
+        ? 0
+        : post.bg_overlay === "on"
+          ? Math.max(0.55, a)
+          : a
+      : a;
+  const top = topOverlayFor(grid, band, canvas);
+
   const { svg, blurBandTop } = buildPageOneCoverSvg(
     post.hook ?? "",
     { ...spec.cardBrand, colorText: band.textColor },
     !!photoUrl,
     {
       showSwipeHint: false,
-      overlay: { theme: band.theme, alpha: band.alpha },
-      topOverlay: topOverlayFor(grid, band, canvas),
+      overlay: { theme: band.theme, alpha: veil(band.alpha) },
+      topOverlay: { theme: top.theme, alpha: veil(top.alpha) },
     }
   );
 
@@ -394,10 +415,28 @@ function buildCardWithVideo(
   const canvas = { w: CARD_W, h: CARD_H };
   const pageKind = card.idx === 0 ? "cover" : card.idx === total - 1 ? "closing" : "interior";
   const override = (card.layout as CardLayoutOverride | null) ?? {};
+  // Foto no card COM vídeo (2026-07-29): a foto do card vale como fundo,
+  // igual ao feed 4:5. Antes o card com vídeo era sempre fundo sólido, e
+  // subir foto nele não mudava nada — o retângulo cobria a foto inteira.
+  const photoBgUrl = card.bg_url ?? null;
+  const framePeek = buildCardVideoOverlaySvg(
+    { headline: card.headline, body: card.body },
+    spec.cardBrand,
+    { pageKind, index: card.idx, total }
+  ).frame;
+  const bandTop = framePeek.y + framePeek.h;
+  const c = photoBgUrl
+    ? contrastFor(card.bg_luminance, { top: bandTop, height: canvas.h - bandTop }, canvas)
+    : null;
   const { svg, frame } = buildCardVideoOverlaySvg(
     { headline: card.headline, body: card.body },
     applyBackground(spec.cardBrand, override.bgMode, override.bgColor),
-    { pageKind, index: card.idx, total }
+    {
+      pageKind,
+      index: card.idx,
+      total,
+      photoBg: c ? { theme: c.theme, alpha: Math.max(0.32, c.alpha) } : undefined,
+    }
   );
   // SEMPRE o vídeo BRUTO: o preview desenha a moldura e o texto por cima,
   // ao vivo. Usar o composto (que já traz a página inteira queimada)
@@ -405,9 +444,11 @@ function buildCardWithVideo(
   // aconteceu com carrossel aprovado que voltou pra fila (29/07). O
   // composto continua sendo o que a tela Prontos e a publicação usam.
   const url = sourceVideoUrl(postId, card.idx, card.video_poster_url);
-  const layers: PreviewLayer[] = url
-    ? [{ kind: "video", url, poster: card.video_poster_url, frame: frameToFrac(frame, canvas) }]
-    : [];
+  const layers: PreviewLayer[] = [];
+  if (photoBgUrl) layers.push({ kind: "photo", url: photoBgUrl });
+  if (url) {
+    layers.push({ kind: "video", url, poster: card.video_poster_url, frame: frameToFrac(frame, canvas) });
+  }
   return { svg: fill(svg), layers, aspect: "1080 / 1350" };
 }
 
@@ -445,15 +486,37 @@ function buildVideoPage(post: PreviewPostInput, spec: RenderSpec): PreviewPage |
   }
 
   const canvas = { w: WIDTH, h: HEIGHT };
+  const frameForBand = buildFeedVideoOverlaySvg(headline, spec.cardBrand).frame;
+  const bandTop = frameForBand.y + frameForBand.h;
+  const band = { top: bandTop, height: HEIGHT - bandTop };
+
+  // FEED BORRADO: o fundo é a cópia borrada do próprio vídeo, então o
+  // overlay NÃO pode ter retângulo de fundo — era o que estava
+  // acontecendo (o markup do feed sólido pintava a cor da marca em cima
+  // do vídeo borrado, e os dois enquadramentos ficavam idênticos na
+  // fila). A luminância vem do pôster, que é o que attach-video mediu.
+  if (shape === "feed-blur") {
+    const c = contrastFor(post.base_luminance, band, canvas);
+    const { svg, frame } = buildFeedVideoBlurBgOverlaySvg(headline, spec.cardBrand, {
+      theme: c.theme,
+      textColor: c.textColor,
+      alpha: Math.max(0.32, c.alpha),
+    });
+    return {
+      svg: fill(svg),
+      layers: [
+        { kind: "video", url, poster, frame: null, blurredBackdrop: true },
+        { kind: "video", url, poster, frame: frameToFrac(frame, canvas) },
+      ],
+      aspect: "1080 / 1350",
+    };
+  }
+
   // Feed 4:5 com FOTO de fundo (2026-07-29): a foto entra como camada e
   // o overlay troca o retângulo sólido por um véu de leitura. O véu é
   // medido na faixa do texto, igual ao render.
-  const photoBgUrl = shape === "feed" ? post.bg_image_url ?? null : null;
-  const frameForBand = buildFeedVideoOverlaySvg(headline, spec.cardBrand).frame;
-  const bandTop = frameForBand.y + frameForBand.h;
-  const c = photoBgUrl
-    ? contrastFor(post.bg_image_luminance, { top: bandTop, height: HEIGHT - bandTop }, canvas)
-    : null;
+  const photoBgUrl = post.bg_image_url ?? null;
+  const c = photoBgUrl ? contrastFor(post.bg_image_luminance, band, canvas) : null;
   const { svg, frame } = buildFeedVideoOverlaySvg(
     headline,
     spec.cardBrand,
@@ -461,9 +524,6 @@ function buildVideoPage(post: PreviewPostInput, spec: RenderSpec): PreviewPage |
   );
   const layers: PreviewLayer[] = [];
   if (photoBgUrl) layers.push({ kind: "photo", url: photoBgUrl });
-  if (shape === "feed-blur") {
-    layers.push({ kind: "video", url, poster, frame: null, blurredBackdrop: true });
-  }
   layers.push({ kind: "video", url, poster, frame: frameToFrac(frame, canvas) });
   return { svg: fill(svg), layers, aspect: "1080 / 1350" };
 }
@@ -514,7 +574,10 @@ export async function buildPostPreview(
     // Sem vídeo pronto ainda: cai no caminho normal (base/arte antiga).
   }
 
-  const photo = post.base_image_url ?? null;
+  // A foto ESCOLHIDA (048) vence a base gerada: se a pessoa subiu um
+  // fundo, é isso que ela quer ver — vale no post único também, não só no
+  // vídeo em feed 4:5, que foi onde o recurso nasceu.
+  const photo = post.bg_image_url ?? post.base_image_url ?? null;
   if (!photo) {
     // Post anterior à 040 (ou vídeo sem pôster): mostra o que existe.
     return [post.image_url, post.closing_image_url]

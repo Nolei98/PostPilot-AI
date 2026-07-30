@@ -19,7 +19,6 @@ import {
   removeTemplateFromPost,
   schedulePost,
   updatePost,
-  uploadPostImage,
   attachUploadedPostVideo,
   createVideoUploadTicket,
   convertPostFormat,
@@ -36,6 +35,7 @@ import { Card, CardActions } from "@/components/ui/Card";
 import { Drawer } from "@/components/ui/Drawer";
 import { Modal } from "@/components/ui/Modal";
 import { LoadingOrb } from "@/components/ui/LoadingOrb";
+import { BrandPreloader } from "@/components/ui/BrandPreloader";
 import { Input, Textarea } from "@/components/ui/Input";
 import { useQueueSelection } from "@/components/QueueSelection";
 import { CarouselPreview } from "@/components/CarouselPreview";
@@ -120,7 +120,6 @@ export function PostCard({
   const toast = useToast();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
-  const [cardsOpen, setCardsOpen] = useState(false);
   const [hook, setHook] = useState(post.hook);
   const [caption, setCaption] = useState(post.caption);
   const [hashtags, setHashtags] = useState(post.hashtags);
@@ -128,6 +127,8 @@ export function PostCard({
   const [exit, setExit] = useState<ExitDirection>(null);
   const [gone, setGone] = useState(false);
   const [isPending, startTransition] = useTransition();
+  /** Salvamento do editor: mantém o preloader da marca até a fila voltar. */
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, startUpload] = useTransition();
@@ -170,26 +171,6 @@ export function PostCard({
     });
   }
 
-  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setUploadError(null);
-    startUpload(async () => {
-      try {
-        // Comprime no navegador antes de enviar — evita estourar o
-        // limite de payload da plataforma com fotos de celular grandes.
-        const resized = await resizeImageForUpload(file);
-        const fd = new FormData();
-        fd.set("post_id", post.id);
-        fd.set("image", resized);
-        const result = await uploadPostImage(fd);
-        if (!result.ok) setUploadError(result.error ?? "Falha ao subir imagem.");
-      } catch {
-        setUploadError("Falha ao subir imagem. Tente um arquivo menor.");
-      }
-    });
-  }
 
   // ---- Fundo deste post (migration 042) ----
   // A cor do TEXTO não entra aqui de propósito: ela é derivada da
@@ -452,6 +433,9 @@ export function PostCard({
 
   return (
     <>
+      {salvandoEdicao && (
+        <BrandPreloader label="Salvando alterações..." hint="Atualizando o post na fila" />
+      )}
       <Card
         className={`animate-fade-up overflow-hidden
           ${exit === "right" ? "animate-exit-right" : ""}
@@ -715,7 +699,7 @@ export function PostCard({
               {(post.carousel_cards?.length ?? 0) > 0 && (
                 <button
                   type="button"
-                  onClick={() => setCardsOpen(true)}
+                  onClick={() => setEditing(true)}
                   className="flex w-full items-center justify-center gap-2 rounded-control bg-surface-2 px-3 py-2 text-caption text-muted transition-colors hover:text-content"
                 >
                   ✎ Editar cards
@@ -909,17 +893,16 @@ export function PostCard({
                 ? "Grave (ou baixe) um clipe que mostre o assunto do título. Vertical vira Reels; deitado encaixa melhor no feed 4:5."
                 : post.image_prompt}
             </p>
-            {!isVideoPost && (
-              <label className="flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content">
-                <span>{uploading ? "Enviando…" : "Subir imagem gerada"}</span>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png"
-                  className="hidden"
-                  disabled={uploading}
-                  onChange={handleImageUpload}
-                />
-              </label>
+            {/* A imagem que a pessoa gera por fora entra como FUNDO
+                (048), não como arte pronta: no render-on-approval quem
+                compõe a peça é a aprovação. O controle vive na seção de
+                fundo, junto das cores — um lugar só pra "o que fica
+                atrás do texto". */}
+            {!isVideoPost && !isCarousel && (
+              <p className="text-micro text-subtle">
+                Gerou a imagem? Suba em <strong className="text-content">Fundo da arte</strong>,
+                abaixo.
+              </p>
             )}
             {uploadError && <p className="text-micro text-error">{uploadError}</p>}
           </section>
@@ -985,9 +968,11 @@ export function PostCard({
             <p className="text-micro text-subtle">
               A cor do texto se ajusta sozinha ao fundo escolhido.
             </p>
-            {/* Vídeo no feed 4:5 também aceita FOTO de fundo — o post
-                único já aceitava; não havia motivo pro vídeo não. */}
-            {isVideoPost && (
+            {/* Foto de fundo (048): vale no post único e no vídeo em feed
+                4:5. Ficou de fora do carrossel de propósito — lá cada
+                card já tem a foto dele, e um fundo por post seria uma
+                segunda verdade sobre o mesmo pixel. */}
+            {!isCarousel && (
               <label className="flex cursor-pointer items-center justify-between gap-2 rounded-control bg-surface-2 px-2.5 py-1.5 text-micro text-muted transition-colors hover:text-content">
                 <span>
                   {uploading
@@ -1005,7 +990,11 @@ export function PostCard({
                 />
               </label>
             )}
-            {isVideoPost && post.bg_image_url && (
+            {/* Erro do upload ao lado do controle: antes só aparecia lá em
+                cima, na seção do prompt, e uma falha de foto passava
+                despercebida — a fila só "continuava com a cor". */}
+            {uploadError && <p className="text-micro text-error">{uploadError}</p>}
+            {!isCarousel && post.bg_image_url && (
               <>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-micro text-subtle">
@@ -1114,24 +1103,52 @@ export function PostCard({
       </Drawer>
 
       {/* ===== Drawer de edição (desliza da direita) ===== */}
-      <Drawer open={editing} onClose={() => setEditing(false)} title="Editar post">
+      <Drawer
+        open={editing}
+        onClose={() => setEditing(false)}
+        title={isCarousel ? "Editar carrossel" : "Editar post"}
+      >
         <div className="space-y-4">
-          {post.image_url && (
+          {/* A miniatura só existe pra arte JÁ composta (post aprovado ou
+              anterior à 040). Na fila image_url é nulo — e num carrossel
+              era pior: mostrava a arte antiga da capa, o que fazia o
+              drawer parecer o de um post único (relatado em 29/07). */}
+          {!isCarousel && post.image_url && (
             <div
               className="relative h-[180px] overflow-hidden rounded-control bg-cover bg-center"
               style={{ backgroundImage: `url(${post.image_url})` }}
             />
           )}
-          <Textarea
-            label="Título (aparece NA IMAGEM)"
-            rows={2}
-            value={hook}
-            onChange={(e) => setHook(e.target.value)}
-          />
-          <p className="-mt-2 text-micro text-subtle">
-            Ao salvar, a imagem é re-renderizada com o novo título — sem
-            custo (não busca foto/gera de novo, só troca o texto).
-          </p>
+
+          {/* Carrossel: o texto que importa está NOS CARDS, então o
+              editor deles abre aqui mesmo, junto de legenda e hashtags —
+              antes vivia atrás de um segundo botão, fácil de não achar. */}
+          {isCarousel && (post.carousel_cards?.length ?? 0) > 0 && (
+            <div className="space-y-2 rounded-control bg-surface-2 p-3">
+              <p className="text-caption text-muted">
+                Páginas do carrossel — texto, fundo e foto de cada uma.
+              </p>
+              <CarouselEditor
+                cards={post.carousel_cards ?? []}
+                templateSelection={templateSelection}
+              />
+            </div>
+          )}
+
+          {!isCarousel && (
+            <>
+              <Textarea
+                label="Título (aparece NA IMAGEM)"
+                rows={2}
+                value={hook}
+                onChange={(e) => setHook(e.target.value)}
+              />
+              <p className="-mt-2 text-micro text-subtle">
+                Ao salvar, a imagem é re-renderizada com o novo título — sem
+                custo (não busca foto/gera de novo, só troca o texto).
+              </p>
+            </>
+          )}
           <Textarea
             label="Legenda"
             rows={8}
@@ -1161,14 +1178,22 @@ export function PostCard({
           <div className="mt-auto flex gap-2">
             <Button
               className="flex-1"
-              loading={isPending}
-              onClick={() =>
+              loading={isPending || salvandoEdicao}
+              onClick={() => {
+                // Preloader da marca também aqui (29/07): o botão sozinho
+                // sumia da vista em card comprido, e dava pra sair da tela
+                // antes de a fila voltar com o texto novo.
+                setSalvandoEdicao(true);
                 startTransition(async () => {
-                  await updatePost(post.id, { hook, caption, hashtags });
-                  setEditing(false);
-                  toast("✓ Alterações salvas.");
-                })
-              }
+                  try {
+                    await updatePost(post.id, { hook, caption, hashtags });
+                    setEditing(false);
+                    toast("✓ Alterações salvas.");
+                  } finally {
+                    setSalvandoEdicao(false);
+                  }
+                });
+              }}
             >
               Salvar alterações
             </Button>
@@ -1185,19 +1210,6 @@ export function PostCard({
             </Button>
           </div>
         </div>
-      </Drawer>
-
-      {/* ===== Drawer de edição dos cards do carrossel ===== */}
-      <Drawer
-        open={cardsOpen}
-        onClose={() => setCardsOpen(false)}
-        title="Editar cards do carrossel"
-      >
-        <p className="mb-3 text-caption text-muted">
-          Ajuste o texto de cada card. Salvar re-renderiza só aquele card
-          com as cores/fonte da marca.
-        </p>
-        <CarouselEditor cards={post.carousel_cards ?? []} templateSelection={templateSelection} />
       </Drawer>
 
       {/* ===== Modal da contra-capa (por post) ===== */}

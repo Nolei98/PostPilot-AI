@@ -91,7 +91,7 @@ interface NewPost {
   hook: string;
   caption: string;
   templateApplied?: boolean;
-  videoShape?: "reels" | "feed";
+  videoShape?: "reels" | "feed" | "feed-blur";
 }
 
 /** Marca que identifica tudo que este seed criou (limpeza + idempotência). */
@@ -190,6 +190,45 @@ async function main() {
     .eq("id", singleId);
   criados.push(`single (1 página)  ${singleId}`);
 
+  // --- 1b. Post único COM contra-capa (template_applied=true) ---
+  // `closingPage` do render spec sai daqui: sem um post assim, a
+  // contra-capa (chip + ícones + wordmark) nunca era conferida na fila.
+  const singleClosingId = await insertPost(userId, {
+    format: "single",
+    hook: "Duas páginas: capa e contra-capa",
+    caption: "Post único com contra-capa — confere chip de perfil e trilha de ícones.",
+    templateApplied: true,
+  });
+  const singleClosingBase = await upload(`${singleClosingId}-base.jpg`, white, "image/jpeg");
+  await db
+    .from("posts")
+    .update({ base_image_url: singleClosingBase, base_luminance: grid })
+    .eq("id", singleClosingId);
+  criados.push(`single (capa + contra-capa)  ${singleClosingId}`);
+
+  // --- 1c. Post único com FOTO DE FUNDO escolhida (048) ---
+  // A foto escolhida vence a base gerada; com véu 'on' pra ver a placa de
+  // leitura por cima de um fundo claro (pior caso).
+  const singleBgId = await insertPost(userId, {
+    format: "single",
+    hook: "Foto de fundo escolhida, com véu ligado",
+    caption: "Testa bg_image_url + bg_overlay='on' na página 1.",
+    templateApplied: false,
+  });
+  const singleBgBase = await upload(`${singleBgId}-base.jpg`, white, "image/jpeg");
+  const singleBgPhoto = await upload(`${singleBgId}-bg.jpg`, white, "image/jpeg");
+  await db
+    .from("posts")
+    .update({
+      base_image_url: singleBgBase,
+      base_luminance: grid,
+      bg_image_url: singleBgPhoto,
+      bg_image_luminance: grid,
+      bg_overlay: "on",
+    })
+    .eq("id", singleBgId);
+  criados.push(`single (foto de fundo, véu on)  ${singleBgId}`);
+
   // --- 2. Carrossel (capa + 2 interiores + fechamento), todos brancos ---
   const carouselId = await insertPost(userId, {
     format: "carousel",
@@ -207,7 +246,8 @@ async function main() {
     { idx: 0, role: "hook", headline: "Carrossel de teste em fundo branco", body: "" },
     { idx: 1, role: "value", headline: "Página interior número um", body: "Corpo de apoio pra ver o auto-fit do título e o texto abaixo dele." },
     { idx: 2, role: "value", headline: "Página interior número dois", body: "Outro corpo, mais curto." },
-    { idx: 3, role: "cta", headline: "Fechamento do carrossel", body: "Chip de perfil e ícones aparecem aqui." },
+    { idx: 3, role: "value", headline: "Interior com vídeo E foto de fundo", body: "A foto vale de fundo e o vídeo mora na moldura 16:9." },
+    { idx: 4, role: "cta", headline: "Fechamento do carrossel", body: "Chip de perfil e ícones aparecem aqui." },
   ];
   for (const c of cards) {
     const bgUrl = await upload(`${carouselId}-card-${c.idx}-bg.jpg`, white, "image/jpeg");
@@ -235,47 +275,98 @@ async function main() {
   );
   await db
     .from("carousel_cards")
-    // bg_url fica NULO de propósito: card com vídeo tem fundo sólido da
-    // marca, o vídeo mora na moldura.
-    .update({ video_poster_url: cardPosterUrl, video_status: "ready", video_error: null })
+    // bg_url NULO de propósito neste: card com vídeo e SEM foto usa o
+    // fundo sólido da marca, o vídeo mora na moldura.
+    .update({ bg_url: null, video_poster_url: cardPosterUrl, video_status: "ready", video_error: null })
     .eq("post_id", carouselId)
     .eq("idx", 1);
-  criados.push(`carousel (4 cards, vídeo no card 2) ${carouselId}`);
 
-  // --- 3. Reels (9:16) e 4. vídeo feed (4:5), vídeo branco de 3s ---
-  for (const [format, shape, w, h] of [
-    ["video", "reels", 1080, 1920],
-    // O vídeo do feed entra numa moldura 16:9 — o material bruto é
-    // horizontal, como um clipe de celular deitado.
-    ["video_feed", "feed", 1920, 1080],
-  ] as const) {
+  // Card 4 (idx 3): vídeo COM foto de fundo — o caso de 2026-07-29, em
+  // que subir foto num card com vídeo não mudava nada.
+  await upload(`${carouselId}-card-3-video-source.mp4`, cardVideo, "video/mp4");
+  const cardPoster3Url = await upload(
+    `${carouselId}-card-3-video-poster-raw.jpg`,
+    cardPoster,
+    "image/jpeg"
+  );
+  await db
+    .from("carousel_cards")
+    .update({ video_poster_url: cardPoster3Url, video_status: "ready", video_error: null })
+    .eq("post_id", carouselId)
+    .eq("idx", 3);
+  criados.push(`carousel (5 cards; vídeo no 2, vídeo+foto no 4) ${carouselId}`);
+
+  // --- 3. Os TRÊS enquadramentos de vídeo, um post pra cada ---
+  // reels (vídeo é o quadro), feed (moldura 16:9 sobre fundo sólido),
+  // feed-blur (moldura sobre o próprio vídeo borrado) e o feed com FOTO
+  // de fundo (048). Sem os dois últimos na fila, "feed" e "feed-blur"
+  // pareciam idênticos e ninguém percebia — foi o bug de 29/07.
+  const videoVariants = [
+    {
+      format: "video",
+      shape: "reels",
+      w: 1080,
+      h: 1920,
+      hook: "Reels: o vídeo clareia e o texto tem que continuar legível",
+      photoBg: false,
+    },
+    {
+      // O vídeo do feed entra numa moldura 16:9 — o material bruto é
+      // horizontal, como um clipe de celular deitado.
+      format: "video_feed",
+      shape: "feed",
+      w: 1920,
+      h: 1080,
+      hook: "Vídeo feed 4:5 na moldura, fundo sólido da marca",
+      photoBg: false,
+    },
+    {
+      format: "video_feed",
+      shape: "feed",
+      w: 1920,
+      h: 1080,
+      hook: "Vídeo feed 4:5 com FOTO de fundo atrás da moldura",
+      photoBg: true,
+    },
+    {
+      format: "video_feed",
+      shape: "feed-blur",
+      w: 1920,
+      h: 1080,
+      hook: "Vídeo feed 4:5 com o próprio vídeo borrado no fundo",
+      photoBg: false,
+    },
+  ] as const;
+
+  for (const v of videoVariants) {
     const id = await insertPost(userId, {
-      format,
-      hook:
-        format === "video"
-          ? "Reels: o vídeo clareia e o texto tem que continuar legível"
-          : "Vídeo feed 4:5 na moldura, título abaixo",
+      format: v.format,
+      hook: v.hook,
       caption: "Clipe de 6s que começa escuro e termina branco — teste do véu de legibilidade.",
-      videoShape: shape,
+      videoShape: v.shape,
     });
-    const video = fadeToWhiteVideo(w, h);
+    const video = fadeToWhiteVideo(v.w, v.h);
     await upload(`${id}-video-source.mp4`, video, "video/mp4");
-    const poster = await darkFrame(w, h);
+    const poster = await darkFrame(v.w, v.h);
     const posterUrl = await upload(`${id}-video-poster-raw.jpg`, poster, "image/jpeg");
     const posterGrid = await buildLuminanceGrid(poster);
+    const photoUrl = v.photoBg ? await upload(`${id}-bg.jpg`, white, "image/jpeg") : null;
     await db
       .from("posts")
       .update({
         // base_* só no Reels: lá o vídeo É o fundo do quadro. No feed 4:5
         // o fundo é sólido e o vídeo fica na moldura — gravar a base aqui
         // faria a prévia cobrir o card inteiro com o pôster.
-        ...(shape === "reels" ? { base_image_url: posterUrl, base_luminance: posterGrid } : {}),
+        ...(v.shape === "reels" ? { base_image_url: posterUrl, base_luminance: posterGrid } : {}),
+        ...(photoUrl
+          ? { bg_image_url: photoUrl, bg_image_luminance: grid, bg_overlay: "auto" }
+          : {}),
         video_poster_url: posterUrl,
         video_status: "ready",
         video_error: null,
       })
       .eq("id", id);
-    criados.push(`${format.padEnd(10)} (${shape})  ${id}`);
+    criados.push(`${v.format.padEnd(10)} (${v.shape}${v.photoBg ? " + foto" : ""})  ${id}`);
   }
 
   console.log("\nPosts criados na fila:");

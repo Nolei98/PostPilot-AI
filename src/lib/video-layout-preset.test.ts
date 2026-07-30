@@ -290,14 +290,26 @@ describe("rótulo do topo nos formatos de vídeo (046)", () => {
 // Fundo por FOTO no feed 4:5 (2026-07-29): antes o fundo do vídeo no
 // feed só podia ser a cor sólida da marca.
 describe("feed 4:5 com foto de fundo", () => {
-  it("com foto, o retângulo sólido dá lugar ao véu de leitura", () => {
+  it("com foto, a cor sólida da marca dá lugar à placa de leitura", () => {
     const brand = brandWith("editorial-noir");
     const solido = buildFeedVideoOverlaySvg(HEADLINE, brand).svg;
     const comFoto = buildFeedVideoOverlaySvg(HEADLINE, brand, { theme: "dark", alpha: 0.4 }).svg;
-    // o fundo sólido usa a máscara do buraco; o véu não
+    // Os dois recortam o buraco da moldura — o que muda é o que preenche
+    // o resto: cor da marca opaca vs. placa translúcida sobre a foto.
     expect(solido).toContain('mask="url(#feed-video-hole)"');
-    expect(comFoto).not.toContain('mask="url(#feed-video-hole)"');
-    expect(comFoto).toContain("feed-photo-band");
+    expect(comFoto).toContain('mask="url(#feed-video-hole)"');
+    expect(comFoto).toContain('fill-opacity="0.4"');
+    expect(comFoto).not.toContain(brand.colorBackground);
+  });
+
+  it("placa preta e branca são a MESMA placa, só a cor muda", () => {
+    const brand = brandWith("editorial-noir");
+    const preta = buildFeedVideoOverlaySvg(HEADLINE, brand, { theme: "dark", alpha: 0.55 }).svg;
+    const branca = buildFeedVideoOverlaySvg(HEADLINE, brand, { theme: "light", alpha: 0.55 }).svg;
+    expect(preta).toContain('fill="#000000" fill-opacity="0.55"');
+    expect(branca).toContain('fill="#FFFFFF" fill-opacity="0.55"');
+    // Mesma geometria: trocar a cor não pode mexer no recorte.
+    expect(preta.replace('fill="#000000"', "COR")).toBe(branca.replace('fill="#FFFFFF"', "COR"));
   });
 
   it("a moldura do vídeo não muda de lugar por causa do fundo", () => {

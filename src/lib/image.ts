@@ -23,6 +23,7 @@ import { rasterizeSvg } from "@/lib/svg-render";
 import {
   videoIdentityFor,
   MONO_FONT,
+  wordmarkToHeadlineGap,
   type BrandRowKind,
   type CoverPageKind,
 } from "@/lib/render-shared";
@@ -501,7 +502,18 @@ async function fetchCoverBrand(postId: string, fontFamily: string): Promise<Card
  * Sem chip (decisão do usuário — igual à capa do carrossel, o Instagram
  * já mostra o perfil por cima do post).
  */
-async function composeCoverStyleContent(baseImage: Buffer, hook: string, cardBrand: CardBrand): Promise<Buffer> {
+async function composeCoverStyleContent(
+  baseImage: Buffer,
+  hook: string,
+  cardBrand: CardBrand,
+  /**
+   * Véu escolhido pra FOTO de fundo (048). Nasceu no vídeo em feed 4:5,
+   * mas a foto de fundo vale no post único também — e até 29/07 só a
+   * foto era respeitada aqui: escolher 'on'/'off' não mudava nada na
+   * página 1. 'auto' (padrão) é o comportamento de sempre.
+   */
+  bgOverlay: "auto" | "on" | "off" = "auto"
+): Promise<Buffer> {
   const probe = buildPageOneCoverSvg(hook, { ...cardBrand, colorText: "#FFFFFF" }, true, { showSwipeHint: false });
   const covered = await sharp(baseImage).resize(WIDTH, HEIGHT, { fit: "cover", position: "attention" }).toBuffer();
   const band = await sharp(covered)
@@ -510,13 +522,15 @@ async function composeCoverStyleContent(baseImage: Buffer, hook: string, cardBra
   const luminance = await measureImageLuminance(band);
   const theme = pickTheme(luminance);
   const textColor = textColorForTheme(theme);
-  const alpha = overlayAlphaFor(theme, textColor, luminance);
+  const medido = overlayAlphaFor(theme, textColor, luminance);
+  const alpha = bgOverlay === "off" ? 0 : bgOverlay === "on" ? Math.max(0.55, medido) : medido;
   // Meta-linha do topo dos 4 layouts alternativos (fora da banda de
   // identidade) — mesma checagem de contraste LOCAL de renderAltLayoutCard
   // (carousel-render.ts); sem efeito no Editorial Noir (não tem topRow).
   const topBand = await sharp(covered).extract({ left: 0, top: 0, width: WIDTH, height: 140 }).toBuffer();
   const topLuminance = await measureImageLuminance(topBand);
-  const topAlpha = overlayAlphaFor(theme, textColor, topLuminance);
+  const topMedido = overlayAlphaFor(theme, textColor, topLuminance);
+  const topAlpha = bgOverlay === "off" ? 0 : bgOverlay === "on" ? Math.max(0.55, topMedido) : topMedido;
   const { svg, blurBandTop } = buildPageOneCoverSvg(hook, { ...cardBrand, colorText: textColor }, true, {
     showSwipeHint: false,
     overlay: { theme, alpha },
@@ -546,11 +560,6 @@ const REELS_SAFE_MARGIN_RIGHT = 170;
 /** Distância da base do quadro até a baseline da última linha — deixa
  * espaço pra legenda/@ que o próprio Instagram desenha por cima. */
 const REELS_SAFE_BOTTOM = 220;
-/** Divisor (———WORDMARK®———) → título, gap fixo entre a baseline do
- * divisor e a 1ª linha do título — mesma ideia "grudados" da capa/vídeo
- * feed (2026-07-24: a marca saiu do canto-topo isolado e veio pra perto
- * do título, exatamente como nos outros modelos de vídeo). */
-const REELS_DIVIDER_GAP = 50;
 
 /**
  * Constrói só o OVERLAY de texto (PNG transparente 1080×1920 — divisor
@@ -626,9 +635,9 @@ function reelsTextZone(headline: string): {
 
   const lastBaselineY = REELS_H - REELS_SAFE_BOTTOM;
   const headStartY = lastBaselineY - (lines.length - 1) * lineH;
-  // Divisor gruda no título — mesma conta de "gap escala com o tamanho
-  // da fonte" já usada na capa (carousel-render.ts).
-  const dividerY = headStartY - Math.round(REELS_DIVIDER_GAP + size * 0.6);
+  // Distância padrão do produto — calibrada AQUI e propagada como razão
+  // folga/corpo pros outros formatos (ver wordmarkToHeadlineGap).
+  const dividerY = headStartY - wordmarkToHeadlineGap(size);
   return {
     lines,
     size,
@@ -725,7 +734,6 @@ const FEED_FRAME_RADIUS = 32;
 /** Vídeo em cima, divisor+título juntos logo abaixo (grupo único),
  * tudo centralizado verticalmente no quadro (2026-07-23). */
 const FEED_GAP_FRAME_TO_DIVIDER = 92;
-const FEED_GAP_DIVIDER_TO_HEADLINE = 36;
 
 /**
  * Peças reaproveitáveis do layout do vídeo FEED — divisor (wordmark) +
@@ -762,7 +770,10 @@ export function feedVideoLayoutParts(
   // grupo (vídeo + divisor + título) — os gaps são fixos, então a
   // altura não muda com a posição, só com o nº de linhas do título.
   const dividerYRel = FEED_FRAME_H + FEED_GAP_FRAME_TO_DIVIDER;
-  const headStartYRel = dividerYRel + FEED_GAP_DIVIDER_TO_HEADLINE + Math.round(size * 0.6);
+  // Divisor → título: a MESMA folga ótica do resto do produto (29/07).
+  // Era 36 + 0.6·corpo aqui, o que deixava o feed 4:5 mais apertado que
+  // o Reels na mesma marca. Ver wordmarkToHeadlineGap (render-shared).
+  const headStartYRel = dividerYRel + wordmarkToHeadlineGap(size);
   const lastLineYRel = headStartYRel + (lines.length - 1) * lineH;
   // Rótulo do topo (046): no feed 4:5 ele cabe no TOPO de verdade — o
   // quadro é do post, não tem interface do Instagram por cima como no
@@ -845,13 +856,25 @@ export function buildFeedVideoOverlaySvg(
    * entra um véu de leitura na faixa do texto — mesma matemática do
    * feed-blur, que também tem fundo imprevisível.
    */
-  photoBg?: { theme: "light" | "dark"; alpha: number }
+  photoBg?: { theme: "light" | "dark"; alpha: number; textColor?: string }
 ): { svg: string; frame: FeedVideoFrame } {
-  const { bg, frame, dividerSvg, headlineSvg } = feedVideoLayoutParts(headline, cardBrand);
+  // Com foto de fundo a cor do texto NÃO pode ser a da marca: a foto
+  // manda. Sem isto, foto clara + colorText branco dava título invisível
+  // — visto na fila em 29/07, e o render real tinha o mesmo defeito
+  // porque os dois passam por aqui.
+  const brand = photoBg?.textColor ? { ...cardBrand, colorText: photoBg.textColor } : cardBrand;
+  const { bg, frame, dividerSvg, headlineSvg } = feedVideoLayoutParts(headline, brand);
 
-  const bandTop = frame.y + frame.h;
+  // Placa contínua com o mesmo recorte do fundo sólido — ver
+  // buildCardVideoOverlaySvg: preta e branca são a mesma placa, muda a
+  // cor dela e a do texto; nunca um degradê parcial, que sobre foto
+  // clara virava mancha no card.
   const bgLayer = photoBg
-    ? buildOverlayGradientSvg("feed-photo-band", bandTop, HEIGHT - bandTop, WIDTH, photoBg.theme, photoBg.alpha, "bottom")
+    ? photoBg.alpha > 0
+      ? `<rect width="${WIDTH}" height="${HEIGHT}" fill="${
+          photoBg.theme === "dark" ? "#000000" : "#FFFFFF"
+        }" fill-opacity="${photoBg.alpha}" mask="url(#feed-video-hole)"/>`
+      : ""
     : `<rect width="${WIDTH}" height="${HEIGHT}" fill="${bg}" mask="url(#feed-video-hole)"/>`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
@@ -910,7 +933,11 @@ export async function buildFeedVideoOverlayPhotoBg(
         ? Math.max(0.55, medido)
         : Math.max(VIDEO_SCRIM_FLOOR, medido);
 
-  const { svg } = buildFeedVideoOverlaySvg(headline, cardBrand, { theme, alpha });
+  const { svg } = buildFeedVideoOverlaySvg(headline, cardBrand, {
+    theme,
+    alpha,
+    textColor: textColorForTheme(theme),
+  });
   const overlayPng = await sharp(covered)
     .composite([
       { input: rasterizeSvg(svg), top: 0, left: 0 },
@@ -968,6 +995,39 @@ export async function buildFeedVideoOverlayBlurBg(
   return { overlayPng: rasterizeSvg(feedVideoBlurBgSvg(plate, dividerSvg, headlineSvg)), frame };
 }
 
+/**
+ * Overlay do feed-blur em SVG puro, pro PREVIEW ao vivo.
+ *
+ * Existe porque a fila estava desenhando o feed-blur com o overlay do
+ * feed SÓLIDO (buildFeedVideoOverlaySvg): aquele markup pinta o quadro
+ * inteiro com a cor da marca e abre só o buraco da moldura, então a cópia
+ * borrada do vídeo ficava escondida atrás da cor e o enquadramento
+ * parecia idêntico ao feed comum (relatado em 29/07). Aqui não há
+ * retângulo de fundo: só o véu de leitura, a marca e o título — o que o
+ * render final faz.
+ */
+export function buildFeedVideoBlurBgOverlaySvg(
+  headline: string,
+  cardBrand: CardBrand,
+  contrast: OverlayContrast
+): { svg: string; frame: FeedVideoFrame } {
+  const { frame, dividerSvg, headlineSvg } = feedVideoLayoutParts(headline, cardBrand);
+  // Mesma placa contínua dos outros formatos de vídeo (ver
+  // buildCardVideoOverlaySvg): cobre tudo menos a moldura, onde o vídeo
+  // nítido entra. O fundo borrado continua aparecendo por baixo dela.
+  const plate =
+    contrast.alpha > 0
+      ? `<defs><mask id="blurbg-hole">
+      <rect width="100%" height="100%" fill="#fff"/>
+      <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="#000"/>
+    </mask></defs>
+  <rect width="${WIDTH}" height="${HEIGHT}" fill="${
+    contrast.theme === "dark" ? "#000000" : "#FFFFFF"
+  }" fill-opacity="${contrast.alpha}" mask="url(#blurbg-hole)"/>`
+      : "";
+  return { svg: feedVideoBlurBgSvg(plate, dividerSvg, headlineSvg), frame };
+}
+
 /** Markup do overlay do feed-blur — compartilhado com o preview. */
 export function feedVideoBlurBgSvg(plate: string, dividerSvg: string, headlineSvg: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
@@ -992,7 +1052,15 @@ export function roundedRectMaskPng(w: number, h: number, radius: number): Buffer
 const CARD_VIDEO_PAD = 96; // mesma margem lateral do card interior comum (carousel-render.ts)
 const CARD_VIDEO_FRAME_H = Math.round((WIDTH - CARD_VIDEO_PAD * 2) * (9 / 16)); // 16:9, "tamanho YouTube"
 const CARD_VIDEO_FRAME_RADIUS = 28;
-const CARD_VIDEO_GAP_HEAD_TO_FRAME = 40;
+/**
+ * Base do título → topo da moldura de vídeo. Subiu de 40 pra 72 em
+ * 29/07: com o título do interior em "nível capa" (corpo até 104), 40px
+ * deixavam o vídeo grudado embaixo da fonte — lido como defeito, não
+ * como composição. Fica MAIOR que o gap de baixo de propósito: o título
+ * é o peso visual da página e precisa de mais ar que o corpo, que
+ * pertence à moldura logo acima dele.
+ */
+const CARD_VIDEO_GAP_HEAD_TO_FRAME = 72;
 const CARD_VIDEO_GAP_FRAME_TO_BODY = 44;
 const CARD_VIDEO_BODY_SIZE = 40;
 const CARD_VIDEO_BODY_LINE_H = 54;
@@ -1050,7 +1118,8 @@ export function cardVideoLayoutParts(
       radius: CARD_VIDEO_FRAME_RADIUS,
     };
     const brandY = frame.y + frame.h + 78;
-    const headStart = brandY + 58 + Math.round(headSize * 0.6);
+    // Mesma distância wordmark→título do resto do produto (29/07).
+    const headStart = brandY + wordmarkToHeadlineGap(headSize);
 
     const handle = cardBrand.handle ? `@${cardBrand.handle}`.toUpperCase() : "";
     // Rótulo do topo (046): o do POST vence o default do preset. Sobe em
@@ -1178,9 +1247,36 @@ export function buildCardVideoOverlay(
 export function buildCardVideoOverlaySvg(
   card: { headline: string | null; body: string | null },
   cardBrand: CardBrand,
-  opts: { pageKind?: CoverPageKind; index?: number; total?: number } = {}
+  opts: {
+    pageKind?: CoverPageKind;
+    index?: number;
+    total?: number;
+    /**
+     * Card com vídeo sobre FOTO (2026-07-29). Sem isso o card com vídeo
+     * era obrigado a ter fundo sólido da marca: subir foto nele não
+     * mudava nada na prévia, porque o retângulo sólido cobria tudo menos
+     * o buraco da moldura. Com foto, o retângulo dá lugar ao véu.
+     */
+    photoBg?: { theme: "light" | "dark"; alpha: number };
+  } = {}
 ): { svg: string; frame: FeedVideoFrame } {
   const { bg, frame, headlineSvg, bodySvg, labelSvg } = cardVideoLayoutParts(card, cardBrand, opts);
+
+  // A placa de leitura é UMA superfície contínua sobre a foto, com o
+  // mesmo recorte do fundo sólido: o quadro inteiro menos o buraco da
+  // moldura, onde quem manda é o vídeo. Foi assim que virou em 29/07 —
+  // antes era um degradê só na faixa de baixo, o que deixava o título
+  // (que vive ACIMA da moldura) sem proteção e, no tema claro, pintava
+  // manchas brancas soltas no card em vez de uma placa.
+  //
+  // Preta e branca são a MESMA placa: muda a cor dela e a do texto.
+  const bgLayer = opts.photoBg
+    ? opts.photoBg.alpha > 0
+      ? `<rect width="${WIDTH}" height="${HEIGHT}" fill="${
+          opts.photoBg.theme === "dark" ? "#000000" : "#FFFFFF"
+        }" fill-opacity="${opts.photoBg.alpha}" mask="url(#card-video-hole)"/>`
+      : ""
+    : `<rect width="${WIDTH}" height="${HEIGHT}" fill="${bg}" mask="url(#card-video-hole)"/>`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
   <defs>
@@ -1189,13 +1285,58 @@ export function buildCardVideoOverlaySvg(
       <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="#000"/>
     </mask>
   </defs>
-  <rect width="${WIDTH}" height="${HEIGHT}" fill="${bg}" mask="url(#card-video-hole)"/>
+  ${bgLayer}
   ${headlineSvg}
   ${bodySvg}
   ${labelSvg}
 </svg>`;
 
   return { svg, frame };
+}
+
+/**
+ * Card com vídeo SOBRE FOTO, já rasterizado — a foto é achatada no PNG e
+ * o buraco da moldura é recortado dela (dest-out), senão a foto taparia o
+ * vídeo que o ffmpeg encaixa por baixo. Mesma técnica do feed 4:5.
+ */
+export async function buildCardVideoOverlayPhotoBg(
+  card: { headline: string | null; body: string | null },
+  cardBrand: CardBrand,
+  photo: Buffer,
+  opts: { pageKind?: CoverPageKind; index?: number; total?: number } = {}
+): Promise<{ overlayPng: Buffer; frame: FeedVideoFrame }> {
+  const textColorBrand = cardBrand.colorText || "#FFFFFF";
+  const { frame } = cardVideoLayoutParts(card, cardBrand, opts);
+
+  const covered = await sharp(photo)
+    .resize(WIDTH, HEIGHT, { fit: "cover", position: "attention" })
+    .toBuffer();
+  const bandTop = frame.y + frame.h;
+  const band = await sharp(covered)
+    .extract({ left: 0, top: bandTop, width: WIDTH, height: HEIGHT - bandTop })
+    .toBuffer();
+  const luminance = await measureImageLuminance(band);
+  const theme = pickTheme(luminance);
+  const alpha = Math.max(VIDEO_SCRIM_FLOOR, overlayAlphaFor(theme, textColorBrand, luminance));
+
+  const { svg } = buildCardVideoOverlaySvg(card, cardBrand, {
+    ...opts,
+    photoBg: { theme, alpha },
+  });
+  const overlayPng = await sharp(covered)
+    .composite([
+      { input: rasterizeSvg(svg), top: 0, left: 0 },
+      {
+        input: roundedRectMaskPng(frame.w, frame.h, frame.radius),
+        top: frame.y,
+        left: frame.x,
+        blend: "dest-out",
+      },
+    ])
+    .png()
+    .toBuffer();
+
+  return { overlayPng, frame };
 }
 
 /**
@@ -1263,6 +1404,44 @@ function brandRowSvg(opts: {
     const baseline = top + h / 2 + fontSize * 0.36;
     return `<rect x="${x}" y="${top}" width="${w}" height="${h}" rx="${h / 2}" fill="${accent}"/>
   <text x="${x + w / 2}" y="${baseline}" ${base} fill="#0A0A0A" text-anchor="middle">${label}</text>`;
+  }
+
+  if (kind === "scallop") {
+    // Doce Vitrine: bordinha ondulada (a bandeja rendada) por cima do
+    // rótulo — a mesma forma da capa/rodapé daquele preset.
+    const r = 13;
+    const ondas = Math.max(3, Math.round((textW + 40) / (r * 2)));
+    const larguraOnda = ondas * r * 2;
+    const inicio = x + width / 2 - larguraOnda / 2;
+    const ondaY = bandBottom - fontSize - 14;
+    let d = `M ${inicio} ${ondaY}`;
+    for (let i = 0; i < ondas; i++) d += ` a ${r} ${r} 0 0 0 ${2 * r} 0`;
+    return `<path d="${d}" fill="none" stroke="${accent}" stroke-width="3"/>
+  <text x="${x + width / 2}" y="${y}" ${base} fill="${accent}" text-anchor="middle">${label}</text>`;
+  }
+
+  if (kind === "double-rule") {
+    // Tribuna: régua dupla à esquerda do rótulo — o traço de papelaria
+    // jurídica, alinhado à esquerda como o resto do preset.
+    const yD = y - 6;
+    const larguraRegua = 200;
+    return `<line x1="${x}" y1="${yD}" x2="${x + larguraRegua}" y2="${yD}" stroke="${accent}" stroke-opacity="0.85" stroke-width="3"/>
+  <line x1="${x}" y1="${yD + 8}" x2="${x + larguraRegua}" y2="${yD + 8}" stroke="${accent}" stroke-opacity="0.6" stroke-width="1.5"/>
+  <text x="${x + larguraRegua + 24}" y="${y}" ${base} fill="${textColor}">${label}</text>`;
+  }
+
+  if (kind === "pulse") {
+    // Clínica Clara: traço de batimento saindo do rótulo pros dois
+    // lados — o filete reto dos editoriais, com um pico no meio.
+    const cxP = x + width / 2;
+    const halfP = textW / 2 + 24;
+    const yP = y - 6;
+    const pulso = (x1: number, x2: number) => {
+      const meio = (x1 + x2) / 2;
+      return `<path d="M ${x1} ${yP} L ${meio - 26} ${yP} L ${meio - 14} ${yP - 12} L ${meio - 2} ${yP + 12} L ${meio + 10} ${yP} L ${x2} ${yP}" fill="none" stroke="${accent}" stroke-opacity="0.75" stroke-width="2.5" stroke-linejoin="round"/>`;
+    };
+    return `${pulso(x, cxP - halfP)}${pulso(cxP + halfP, x + width)}
+  <text x="${cxP}" y="${y}" ${base} fill="${textColor}" text-anchor="middle">${label}</text>`;
   }
 
   // "rule" (Editorial Noir / Serif Luxe): wordmark entre dois filetes.
@@ -1507,9 +1686,10 @@ async function composeCoverImage(
   hook: string,
   cardBrand: CardBrand,
   brand: BrandTemplate,
-  watermark: boolean
+  watermark: boolean,
+  bgOverlay: "auto" | "on" | "off" = "auto"
 ): Promise<Buffer> {
-  let final = await composeCoverStyleContent(base, hook, cardBrand);
+  let final = await composeCoverStyleContent(base, hook, cardBrand, bgOverlay);
 
   const layers: CompositeLayer[] = [];
   const logoLayer = brand.showLogo ? await buildLogoLayer(brand.logoUrl, WIDTH) : null;
@@ -1531,7 +1711,14 @@ export async function composeFromSpec(
   hook: string,
   spec: RenderSpec
 ): Promise<Buffer> {
-  return composeCoverImage(base, hook, spec.cardBrand, spec.brandTemplate, spec.watermark);
+  return composeCoverImage(
+    base,
+    hook,
+    spec.cardBrand,
+    spec.brandTemplate,
+    spec.watermark,
+    spec.bgOverlay
+  );
 }
 
 /**

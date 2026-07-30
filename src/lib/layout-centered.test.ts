@@ -13,13 +13,25 @@ const baseBrand: CardBrand = {
   handle: "marca.ia",
 };
 
-const PRESETS: LayoutPreset[] = ["editorial-noir", "brutalism", "serif-luxe", "swiss-mono", "pop-creator"];
+const PRESETS: LayoutPreset[] = [
+  "editorial-noir",
+  "brutalism",
+  "serif-luxe",
+  "swiss-mono",
+  "pop-creator",
+  "doce-vitrine",
+  "clinica-clara",
+  "tribuna",
+];
 const FONT_FOR: Record<LayoutPreset, string> = {
   "editorial-noir": "Inter",
   brutalism: "Anton",
   "serif-luxe": "DM Serif Display",
   "swiss-mono": "Inter",
   "pop-creator": "Varela Round",
+  "doce-vitrine": "DM Serif Display",
+  "clinica-clara": "Sora",
+  tribuna: "DM Serif Display",
 };
 
 describe("buildCenteredPhraseSvg", () => {

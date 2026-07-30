@@ -104,6 +104,17 @@ export const convertPostFormat = inngest.createFunction(
           );
         });
 
+        // Sobras de uma conversão anterior (ou de uma geração de carrossel
+        // que virou post único) fazem o insert bater na unique
+        // (post_id, idx) — "duplicate key value violates unique constraint
+        // carousel_cards_post_id_idx_key", visto no #0028 em 29/07. O job
+        // também é retentável: o step pode rodar duas vezes depois de uma
+        // falha no meio. Limpar antes torna a inserção idempotente.
+        await step.run("clear-old-cards", async () => {
+          const { error } = await supabase.from("carousel_cards").delete().eq("post_id", postId);
+          if (error) throw new Error(`limpeza de cards antigos: ${error.message}`);
+        });
+
         await step.run("insert-cards", async () => {
           const { buildLuminanceGrid } = await import("@/lib/contrast");
           const { getCardBg } = await import("@/lib/card-bg");

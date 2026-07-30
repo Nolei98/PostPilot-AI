@@ -13,6 +13,9 @@ import { buildBrutalismCoverSvg } from "@/lib/layout-brutalism";
 import { buildSerifLuxeCoverSvg } from "@/lib/layout-serif-luxe";
 import { buildSwissMonoCoverSvg } from "@/lib/layout-swiss-mono";
 import { buildPopCreatorCoverSvg } from "@/lib/layout-pop-creator";
+import { buildDoceVitrineCoverSvg } from "@/lib/layout-doce-vitrine";
+import { buildClinicaClaraCoverSvg } from "@/lib/layout-clinica-clara";
+import { buildTribunaCoverSvg } from "@/lib/layout-tribuna";
 import { buildCenteredPhraseSvg } from "@/lib/layout-centered";
 import {
   pickTheme,
@@ -40,6 +43,9 @@ export const ALT_COVER_BUILDERS: Partial<
   "serif-luxe": buildSerifLuxeCoverSvg,
   "swiss-mono": buildSwissMonoCoverSvg,
   "pop-creator": buildPopCreatorCoverSvg,
+  "doce-vitrine": buildDoceVitrineCoverSvg,
+  "clinica-clara": buildClinicaClaraCoverSvg,
+  tribuna: buildTribunaCoverSvg,
 };
 
 /** Dispatcher único da PÁGINA 1 do post único — 2 variações (kit v2 §3),
