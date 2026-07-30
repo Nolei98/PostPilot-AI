@@ -637,41 +637,40 @@ export function PostCard({
         <div className="bg-black">
           {/* Header (foto/nome/@) removido: já aparece no chip da imagem — evita redundância */}
 
-          {/* Vídeo pronto (Reels 9:16 ou feed 4:5) vira a mídia principal do
-              post — senão, mesma preview de sempre (single: pág 1 +
-              contra-capa; carrossel: todos os cards, em ordem). Enquanto
-              upload/processamento (imagem OU vídeo) está rolando, o orbe
-              da marca gira por cima pra deixar claro que tem algo em
-              andamento (sem isso só o botão dizia "processando", a
+          {/* SEMPRE a prévia ao vivo, inclusive com vídeo pronto (30/07).
+              Antes, vídeo composto virava a mídia principal do card e a
+              proporção saía de `post.format` — o que quebrava justamente
+              ao REENQUADRAR: `savePostVideoShape` troca shape e formato na
+              hora, mas o arquivo composto só é refeito na aprovação, então
+              o feed 4:5 aparecia com o Reels 9:16 velho dentro, espremido.
+              Era o mesmo erro do §0-D.1, só que na outra ponta: o composto
+              já traz a página inteira queimada e não pode ser reencaixado
+              em nada. A prévia ao vivo desenha o overlay do enquadramento
+              ATUAL sobre o arquivo BRUTO, e a proporção vem do próprio
+              preview (`livePage.aspect`), não de um palpite pelo formato.
+              Enquanto upload/processamento (imagem OU vídeo) está rolando,
+              o orbe da marca gira por cima pra deixar claro que tem algo
+              em andamento (sem isso só o botão dizia "processando", a
               prévia ficava parada/enganosa). */}
-          {post.video_status === "ready" && post.video_url ? (
-            <video
-              src={post.video_url}
-              poster={post.video_poster_url ?? undefined}
-              controls
-              className={`w-full bg-black ${post.format === "video_feed" ? "aspect-[4/5]" : "aspect-[9/16]"}`}
+          <div className="relative">
+            <CarouselPreview
+              images={previewImages}
+              pages={previewPages}
+              videos={previewVideos}
+              posters={previewPosters}
+              alt={post.hook}
+              className="aspect-[4/5] w-full"
             />
-          ) : (
-            <div className="relative">
-              <CarouselPreview
-                images={previewImages}
-                pages={previewPages}
-                videos={previewVideos}
-                posters={previewPosters}
-                alt={post.hook}
-                className="aspect-[4/5] w-full"
-              />
-              {/* Conversão de formato (044) roda em job: sem o orbe, o
-                  card ficava parado com os botões apagados e nenhuma
-                  pista de que algo estava acontecendo — o `router.refresh`
-                  não dispara o loading.tsx da rota. */}
-              {convertendo ? (
-                <LoadingOrb label={isCarousel ? "virando post único" : "virando carrossel"} />
-              ) : (
-                (uploading || uploadingVideo || post.video_status === "processing") && <LoadingOrb />
-              )}
-            </div>
-          )}
+            {/* Conversão de formato (044) roda em job: sem o orbe, o
+                card ficava parado com os botões apagados e nenhuma
+                pista de que algo estava acontecendo — o `router.refresh`
+                não dispara o loading.tsx da rota. */}
+            {convertendo ? (
+              <LoadingOrb label={isCarousel ? "virando post único" : "virando carrossel"} />
+            ) : (
+              (uploading || uploadingVideo || post.video_status === "processing") && <LoadingOrb />
+            )}
+          </div>
 
           <div className="flex gap-4 px-3 py-2.5">
             {/* coração / comentário / compartilhar — fiéis ao IG */}

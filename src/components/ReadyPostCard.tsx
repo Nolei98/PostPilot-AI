@@ -45,7 +45,11 @@ export function ReadyPostCard({
   const isRendering = post.render_status === "pending" || post.render_status === "rendering";
   const renderFailed = post.render_status === "error";
   const isVideo = (post.format === "video" || post.format === "video_feed") && !!post.video_url;
-  const isFeedVideo = post.format === "video_feed";
+  // A proporção da miniatura sai do ENQUADRAMENTO gravado, não do formato:
+  // `video_shape` é o que o ffmpeg obedeceu ao compor o arquivo. Os dois
+  // andam juntos hoje (savePostVideoShape atualiza os dois), mas post
+  // anterior à migration 040 tem shape nulo — daí o formato como reserva.
+  const isFeedVideo = (post.video_shape ?? (post.format === "video_feed" ? "feed" : "reels")) !== "reels";
   const isScheduled = post.status === "scheduled";
 
   const [copied, setCopied] = useState(false);
