@@ -31,6 +31,62 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 ---
 
+## 0-F. Sessão 2026-07-30 — validação de produção e medição
+
+Sessão de conferência: nada de feature nova, só descobrir o que já é
+verdade em produção antes de decidir o próximo passo do MVP.
+
+### 0-F.1 Estado conferido no Postgres de produção (30/07)
+
+- **`auto_generate=false` nos 6 clientes** — a pausa (047) já está ligada
+  em todo mundo; a pendência de §0-D.5 está fechada.
+- **Nenhum cliente em `pollinations`** — confirma §0-C.6.
+- Posts: 114 `pending_approval`, 32 `approved`, 38 `published`, 400
+  `discarded`.
+- **Render sem defeito**: os 70 posts aprovados/publicados estão todos em
+  `render_status='ready'`, nenhum em `error`. O render-on-approval (040)
+  está de pé em produção.
+- **14 cards órfãos apagados** (`#0087` e `#0028`) — ver §0-E.7.
+
+### 0-F.2 Estado conferido no domínio de produção
+
+`https://post-pilot-ai-seven.vercel.app`:
+
+- `/`, `/login` → 200; `/fila`, `/ready`, `/settings` → 307 (protegidas).
+- **`/privacidade`, `/termos` e `/exclusao-de-dados` → 200** — o primeiro
+  item do checklist de App Review (§5 do dossiê) está cumprido.
+- A landing tem CTA ("Comece grátis"), então o item "landing mínima com
+  CTA" do `LANCAMENTO.md` está cumprido — `/pricing` continua atrás do
+  login, o que a regra permite ("ou").
+- `META_APP_ID` e `META_APP_SECRET` existem em Production.
+
+### 0-F.3 Provider incoerente no kit "João Rodrigues"
+
+O Brand Kit do usuário está em `text_provider='claude'` +
+`image_provider='stock'`, mas **não existe `ANTHROPIC_API_KEY` nem
+`FAL_KEY` em Production** (`stock` usa Unsplash/Pexels, essas duas keys
+existem — o problema é só o texto). Não estourou ainda porque
+`auto_generate` está desligado em todos os clientes. Antes de religar:
+ou trocar o kit pra `gemini`, ou colocar a chave da Anthropic na Vercel.
+É decisão de custo, não de código.
+
+### 0-F.4 Vercel Analytics
+
+Faltava a medição inteira — sem ela a "métrica dos primeiros 7 dias" do
+`LANCAMENTO.md` não existe. O pacote `@vercel/analytics` não instala
+neste projeto: ele declara peer OPCIONAL de `@sveltejs/kit`, que puxa
+`vite@8`, e o `vitest@2` daqui fixa `vite@5` — `ERESOLVE`. Resolver com
+`--legacy-peer-deps` mudaria a resolução do lockfile inteiro por causa de
+uma tag `<script>`.
+
+O que o pacote faz é injetar `/_vercel/insights/script.js`. Isso foi pro
+`layout.tsx` como `<Script strategy="afterInteractive">`, atrás de
+`VERCEL_ENV === 'production'` (fora da Vercel o caminho dá 404 e sujaria
+o console do dev). **Só mede depois de ligar Analytics no painel do
+projeto** — o script sozinho não habilita nada.
+
+---
+
 ## 0-E. Sessão 2026-07-29/30 — presets de nicho, painel visual e o "salvei e não mudou nada"
 
 Sessão sem migration nenhuma: tudo aqui é arte e percepção de
@@ -179,8 +235,10 @@ desde §0-D).
 > de `PREVIEW_LAYOUTS` (`src/lib/layout-preview.ts`) — se o standby tiver
 > que ser invisível pro cliente, é ali que se filtra (uma linha).
 
-- [ ] **Rodar `repair-orphan-cards.ts` em produção** — o job já não cria
-      mais órfãos, mas os antigos seguem no banco travando conversão.
+- [x] **`repair-orphan-cards.ts --clean` rodado em produção (30/07)** —
+      14 cards órfãos apagados, dos posts `#0087` e `#0028` (ambos
+      `video_feed`, ambos ainda na fila). Reconferido: nenhum órfão
+      restante.
 - [ ] **Decidir o destino dos presets de nicho** (ver nota acima) — e só
       então conferir em arte final: aprovar um carrossel em cada, com foto
       de fundo e sem.
