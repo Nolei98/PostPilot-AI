@@ -149,16 +149,22 @@ export default async function SettingsPage({
         <Card className="flex items-center justify-between gap-3 p-4">
           <div>
             <p className="text-body font-semibold">
-              {quota.unlimited ? "Ilimitado (Pollinations.ai)" : PLANS[quota.plan].label}
+              {quota.unlimited ? "Ilimitado (conta interna)" : PLANS[quota.plan].label}
             </p>
             <p className="text-caption text-muted">
               {quota.unlimited
                 ? `${quota.used} posts gerados este mês`
                 : `${quota.used}/${quota.limit} posts usados este mês`}
             </p>
+            {/* A flag `unlimited` libera o TETO de posts e SÓ isso. Até
+                2026-07-27 ela também forçava o provider (pollinations, "pra
+                custo zero"), e este aviso descrevia esse comportamento —
+                mas o forçamento saiu do generate-post e o texto ficou,
+                afirmando que Ajustes não tinha efeito quando tem. */}
             {quota.unlimited && (
-              <p className="mt-1 text-caption text-warning">
-                Conta ilimitada: texto e imagem sempre via Pollinations.ai (grátis), independente do que estiver selecionado em Geração &amp; notificações.
+              <p className="mt-1 text-caption text-muted">
+                Conta ilimitada: sem teto mensal de posts. Os providers de
+                texto e imagem são os escolhidos em Geração &amp; notificações.
               </p>
             )}
           </div>
@@ -644,11 +650,6 @@ export default async function SettingsPage({
                 />
               </div>
 
-              {quota.unlimited && (
-                <p className="rounded-control bg-warning/10 px-3 py-2.5 text-caption text-warning">
-                  Sua conta é ilimitada — os providers abaixo são ignorados; texto e imagem saem sempre pelo Pollinations.ai (grátis).
-                </p>
-              )}
               <div className="space-y-1.5">
                 <label htmlFor="text_provider" className="block text-caption text-muted">
                   Provider de IA — texto (hook, legenda, hashtags)
@@ -659,9 +660,14 @@ export default async function SettingsPage({
                   defaultValue={brandKit?.text_provider ?? "gemini"}
                   className={fieldClasses}
                 >
-                  <option value="gemini">Gemini (Google AI Studio)</option>
-                  <option value="claude">Claude (Anthropic)</option>
-                  <option value="pollinations">Pollinations.ai (grátis, sem key)</option>
+                  {/* O rótulo diz o CUSTO, não só o nome: a Pollinations
+                      passou a exigir crédito pago em requests
+                      multi-mensagem (402 em 07/2026) e ficou como armadilha
+                      — quem lesse "grátis, sem key" escolhia e a fila
+                      parava calada. */}
+                  <option value="gemini">Gemini (Google AI Studio) — grátis até a cota</option>
+                  <option value="claude">Claude (Anthropic) — pago, exige chave</option>
+                  <option value="pollinations">Pollinations.ai — exige créditos pagos</option>
                 </select>
               </div>
               <div className="space-y-1.5">
@@ -674,10 +680,10 @@ export default async function SettingsPage({
                   defaultValue={brandKit?.image_provider ?? "stock"}
                   className={fieldClasses}
                 >
-                  <option value="stock">Fotos reais (Pexels/Unsplash) — recomendado</option>
-                  <option value="gemini">Gemini (Google AI Studio)</option>
-                  <option value="fal">Fal.ai (Flux)</option>
-                  <option value="pollinations">Pollinations.ai (grátis, sem key)</option>
+                  <option value="stock">Fotos reais (Pexels/Unsplash) — grátis, recomendado</option>
+                  <option value="gemini">Gemini (gera a imagem) — pago por imagem</option>
+                  <option value="fal">Fal.ai (Flux) — pago, exige chave</option>
+                  <option value="pollinations">Pollinations.ai — exige créditos pagos</option>
                 </select>
               </div>
               <p className="text-caption text-subtle">
