@@ -15,6 +15,7 @@ import {
   buildClosingPreview,
   buildVideoPreview,
   buildFeedVideoPreview,
+  buildFeedVideoPhotoPreview,
   buildInteriorVideoPreview,
   scaleSvg,
 } from "../src/lib/layout-preview";
@@ -80,6 +81,7 @@ function pecas(preset: LayoutPreset) {
     { rotulo: "Fechamento", aspecto: "4 / 5", svg: buildClosingPreview(preset, brand) },
     { rotulo: "Reels (9:16)", aspecto: "9 / 16", svg: buildVideoPreview(preset, brand) },
     { rotulo: "Vídeo no feed (4:5)", aspecto: "4 / 5", svg: buildFeedVideoPreview(preset, brand) },
+    { rotulo: "Feed 4:5 com foto", aspecto: "4 / 5", svg: buildFeedVideoPhotoPreview(preset, brand) },
     { rotulo: "Interior com vídeo", aspecto: "4 / 5", svg: buildInteriorVideoPreview(preset, brand) },
   ];
 }

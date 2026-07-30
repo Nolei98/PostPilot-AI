@@ -23,6 +23,7 @@ import {
   type LayoutPreset,
 } from "@/lib/render-shared";
 import { buildCoverSvg, buildCardSvg } from "@/lib/carousel-render";
+import { textColorForTheme } from "@/lib/contrast";
 import { feedVideoLayoutParts, cardVideoLayoutParts } from "@/lib/image";
 import { buildBrutalismCoverSvg, buildBrutalismCardSvg } from "@/lib/layout-brutalism";
 import { buildSerifLuxeCoverSvg, buildSerifLuxeCardSvg } from "@/lib/layout-serif-luxe";
@@ -43,13 +44,21 @@ export const PREVIEW_LAYOUTS: { key: LayoutPreset; label: string }[] = [
   { key: "tribuna", label: "Tribuna (advocacia)" },
 ];
 
-export type PreviewFormat = "cover" | "carousel" | "video" | "hybrid" | "video-feed" | "video-interior";
+export type PreviewFormat =
+  | "cover"
+  | "carousel"
+  | "video"
+  | "hybrid"
+  | "video-feed"
+  | "video-feed-photo"
+  | "video-interior";
 
 export const PREVIEW_FORMATS: { key: PreviewFormat; label: string }[] = [
   { key: "cover", label: "Capa normal" },
   { key: "carousel", label: "Carrossel" },
   { key: "video", label: "Vídeo (Reels)" },
   { key: "video-feed", label: "Vídeo (feed, 4:5)" },
+  { key: "video-feed-photo", label: "Feed 4:5 com foto" },
   { key: "video-interior", label: "Interior com vídeo" },
   { key: "hybrid", label: "Modelo com vídeo" },
 ];
@@ -271,6 +280,68 @@ export function buildFeedVideoPreview(preset: LayoutPreset, brand: CardBrand): s
     <line x1="0" y1="0" x2="0" y2="28" stroke="#26262e" stroke-width="14"/>
   </pattern></defs>
   <rect width="${CARD_W}" height="${CARD_H}" fill="${bg}"/>
+  <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="url(#${patchId})"/>
+  <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="none" stroke="${accent}" stroke-opacity="0.6" stroke-width="3" stroke-dasharray="14 10"/>
+  <circle cx="${playCx}" cy="${playCy}" r="${playR}" fill="#000" fill-opacity="0.45"/>
+  <path d="M ${playCx - 18} ${playCy - 26} L ${playCx - 18} ${playCy + 26} L ${playCx + 24} ${playCy} Z" fill="#fff"/>
+  ${dividerSvg}
+  ${headlineSvg}
+</svg>`;
+}
+
+/**
+ * Vídeo feed 4:5 com FOTO de fundo (migration 048) — mesma geometria do
+ * caso acima, trocando a cor sólida da marca por uma foto atrás da
+ * moldura.
+ *
+ * Vale a prévia PRÓPRIA porque a foto muda duas coisas que o exemplo de
+ * fundo sólido não mostra: a cor do texto deixa de ser a da marca (a foto
+ * é que manda) e entra a placa de leitura por baixo do texto, recortada
+ * na moldura pelo mesmo `mask` do render (buildFeedVideoOverlaySvg, em
+ * image.ts). Sem ver isso, dá pra escolher um layout que só funciona
+ * sobre fundo escuro e descobrir na primeira foto clara.
+ *
+ * A "foto" aqui é um degradê claro→escuro: o topo claro prova que a
+ * moldura se destaca em qualquer luminância, e a base escura é onde o
+ * texto senta de verdade — a mesma faixa que o render mede.
+ */
+export function buildFeedVideoPhotoPreview(preset: LayoutPreset, brand: CardBrand): string {
+  // Fundo escuro na faixa do texto ⇒ tema escuro, texto branco. No render
+  // isso sai da luminância MEDIDA; aqui a foto é conhecida, então o valor
+  // é fixo de propósito — o exemplo não pode variar entre execuções.
+  const theme = "dark" as const;
+  const textColor = textColorForTheme(theme);
+  const SCRIM = 0.32; // piso de véu do vídeo (VIDEO_SCRIM_FLOOR, image.ts)
+
+  const { frame, dividerSvg, headlineSvg } = feedVideoLayoutParts(
+    "O título do seu próximo vídeo",
+    { ...brandForPreset(brand, preset), colorText: textColor }
+  );
+  const accent = brand.colorAccent || "#7C5CFF";
+  const playCx = frame.x + frame.w / 2;
+  const playCy = frame.y + frame.h / 2;
+  const playR = 54;
+  const holeId = "feed-photo-hole";
+  const fotoId = "feed-photo-bg";
+  const patchId = "feed-photo-hatch";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_W}" height="${CARD_H}" viewBox="0 0 ${CARD_W} ${CARD_H}">
+  <defs>
+    <linearGradient id="${fotoId}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E8DCC8"/>
+      <stop offset="0.55" stop-color="#8A7A62"/>
+      <stop offset="1" stop-color="#241C14"/>
+    </linearGradient>
+    <pattern id="${patchId}" width="28" height="28" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <rect width="28" height="28" fill="#15151a"/>
+      <line x1="0" y1="0" x2="0" y2="28" stroke="#26262e" stroke-width="14"/>
+    </pattern>
+    <mask id="${holeId}">
+      <rect width="100%" height="100%" fill="#fff"/>
+      <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="${CARD_W}" height="${CARD_H}" fill="url(#${fotoId})"/>
+  <rect width="${CARD_W}" height="${CARD_H}" fill="#000000" fill-opacity="${SCRIM}" mask="url(#${holeId})"/>
   <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="url(#${patchId})"/>
   <rect x="${frame.x}" y="${frame.y}" width="${frame.w}" height="${frame.h}" rx="${frame.radius}" fill="none" stroke="${accent}" stroke-opacity="0.6" stroke-width="3" stroke-dasharray="14 10"/>
   <circle cx="${playCx}" cy="${playCy}" r="${playR}" fill="#000" fill-opacity="0.45"/>

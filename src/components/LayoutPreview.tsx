@@ -8,6 +8,7 @@ import {
   buildCarouselPreview,
   buildVideoPreview,
   buildFeedVideoPreview,
+  buildFeedVideoPhotoPreview,
   buildInteriorVideoPreview,
   buildHybridPreview,
   scaleSvg,
@@ -73,6 +74,13 @@ export function LayoutPreview({
     return (
       <div aria-label={`${layoutPreset} — vídeo (feed, 4:5)`} className="w-24 shrink-0">
         <Frame svg={buildFeedVideoPreview(layoutPreset, brand)} aspect="4:5" />
+      </div>
+    );
+  }
+  if (format === "video-feed-photo") {
+    return (
+      <div aria-label={`${layoutPreset} — feed 4:5 com foto de fundo`} className="w-24 shrink-0">
+        <Frame svg={buildFeedVideoPhotoPreview(layoutPreset, brand)} aspect="4:5" />
       </div>
     );
   }
