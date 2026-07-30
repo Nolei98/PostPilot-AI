@@ -60,15 +60,28 @@ verdade em produção antes de decidir o próximo passo do MVP.
   login, o que a regra permite ("ou").
 - `META_APP_ID` e `META_APP_SECRET` existem em Production.
 
-### 0-F.3 Provider incoerente no kit "João Rodrigues"
+### 0-F.3 Provider incoerente no kit "João Rodrigues" — resolvido
 
-O Brand Kit do usuário está em `text_provider='claude'` +
+O Brand Kit do usuário estava em `text_provider='claude'` +
 `image_provider='stock'`, mas **não existe `ANTHROPIC_API_KEY` nem
 `FAL_KEY` em Production** (`stock` usa Unsplash/Pexels, essas duas keys
-existem — o problema é só o texto). Não estourou ainda porque
-`auto_generate` está desligado em todos os clientes. Antes de religar:
-ou trocar o kit pra `gemini`, ou colocar a chave da Anthropic na Vercel.
-É decisão de custo, não de código.
+existem — o problema era só o texto). Não estourou porque
+`auto_generate` está desligado em todos os clientes.
+
+Resolvido em 30/07 com **`text_provider='gemini'`, mantendo
+`image_provider='stock'`**. O `set-client-provider.ts` não serviu aqui:
+ele troca os DOIS campos de propósito (herança do bloqueio da
+Pollinations, que atingia texto e imagem juntos), e mandar a imagem pra
+`gemini` custaria dinheiro — foi um PATCH direto só no campo de texto.
+
+> 💸 **Política de custo declarada pelo usuário em 30/07: não gastar nada
+> por enquanto.** Isso vale como filtro pras decisões de provider:
+> `gemini-2.5-flash` (texto) tem free tier; **`gemini-2.5-flash-image`
+> (`src/lib/image.ts:118`) e a Fal não têm** — imagem sem custo é
+> `stock` (Unsplash/Pexels). Os outros 5 kits estão em
+> `image_provider='gemini'`; hoje não gastam porque `auto_generate` está
+> desligado em todos, mas religar qualquer um com esse provider começa a
+> consumir. Decidir antes de religar.
 
 ### 0-F.4 Vercel Analytics
 
@@ -82,8 +95,23 @@ uma tag `<script>`.
 O que o pacote faz é injetar `/_vercel/insights/script.js`. Isso foi pro
 `layout.tsx` como `<Script strategy="afterInteractive">`, atrás de
 `VERCEL_ENV === 'production'` (fora da Vercel o caminho dá 404 e sujaria
-o console do dev). **Só mede depois de ligar Analytics no painel do
-projeto** — o script sozinho não habilita nada.
+o console do dev). **Analytics ligado no painel pelo usuário em 30/07** —
+o script sozinho não habilitaria nada.
+
+### 0-F.5 Decisões do usuário em 30/07 (o que fica de fora do MVP)
+
+- **Stripe segue em TEST mode**, confirmado pelo usuário. Não é
+  esquecimento: sem intenção de gastar/cobrar agora, live mode não entra
+  no caminho crítico. Fica registrado que o checkout de produção não
+  cobra de verdade até isso mudar.
+- **Caps de gasto: não se aplicam por enquanto** — a política é não
+  gastar nada, então o controle é a escolha de provider (§0-F.3), não o
+  teto de fatura.
+- **App Review do Meta: adiado pra quando o app estiver no ar.** Sem ele,
+  publicação automática só funciona pra contas cadastradas no painel de
+  desenvolvedor. O dossiê (`docs/meta-app-review.md`) fica pronto pra
+  quando o assunto voltar; as 3 URLs legais já respondem 200 (§0-F.2).
+- **Presets de nicho em standby** — ver §0-E.7.
 
 ---
 
