@@ -5,7 +5,7 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga não recebe mais commits.
-**Última atualização:** 2026-07-30 — três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Última atualização:** 2026-07-30 (noite) — documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
 ### Bloqueio ENCERRADO em 29/07: Pollinations.ai exigia pagamento pra requests multi-mensagem
 > ✅ Resolvido trocando os dois clientes afetados pra `gemini` (ver §0-C.6).
@@ -28,6 +28,97 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0-G. Sessão 2026-07-30 (noite) — documentação unificada e os 4 riscos que faltavam do lançamento
+
+Sessão sem migration. Duas frentes: organizar a documentação num ponto de
+entrada único e fechar os itens da auditoria que ainda estavam abertos.
+
+### 0-G.1 `ESTADO-DO-PROJETO.md` — o documento que faltava
+
+Havia 7 documentos e nenhum respondia "o que está pronto e o que falta"
+sem ler os 7. Criado `ESTADO-DO-PROJETO.md` como ponto de entrada: o que
+o produto é, stack, o caminho de um post, pronto, pendente por gravidade,
+planos e política de custo, lançamento em portões e um índice dos outros
+documentos.
+
+Nenhum documento foi apagado — a avaliação foi feita arquivo por arquivo e
+**todos têm conteúdo que só existe neles** (o `PROGRESSO` tem o porquê, a
+auditoria tem a evidência, o `HANDOFF` tem o contrato de tokens, o
+`meta-app-review` tem as justificativas por permissão). `docs/layouts.html`
+já era ignorado pelo git desde antes.
+
+O `README.md` foi reescrito: descrevia o MVP v1 (sem multi-tenant, sem
+carrossel, sem vídeo) e mandava rodar só a `001_schema.sql`. Agora é só
+setup, e avisa das armadilhas reais — a ordem `dev` antes do Inngest, os
+**dois arquivos `016`**, e que o `seed.sql` só serve pra usuário criado à
+mão no painel (conta criada pelo app já nasce configurada pelo trigger).
+
+### 0-G.2 `.env.example` não tinha nenhuma variável do Stripe
+
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_CRIADOR` e
+`STRIPE_PRICE_PRO` são lidas pelo código e não estavam no exemplo. Quem
+clonasse o repo montava um app sem cobrança sem saber por quê. Registrado
+junto o detalhe que morde na hora de virar live: o webhook secret é por
+endpoint **e** por modo — trocar pra live exige secret novo.
+
+### 0-G.3 Os 4 riscos abertos da auditoria, fechados
+
+- **§2.3 — triagem sem teto:** o teto do plano só valia na geração, então
+  quem estourou a cota seguia consumindo IA na triagem sem poder gerar
+  nada. Agora a triagem pula quem está sem cota; as notícias continuam
+  gravadas como `new` e são triadas no ciclo seguinte. Adiamento, não
+  perda.
+- **§2.6 — exclusão de conta:** agora existe de verdade, em Ajustes,
+  fechada por padrão e com confirmação digitada.
+- **§2.7 — `/pricing` atrás do login:** aberta, sem a casca do app (a
+  sidebar depende de cliente ativo, que não existe sem conta).
+- **§2.8 — API respondendo 307:** agora 401. O `matcher` já deixava de
+  fora inngest, webhook do Stripe e as fontes.
+
+### 0-G.4 Dois defeitos achados na revisão, antes de commitar
+
+O código da exclusão de conta estava escrito, mas a revisão pegou duas
+falhas — as duas no mesmo ponto, o Storage:
+
+1. **Estouro de tempo.** A limpeza usava `storage.list()` com `search` do
+   id **por post**: uma requisição por post. Numa conta com centenas de
+   posts a server action estouraria o tempo e morreria ANTES do
+   `deleteUser` — falhando exatamente onde não pode falhar. Trocado por
+   derivar os nomes das COLUNAS de URL (`image_url`, `base_image_url`,
+   `bg_image_url`, `video_url`, `video_poster_url`, `closing_image_url` +
+   os campos equivalentes dos cards), que já carregam o nome do objeto.
+   Poucas chamadas, resultado exato.
+2. **Bucket esquecido.** Só `post-images` era limpo. O `avatars`
+   (`{client_id}.png|jpg`, a foto do Brand Kit) ficaria para trás — o dado
+   mais pessoal de todos, justo numa ação de LGPD.
+
+### 0-G.5 Regra de documentação (`CLAUDE.md`)
+
+Criado `CLAUDE.md` na raiz do app com a regra pedida pelo usuário:
+atualizar a documentação **ao encerrar a sessão**, e **assim que
+terminar** quando o trabalho for complexo (migration, job novo, item da
+auditoria, decisão de produto, mais de 3 arquivos, ou qualquer coisa cujo
+porquê não seja óbvio no diff). A regra inclui a tabela de onde escrever o
+quê, pra não virar tudo no mesmo arquivo.
+
+### 0-G.6 Verificação
+
+`tsc` limpo · `next lint` limpo · **478 testes** (36 arquivos) passando ·
+build de produção limpo · **3 e2e** passando contra o Supabase real.
+
+Commits: `2e7e508` (exclusão de conta), `cc9e555` (pricing + 401),
+`97b4355` (teto de triagem).
+
+### 0-G.7 Pendências
+
+- **Não testado no browser:** a exclusão de conta só passou por tipo,
+  lint e build. Testar com uma conta descartável antes de confiar — a
+  ação é irreversível.
+- Nada foi enviado pro origin ainda (`git push` pendente; o push dispara
+  deploy na Vercel).
 
 ---
 

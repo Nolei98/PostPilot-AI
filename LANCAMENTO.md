@@ -2,6 +2,11 @@
 
 > Regra: 10 usuários reais que usam todo dia > 1.000 cadastros que não voltam.
 
+> ⚠️ **O checklist do §1 está desatualizado** (vários itens já estão prontos).
+> A versão viva dele, em portões, está em
+> **[`ESTADO-DO-PROJETO.md`](./ESTADO-DO-PROJETO.md) §7**. As seções §2–§6
+> daqui (canais, roteiro do dia, funil, feedback, métrica) continuam válidas.
+
 ---
 
 ## 1. Checklist de pré-lançamento

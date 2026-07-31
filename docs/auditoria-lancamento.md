@@ -92,7 +92,7 @@ Um usuário do plano grátis pode cadastrar 200 fontes.
 `createClientTenant` insere em `clients` sem checar plano nem contagem.
 Combinado com 2.1: N clientes × N fontes, tudo no plano grátis.
 
-### 🔴 2.3 A triagem custa IA por notícia, e nada a limita
+### ✅ 2.3 A triagem custa IA por notícia, e nada a limita — CORRIGIDO 30/07
 
 `scan-news` roda **a cada 3 horas** por cron, em fan-out para o cliente
 ativo de **cada usuário**, e passa cada notícia por `triageNews`
@@ -111,8 +111,14 @@ zero (§0-F.5 do PROGRESSO) assume.
 > `createClientTenant` a contar os clientes do dono contra o novo
 > `maxClients` (free 1, criador 3, pro sem teto). O teto de fontes também
 > aparece na UI de Ajustes antes de a pessoa preencher o formulário. 2.3
-> (custo de triagem) segue ABERTO, mas deixou de ser ilimitado: agora é
-> 2 fontes × 1 cliente no plano grátis.
+> (custo de triagem) deixou de ser ilimitado no mesmo commit (2 fontes ×
+> 1 cliente no plano grátis) e foi FECHADO na noite de 30/07 — ver o fim
+> de §2.3.
+
+> **Corrigido em 30/07 (noite), commit `97b4355`:** a triagem passou a
+> pular quem está sem cota no mês. As notícias continuam gravadas como
+> `new` e são triadas no ciclo seguinte — adiamento, não perda. O gasto
+> de IA agora acompanha o teto do plano em vez de ignorá-lo.
 
 ### ✅ 2.4 Cota estourada é silenciosa na fila — CORRIGIDO 30/07
 
@@ -134,14 +140,14 @@ esquema (`http/https`), nem bloqueio de IP interno/localhost/metadata.
 Num app fechado isso é teórico. Aberto ao público, é uma requisição
 server-side para qualquer endereço que o usuário quiser.
 
-### 🟠 2.6 Exclusão de conta não é self-service
+### ✅ 2.6 Exclusão de conta não é self-service — CORRIGIDO 30/07
 
 A página `/exclusao-de-dados` explica o processo (exigência do App Review
 do Meta), mas **não existe ação de excluir conta** no código — nenhuma
 `deleteAccount` em `actions.ts`. Para lançamento público no Brasil, LGPD
 pede caminho efetivo de exclusão.
 
-### 🟡 2.7 `/pricing` exige login
+### ✅ 2.7 `/pricing` exige login — CORRIGIDO 30/07
 
 `GET /pricing` em produção responde **307** para o login. É a página de
 conversão: quem chega pela landing não consegue ver preço sem criar
@@ -149,12 +155,18 @@ conta. A landing tem CTA ("Comece grátis"), então o item do
 `LANCAMENTO.md` está formalmente cumprido — mas para lançamento é uma
 perda de conversão evitável.
 
-### 🟡 2.8 APIs respondem 307 em vez de 401
+### ✅ 2.8 APIs respondem 307 em vez de 401 — CORRIGIDO 30/07
 
 `POST /api/checkout`, `POST /api/portal` e `GET /api/instagram/connect`
 sem sessão redirecionam para o login em vez de devolver 401. Não é falha
 de segurança (nada vaza), mas cliente HTTP nenhum entende um redirect
 como "não autenticado".
+
+> **Corrigido em 30/07 (noite):** `deleteMyAccount` (commit `2e7e508`)
+> apaga os arquivos dos dois buckets e depois o usuário — o resto do banco
+> cai por cascata. `/pricing` abriu sem login e as rotas de API passaram a
+> responder 401 (commit `cc9e555`). ⚠️ A exclusão ainda NÃO foi exercida no
+> browser: só tipo, lint, testes e build.
 
 ### 🟡 2.9 Publicação no Instagram só funciona para contas de teste
 
