@@ -145,7 +145,7 @@ de verdade. Ver `ESTADO-DO-PROJETO.md` §7.2.
 ## Estrutura
 
 ```
-supabase/migrations/       # 001–049 (a 049 ainda não aplicada em produção)
+supabase/migrations/       # 001–049, todas aplicadas em produção
 src/middleware.ts          # guard de sessão; define as rotas públicas
 src/lib/plans.ts           # limites de plano — fonte única da verdade
 src/lib/ai/                # triagem, geração, carrossel, roteiro de vídeo, embedding

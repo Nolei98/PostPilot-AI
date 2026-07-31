@@ -4,10 +4,8 @@
 > está pronto, o que falta, e em que ordem fazer. Os outros documentos são
 > aprofundamento — a lista deles está no fim (§8).
 >
-> Atualizado em **2026-07-30** (noite). Commit de referência: `ad8d885` (`main`,
+> Atualizado em **2026-07-30** (noite). Commit de referência: `676f6b3` (`main`,
 > ainda não enviado pro origin).
->
-> ⚠️ **A migration 049 ainda não foi aplicada no Supabase de produção.** Ver §5.
 
 ---
 
@@ -82,7 +80,7 @@ Arquivos-chave:
 | Arte (SVG → PNG) | `src/lib/image.ts`, `src/lib/cover-svg.ts`, `src/lib/carousel-render.ts` |
 | Vídeo | `src/lib/video-assembly.ts`, `src/lib/stock-videos.ts` |
 | Cliente ativo (multi-tenant) | `src/lib/client-context.ts`, `src/lib/shell.ts` |
-| Migrations (001–049; a 049 falta aplicar) | `supabase/migrations/` |
+| Migrations (001–049, todas aplicadas) | `supabase/migrations/` |
 
 ---
 
@@ -149,7 +147,6 @@ Numeração igual à de `docs/auditoria-lancamento.md`, pra dar pra cruzar.
 | 2.10 | **Stripe em modo de teste** — ninguém consegue pagar de verdade | trava a receita |
 | 2.9 | **App Review do Meta não submetido** — publicação automática só em contas de teste. Para o público, o produto entrega até o download da arte | dossiê pronto em `docs/meta-app-review.md`; falta Business Verification, screencast, ícone/categoria |
 | — | Presets de nicho (confeitaria, saúde, advocacia) prontos porém **em standby** | decisão de produto |
-| — | **Migration 049 não aplicada em produção** — o botão "gerar vídeo" grava numa coluna que ainda não existe lá | rodar `supabase/migrations/049_video_script.sql` antes do próximo deploy |
 | — | Vídeo gerado (Sprint D) **nunca rodou com o Pexels real** — os testes usam clipes sintéticos | gerar 3-4 vídeos e olhar a saída antes de confiar |
 | — | Publicação de Reels (Graph API) e TikTok | Sprint D segue aberto nesse ponto |
 | — | Sprints E (Viral Radar) e F (ações de agente) | não começados |
