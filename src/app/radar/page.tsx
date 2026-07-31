@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/ui/AppShell";
 import { getShellData } from "@/lib/shell";
 import { RadarScanButton } from "@/components/RadarScanButton";
+import { RemixBriefPanel } from "@/components/RemixBriefPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,8 @@ export default async function RadarPage() {
         </div>
         <RadarScanButton />
       </div>
+
+      <RemixBriefPanel temReferencias={referencias.length > 0} />
 
       {referencias.length === 0 ? (
         <div className="rounded-xl border border-subtle p-8 text-center">

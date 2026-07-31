@@ -1007,6 +1007,64 @@ export async function triggerRadarScan(): Promise<{ ok: boolean; error?: string 
   }
 }
 
+/**
+ * Brief de remix (Sprint E, fatia 2): lê as referências de TOPO do cliente
+ * ativo e devolve a fórmula por trás delas.
+ *
+ * Não grava nada: o brief é derivado das referências, que já estão no
+ * banco, e o provider de texto do kit é grátis. Guardar exigiria decidir
+ * invalidação (o ranking muda a cada coleta) por um ganho que não existe.
+ */
+export async function gerarBriefDeRemix(): Promise<{
+  ok: boolean;
+  error?: string;
+  brief?: import("@/lib/ai/remix").RemixBrief;
+}> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+
+  try {
+    const { getActiveClientId } = await import("@/lib/client-context");
+    const clientId = await getActiveClientId();
+    if (!clientId) return { ok: false, error: "Nenhum cliente ativo." };
+
+    const { data: refs } = await supabase
+      .from("viral_references")
+      .select("title, platform, points, comments, score")
+      .eq("client_id", clientId)
+      .order("score", { ascending: false })
+      .limit(8);
+
+    if (!refs || refs.length === 0) {
+      return { ok: false, error: "Nenhuma referência ainda — atualize o radar primeiro." };
+    }
+
+    const { data: kit } = await supabase
+      .from("brand_kits")
+      .select("niche, post_language, text_provider")
+      .eq("client_id", clientId)
+      .maybeSingle();
+
+    const { generateRemixBrief } = await import("@/lib/ai/remix");
+    const { resolveTextProvider } = await import("@/lib/ai/provider");
+    const brief = await generateRemixBrief(
+      {
+        referencias: refs as import("@/lib/ai/remix").RemixReference[],
+        niche: kit?.niche ?? null,
+        language: kit?.post_language ?? "pt-BR",
+      },
+      resolveTextProvider(kit?.text_provider)
+    );
+    return { ok: true, brief };
+  } catch (err) {
+    console.error("[gerarBriefDeRemix] falhou:", err);
+    return { ok: false, error: "Não foi possível gerar o brief. Tente de novo." };
+  }
+}
+
 export async function triggerScan(): Promise<{
   ok: boolean;
   error?: string;
