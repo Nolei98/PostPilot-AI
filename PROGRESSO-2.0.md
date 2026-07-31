@@ -107,6 +107,38 @@ sessão) · build de produção limpo. A 049 é aplicada pelo harness de pglite
 em todo `npm test`, então as migrations seguem exercitadas de ponta a
 ponta.
 
+### 0-H.7 Primeira geração real — dois defeitos que só o vídeo mostrou
+
+`scripts/test-video-generated.ts` roda o caminho inteiro (roteiro →
+b-roll do Pexels → montagem) SEM tocar no banco nem no Storage, e cospe o
+mp4 em `scripts/out/`. Existe porque testar a qualidade da saída não pode
+exigir sujar um post real de produção.
+
+O primeiro vídeo gerado de verdade (5 clipes, 11s, 21s de montagem)
+expôs duas coisas que nenhum teste pegava, porque só aparecem em pixel:
+
+1. **Emoji virava tofu.** O gancho `🚨 Anthropic lança…` rasterizava um
+   quadradinho vazio grudado na primeira palavra: o texto é queimado por
+   resvg com fonte de TEXTO, e nenhuma delas tem glifo de emoji. Gancho de
+   IA começa com emoji o tempo todo. `stripEmoji` tira do texto QUEIMADO;
+   o `caption` que vai pro Instagram mantém os dele.
+2. **Duas legendas no frame do limite.** `enable='between(t,a,b)'` do
+   ffmpeg é fechado dos DOIS lados, e o fim de um segmento é exatamente o
+   início do próximo — no frame da emenda o CTA aparecia por cima do beat
+   anterior. Trocado por `gte(t,start)*lt(t,end)`; o último segmento fica
+   só com `gte`, porque o vídeo acaba junto com ele.
+
+Os dois confirmados no MESMO instante do vídeo depois do conserto
+(frames 1s e 9s). 4 testes novos pro `stripEmoji`.
+
+> ⚠️ **Achado de operação: o free tier do Gemini são 20 requisições por
+> DIA** (`gemini-2.5-flash`, `GenerateRequestsPerDayPerProjectPerModel-FreeTier`).
+> A primeira tentativa de gerar o roteiro morreu em 429 com a cota já
+> estourada. Isso não é limite deste script — é o teto do provider de
+> texto do produto inteiro. Com o piloto religado, 20 requisições/dia é
+> menos de uma varredura completa. Precisa entrar na conta antes de
+> qualquer divulgação.
+
 ### 0-H.6 Pendências
 
 - ✅ **Migration 049 aplicada no Supabase de produção em 30/07** —
@@ -116,9 +148,12 @@ ponta.
   missing", e o "Success. No rows returned" seguinte era do SELECT de
   verificação, não do ALTER — parecia sucesso e não era. Aplicada pelo SQL
   Editor do dashboard.
-- **Nunca rodou de ponta a ponta com Pexels real.** Os testes cobrem as
-  consultas e a montagem com clipes sintéticos; a busca real de b-roll
-  nunca foi exercida por este job.
+- ✅ **Rodou de ponta a ponta com Pexels real** em 30/07 — ver §0-H.7. O
+  que ainda NÃO rodou é o job dentro do app (fila → botão → Inngest →
+  Storage): o teste foi pelos módulos, sem banco.
+- **Roteiro real nunca saiu**: a amostra usou MOCK porque a cota diária do
+  Gemini estava estourada. O texto queimado no vídeo de exemplo é
+  `[MOCK] …` e vem truncado pelo próprio mock, não pelo render.
 - Publicação de Reels (Graph API) e TikTok continuam fora — §4.4 segue
   aberto nesse ponto.
 

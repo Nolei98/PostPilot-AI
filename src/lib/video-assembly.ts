@@ -150,6 +150,25 @@ async function sampleBandColor(frame: Buffer, bandY: number, bandH: number): Pro
 }
 
 /**
+ * Tira emoji e pictogramas do texto QUEIMADO no vídeo.
+ *
+ * O texto é rasterizado por resvg com fonte de texto (Inter/sans): nenhuma
+ * delas tem glifo de emoji, então "🚨 Anthropic lança…" virava um
+ * quadradinho vazio (tofu) grudado na primeira palavra — verificado no
+ * frame 1s do primeiro vídeo gerado de verdade. E gancho de IA começa com
+ * emoji o tempo todo.
+ *
+ * Só a legenda QUEIMADA perde o emoji. O `caption` do post (a legenda que
+ * vai pro Instagram) passa longe daqui e mantém os dele.
+ */
+export function stripEmoji(text: string): string {
+  return text
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}️‍]/gu, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/**
  * Legenda em PNG transparente. O véu atrás do texto NÃO é uma caixa —
  * é um gradiente contínuo (sem borda reta) que nasce transparente,
  * passa pela cor MÉDIA do próprio b-roll daquele trecho (`bandColor`,
@@ -159,7 +178,7 @@ async function sampleBandColor(frame: Buffer, bandY: number, bandH: number): Pro
 function buildCaptionSvg(text: string, bandColor: [number, number, number]): string {
   const fontSize = 56;
   const maxChars = 22;
-  const lines = wrapText(text.toUpperCase(), maxChars).slice(0, 3);
+  const lines = wrapText(stripEmoji(text).toUpperCase(), maxChars).slice(0, 3);
   const lineH = fontSize * 1.2;
   const textBandH = captionTextBandHeight(text);
   const startY = ASSEMBLY_H - 90 - (lines.length - 1) * lineH;
@@ -238,14 +257,25 @@ export async function assembleScriptVideo(
 
     // filter_complex: encadeia um overlay por legenda, cada um só
     // visível na janela [start,end) do seu segmento.
+    //
+    // `gte*lt` e não `between`: o between do ffmpeg é fechado dos DOIS
+    // lados, e o fim de um segmento é exatamente o começo do próximo —
+    // então no frame do limite as duas legendas apareciam juntas, uma por
+    // cima da outra (visto no frame 9s do primeiro vídeo gerado: o CTA
+    // sobreposto ao beat anterior). Meio aberto no fim resolve, e o
+    // último segmento não perde nada porque o vídeo acaba junto com ele.
     const inputs = ["-i", concatPath, ...captionPaths.flatMap((p) => ["-i", p])];
     const filterParts: string[] = [];
     let lastLabel = "0:v";
     segments.forEach((seg, i) => {
       const inputIdx = i + 1;
       const outLabel = i === segments.length - 1 ? "outv" : `v${i}`;
+      const ultimo = i === segments.length - 1;
+      const janela = ultimo
+        ? `gte(t,${seg.start})`
+        : `gte(t,${seg.start})*lt(t,${seg.end})`;
       filterParts.push(
-        `[${lastLabel}][${inputIdx}:v]overlay=0:0:enable='between(t,${seg.start},${seg.end})'[${outLabel}]`
+        `[${lastLabel}][${inputIdx}:v]overlay=0:0:enable='${janela}'[${outLabel}]`
       );
       lastLabel = outLabel;
     });

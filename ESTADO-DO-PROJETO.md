@@ -39,7 +39,7 @@ com Brand Kit próprio (logo, cores, nicho, idioma, providers de IA).
 ```bash
 npm run dev                                                     # app  → localhost:3000
 npx inngest-cli@latest dev -u http://localhost:3000/api/inngest  # jobs → localhost:8288
-npm test          # 487 testes (unitários + RLS via pglite). Rodam sem chave, custo $0
+npm test          # 491 testes (unitários + RLS via pglite). Rodam sem chave, custo $0
 npm run test:e2e  # 3 testes Playwright — LOCAL only, usa Supabase real
 npx tsc --noEmit  # typecheck
 ```
@@ -110,7 +110,7 @@ Arquivos-chave:
 - **Páginas legais** (`/privacidade`, `/termos`, `/exclusao-de-dados`) no ar,
   respondendo 200.
 - **Vercel Analytics** ligado.
-- **Qualidade**: `tsc` limpo, `lint` limpo, build limpo, 487 testes + 3 e2e
+- **Qualidade**: `tsc` limpo, `lint` limpo, build limpo, 491 testes + 3 e2e
   passando. CI no GitHub Actions em todo push.
 
 ---
@@ -147,7 +147,8 @@ Numeração igual à de `docs/auditoria-lancamento.md`, pra dar pra cruzar.
 | 2.10 | **Stripe em modo de teste** — ninguém consegue pagar de verdade | trava a receita |
 | 2.9 | **App Review do Meta não submetido** — publicação automática só em contas de teste. Para o público, o produto entrega até o download da arte | dossiê pronto em `docs/meta-app-review.md`; falta Business Verification, screencast, ícone/categoria |
 | — | Presets de nicho (confeitaria, saúde, advocacia) prontos porém **em standby** | decisão de produto |
-| — | Vídeo gerado (Sprint D) **nunca rodou com o Pexels real** — os testes usam clipes sintéticos | gerar 3-4 vídeos e olhar a saída antes de confiar |
+| — | **Free tier do Gemini: 20 requisições por DIA** (`gemini-2.5-flash`) — bateu 429 na primeira geração de roteiro | é o teto do provider de texto do produto inteiro, não só do vídeo. Contar antes de religar o piloto |
+| — | Vídeo gerado rodou pelos módulos com Pexels real, mas **o job dentro do app (fila → botão → Inngest → Storage) nunca rodou** | subir dev + Inngest e clicar "gerar vídeo" num post real |
 | — | Publicação de Reels (Graph API) e TikTok | Sprint D segue aberto nesse ponto |
 | — | Sprints E (Viral Radar) e F (ações de agente) | não começados |
 

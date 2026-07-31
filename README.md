@@ -79,7 +79,7 @@ foi possível iniciar a varredura".
 ### 5. Testes
 
 ```bash
-npm test          # 487 testes: unitários + RLS/uniqueness (pglite) — mock, sem chave, $0
+npm test          # 491 testes: unitários + RLS/uniqueness (pglite) — mock, sem chave, $0
 npm run test:e2e  # 3 e2e (Playwright) — LOCAL only: cria e apaga usuário no Supabase real
 npx tsc --noEmit  # typecheck
 npm run lint
@@ -159,6 +159,7 @@ src/app/ready/             # prontos pra publicar
 src/app/settings/          # Brand Kit, fontes, templates, conta
 src/app/pricing/           # planos (pública)
 scripts/                   # utilitários de operação e teste visual
+                           # (test-video-generated.ts gera um vídeo sem tocar no banco)
 ```
 
 Os jobs do Inngest usam service role e **ignoram RLS** — por isso herdam

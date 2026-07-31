@@ -6,6 +6,7 @@ import {
   buildScriptTimeline,
   segmentDurations,
   assembleScriptVideo,
+  stripEmoji,
 } from "@/lib/video-assembly";
 import type { VideoScript } from "@/lib/ai/video-script";
 
@@ -80,5 +81,27 @@ describe("assembleScriptVideo (ffmpeg real, clipes sintéticos)", () => {
 
   it("rejeita quando o número de clipes não bate com os segmentos", async () => {
     await expect(assembleScriptVideo(script, [])).rejects.toThrow(/precisa ser 1:1/);
+  });
+});
+
+describe("stripEmoji (legenda queimada)", () => {
+  it("tira o emoji do gancho — a fonte do render não tem glifo e virava tofu", () => {
+    expect(stripEmoji("🚨 Anthropic lança modelo")).toBe("Anthropic lança modelo");
+    expect(stripEmoji("Isso muda tudo 🔥🔥")).toBe("Isso muda tudo");
+  });
+
+  it("preserva acento e pontuação — é texto pt-BR, não ASCII", () => {
+    expect(stripEmoji("⚡ Atenção: não é só isso, é MUITO mais")).toBe(
+      "Atenção: não é só isso, é MUITO mais"
+    );
+  });
+
+  it("não deixa espaço duplo onde o emoji estava", () => {
+    expect(stripEmoji("antes 🚀 depois")).toBe("antes depois");
+  });
+
+  it("texto sem emoji passa intacto", () => {
+    const t = "O detalhe que passou batido pra maioria.";
+    expect(stripEmoji(t)).toBe(t);
   });
 });
