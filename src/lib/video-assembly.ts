@@ -9,14 +9,17 @@
 // já testada) composto por cima com o filtro overlay do ffmpeg, nunca
 // ffmpeg drawtext (exigiria um .ttf disponível pro processo do ffmpeg,
 // que o resvg já resolve pra nós). Cada legenda some/aparece na janela
-// de tempo do beat (`enable='between(t,start,end)'`).
+// de tempo do beat (`enable='gte(t,start)*lt(t,end)'` — meio aberta no
+// fim, senão duas legendas dividem o frame da emenda).
 //
-// Escopo desta v1: b-roll + legendas queimadas. Logo/chip de marca fica
-// pra depois (o vídeo manual já cobre isso; aqui prioriza legenda).
+// Escopo desta v1: b-roll + legendas queimadas. A MARCA não sai daqui:
+// este mp4 é a fonte, e o wordmark/título é carimbado na aprovação
+// (render-approved-post → renderVideoPost). Por isso a legenda respeita
+// um rodapé reservado — ver CAPTION_SAFE_BOTTOM.
 // ============================================================
 import fs from "node:fs";
 import sharp from "sharp";
-import { wrapText } from "@/lib/carousel-render";
+import { wrapText, stripEmoji } from "@/lib/carousel-render";
 import { rasterizeSvg } from "@/lib/svg-render";
 import { tmpPath, runFfmpeg, extractPosterFrame } from "@/lib/video";
 import type { VideoScript } from "@/lib/ai/video-script";
@@ -104,16 +107,7 @@ async function concatClips(clipPaths: string[]): Promise<string> {
   }
 }
 
-/** Altura (em px) da faixa onde o texto senta — mesma conta usada pra
- * saber de onde amostrar a cor e pra desenhar o gradiente. */
-function captionTextBandHeight(text: string): number {
-  const fontSize = 56;
-  const maxChars = 22;
-  const lines = wrapText(text.toUpperCase(), maxChars).slice(0, 3);
-  return 120 + lines.length * fontSize * 1.2;
-}
-
-/** Cor média (RGB) do terço inferior do frame — de onde o gradiente da
+/** Cor média (RGB) da faixa da legenda no frame — de onde o gradiente da
  * legenda "puxa" a cor, em vez de ser um preto genérico sem relação com
  * a imagem. Mesma ideia de measureImageLuminance (contrast.ts), mas
  * preservando a cor (não só a luminância) pra tingir o scrim. */
@@ -150,22 +144,49 @@ async function sampleBandColor(frame: Buffer, bandY: number, bandH: number): Pro
 }
 
 /**
- * Tira emoji e pictogramas do texto QUEIMADO no vídeo.
+ * Rodapé RESERVADO: nada de legenda queimada abaixo desta altura.
  *
- * O texto é rasterizado por resvg com fonte de texto (Inter/sans): nenhuma
- * delas tem glifo de emoji, então "🚨 Anthropic lança…" virava um
- * quadradinho vazio (tofu) grudado na primeira palavra — verificado no
- * frame 1s do primeiro vídeo gerado de verdade. E gancho de IA começa com
- * emoji o tempo todo.
+ * Duas coisas disputam a base do quadro e a legenda perdia pras duas:
+ *  1. **A marca.** Este mp4 é a FONTE — na aprovação o `renderVideoPost`
+ *     carimba divisor + wordmark + título por cima, com a última linha
+ *     em `REELS_H - 220` (image.ts) e o bloco subindo conforme o título
+ *     quebra. A legenda sentava exatamente aí e sumia embaixo da marca.
+ *  2. **A UI do Instagram**, que desenha legenda/@/botões por cima dos
+ *     ~220px de baixo — texto ali não é lido por ninguém.
  *
- * Só a legenda QUEIMADA perde o emoji. O `caption` do post (a legenda que
- * vai pro Instagram) passa longe daqui e mantém os dele.
+ * 780px cobre o pior caso da marca (título de 5 linhas + divisor + folga)
+ * com sobra. A legenda passa a viver no terço central-baixo, acima de
+ * tudo isso.
  */
-export function stripEmoji(text: string): string {
-  return text
-    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}️‍]/gu, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+const CAPTION_SAFE_BOTTOM = 780;
+
+const CAPTION_FONT_SIZE = 56;
+const CAPTION_MAX_CHARS = 22;
+const CAPTION_MAX_LINES = 3;
+
+/**
+ * Geometria da legenda: onde o texto senta e qual faixa o véu precisa
+ * cobrir. Uma conta só, dois consumidores — o desenho do SVG e a
+ * amostragem da cor. Quando eram duas, o véu podia cair num lugar e o
+ * texto em outro (mesmo motivo do `reelsTextZone` em image.ts).
+ */
+export function captionGeometry(text: string): {
+  lines: string[];
+  lineH: number;
+  startY: number;
+  bandTop: number;
+  bandH: number;
+} {
+  const lines = wrapText(stripEmoji(text).toUpperCase(), CAPTION_MAX_CHARS).slice(
+    0,
+    CAPTION_MAX_LINES
+  );
+  const lineH = CAPTION_FONT_SIZE * 1.2;
+  // Última baseline no piso reservado; as outras linhas sobem a partir dela.
+  const startY = ASSEMBLY_H - CAPTION_SAFE_BOTTOM - (lines.length - 1) * lineH;
+  const bandTop = Math.max(0, startY - CAPTION_FONT_SIZE - 48);
+  const bandH = (lines.length - 1) * lineH + CAPTION_FONT_SIZE + 96;
+  return { lines, lineH, startY, bandTop, bandH };
 }
 
 /**
@@ -176,19 +197,21 @@ export function stripEmoji(text: string): string {
  * cor da imagem em vez de ser um preto genérico carimbado por cima.
  */
 function buildCaptionSvg(text: string, bandColor: [number, number, number]): string {
-  const fontSize = 56;
-  const maxChars = 22;
-  const lines = wrapText(stripEmoji(text).toUpperCase(), maxChars).slice(0, 3);
-  const lineH = fontSize * 1.2;
-  const textBandH = captionTextBandHeight(text);
-  const startY = ASSEMBLY_H - 90 - (lines.length - 1) * lineH;
-  const [r, g, b] = bandColor.map(Math.round);
+  const { lines, lineH, startY, bandTop, bandH } = captionGeometry(text);
+
+  // A cor amostrada ESCURECIDA, não crua. Crua, um b-roll claro (tela de
+  // terminal, céu, parede branca) devolve um cinza-claro, e o véu ficava
+  // mais claro que o texto branco — legenda ilegível pelo caminho oposto
+  // ao que o véu existe pra resolver. O fator mantém o TOM do clipe (é o
+  // ponto de amostrar) e garante que a banda sempre escureça.
+  const [r, g, b] = bandColor.map((c) => Math.round(c * 0.4));
   const tint = `rgb(${r},${g},${b})`;
 
-  // gradiente cobre o quadro INTEIRO (sem rect com borda própria):
-  // limpo até ~58%, a cor da imagem emerge gradualmente, escurece pro
-  // preto só perto da base — nunca um degrau, sempre transição.
-  const fadeStart = 1 - (textBandH * 1.6) / ASSEMBLY_H;
+  // O véu deixou de ser preso na base do quadro e virou uma FAIXA em
+  // volta do texto: transparente nas duas pontas, cor do próprio b-roll
+  // no meio. Preso embaixo, ele escurecia justamente a área onde a marca
+  // é carimbada depois — dois véus empilhados no mesmo lugar.
+  const bandBottom = bandTop + bandH;
 
   const tspans = lines
     .map((l, i) => `<tspan x="${ASSEMBLY_W / 2}" y="${startY + i * lineH}">${escapeXml(l)}</tspan>`)
@@ -196,15 +219,15 @@ function buildCaptionSvg(text: string, bandColor: [number, number, number]): str
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${ASSEMBLY_W}" height="${ASSEMBLY_H}" viewBox="0 0 ${ASSEMBLY_W} ${ASSEMBLY_H}">
   <defs>
-    <linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="scrim" x1="0" y1="${bandTop}" x2="0" y2="${bandBottom}" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="${tint}" stop-opacity="0"/>
-      <stop offset="${Math.max(0, fadeStart).toFixed(3)}" stop-color="${tint}" stop-opacity="0"/>
-      <stop offset="${Math.min(0.97, fadeStart + 0.16).toFixed(3)}" stop-color="${tint}" stop-opacity="0.4"/>
-      <stop offset="1" stop-color="#000000" stop-opacity="0.88"/>
+      <stop offset="0.28" stop-color="${tint}" stop-opacity="0.72"/>
+      <stop offset="0.72" stop-color="${tint}" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="${tint}" stop-opacity="0"/>
     </linearGradient>
   </defs>
-  <rect x="0" y="0" width="${ASSEMBLY_W}" height="${ASSEMBLY_H}" fill="url(#scrim)"/>
-  <text font-family="sans-serif" font-weight="800" font-size="${fontSize}" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.5">${tspans}</text>
+  <rect x="0" y="${bandTop}" width="${ASSEMBLY_W}" height="${bandH}" fill="url(#scrim)"/>
+  <text font-family="sans-serif" font-weight="800" font-size="${CAPTION_FONT_SIZE}" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.5">${tspans}</text>
 </svg>`;
 }
 
@@ -246,8 +269,8 @@ export async function assembleScriptVideo(
       // amostra a cor de um frame do PRÓPRIO clipe deste segmento — é
       // essa cor que "puxa" o gradiente da legenda (não preto genérico).
       const frame = await extractPosterFrame(fs.readFileSync(normalizedPaths[i]), 0.15);
-      const textBandH = captionTextBandHeight(seg.text);
-      const bandColor = await sampleBandColor(frame, ASSEMBLY_H - textBandH, textBandH);
+      const { bandTop, bandH } = captionGeometry(seg.text);
+      const bandColor = await sampleBandColor(frame, bandTop, bandH);
 
       const png = rasterizeSvg(buildCaptionSvg(seg.text, bandColor));
       const p = tmpPath("caption.png");

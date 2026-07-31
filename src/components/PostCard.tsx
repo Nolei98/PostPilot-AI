@@ -23,6 +23,7 @@ import {
   createVideoUploadTicket,
   convertPostFormat,
   savePostVideoShape,
+  savePostVideoTitleMode,
   generateVideoForPost,
   uploadPostBackgroundImage,
   removePostBackgroundImage,
@@ -318,6 +319,18 @@ export function PostCard({
     });
   }
 
+  // Título sobre o vídeo (050): liga/desliga sem re-render — a arte final
+  // nasce na aprovação e a prévia já lê a coluna.
+  const [salvandoTitulo, startTitulo] = useTransition();
+  const tituloLigado = (post.video_title_mode ?? "on") === "on";
+
+  function alternarTitulo() {
+    startTitulo(async () => {
+      await savePostVideoTitleMode(post.id, tituloLigado ? "off" : "on");
+      router.refresh();
+    });
+  }
+
   // Reenquadrar (sem reenviar arquivo): só troca video_shape/format.
   const [reenquadrando, startReenquadrar] = useTransition();
 
@@ -602,6 +615,22 @@ export function PostCard({
             {/* Com vídeo pronto os ícones passam a reenquadrar, então
                 trocar o ARQUIVO ganha entrada própria — antes era o
                 mesmo clique, e não dava pra fazer um sem o outro. */}
+            {videoPronto && !videoOcupado && videoAtivo === "reels" && (
+              <button
+                type="button"
+                onClick={alternarTitulo}
+                disabled={salvandoTitulo}
+                title={
+                  tituloLigado
+                    ? "Tirar o título de cima do vídeo (o vídeo já tem texto próprio)"
+                    : "Carimbar o título e a marca sobre o vídeo"
+                }
+                aria-pressed={tituloLigado}
+                className="ml-1 text-micro text-subtle underline-offset-2 transition-colors hover:text-content hover:underline disabled:opacity-40"
+              >
+                {salvandoTitulo ? "salvando…" : tituloLigado ? "título: ligado" : "título: desligado"}
+              </button>
+            )}
             {videoPronto && !videoOcupado && (
               <label
                 title="Trocar o arquivo de vídeo"

@@ -6,8 +6,10 @@ import {
   buildScriptTimeline,
   segmentDurations,
   assembleScriptVideo,
-  stripEmoji,
+  captionGeometry,
+  ASSEMBLY_H,
 } from "@/lib/video-assembly";
+import { stripEmoji } from "@/lib/carousel-render";
 import type { VideoScript } from "@/lib/ai/video-script";
 
 const execFileAsync = promisify(execFile);
@@ -81,6 +83,41 @@ describe("assembleScriptVideo (ffmpeg real, clipes sintéticos)", () => {
 
   it("rejeita quando o número de clipes não bate com os segmentos", async () => {
     await expect(assembleScriptVideo(script, [])).rejects.toThrow(/precisa ser 1:1/);
+  });
+});
+
+describe("captionGeometry (legenda acima da marca)", () => {
+  // A marca é carimbada na aprovação com a última linha em REELS_H-220 e
+  // o bloco subindo conforme o título quebra; a UI do Instagram come os
+  // ~220px de baixo. Legenda que encoste aí some.
+  const LIMITE_DA_MARCA = ASSEMBLY_H - 780;
+
+  it("nunca desce abaixo do rodapé reservado pra marca + UI do Instagram", () => {
+    for (const t of ["curto", "um texto de tamanho medio aqui", "um texto bem mais longo que vai quebrar em tres linhas inteiras sem parar"]) {
+      const g = captionGeometry(t);
+      const ultimaBaseline = g.startY + (g.lines.length - 1) * g.lineH;
+      expect(ultimaBaseline).toBeLessThanOrEqual(LIMITE_DA_MARCA);
+    }
+  });
+
+  it("texto de 3 linhas sobe o bloco inteiro, não estica pra baixo", () => {
+    const curta = captionGeometry("curto");
+    const longa = captionGeometry("um texto bem mais longo que vai quebrar em tres linhas inteiras sem parar");
+    expect(longa.lines.length).toBeGreaterThan(curta.lines.length);
+    expect(longa.startY).toBeLessThan(curta.startY);
+  });
+
+  it("o véu cobre o texto inteiro — texto fora do véu some quando o vídeo clareia", () => {
+    const g = captionGeometry("um texto de tamanho medio aqui");
+    const topoDoTexto = g.startY - 56;
+    const baseDoTexto = g.startY + (g.lines.length - 1) * g.lineH;
+    expect(g.bandTop).toBeLessThanOrEqual(topoDoTexto);
+    expect(g.bandTop + g.bandH).toBeGreaterThanOrEqual(baseDoTexto);
+  });
+
+  it("corta em 3 linhas — legenda de Reels não é parágrafo", () => {
+    const g = captionGeometry("palavra ".repeat(40));
+    expect(g.lines.length).toBeLessThanOrEqual(3);
   });
 });
 

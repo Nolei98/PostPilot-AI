@@ -795,6 +795,33 @@ export async function savePostVideoShape(
   revalidatePath(QUEUE_PATH);
 }
 
+/**
+ * Liga/desliga o título sobre o vídeo do Reels (migration 050).
+ *
+ * Não re-renderiza nada: o post está na fila, a arte definitiva só nasce
+ * na aprovação, e a prévia ao vivo já lê a coluna. Trocar aqui é só
+ * gravar a decisão — o mesmo desenho de `savePostBackgroundOverlay`.
+ */
+export async function savePostVideoTitleMode(
+  postId: string,
+  mode: "on" | "off"
+): Promise<void> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const { error } = await supabase
+    .from("posts")
+    .update({ video_title_mode: mode })
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .eq("status", "pending_approval");
+  if (error) throw new Error(error.message);
+  revalidatePath(QUEUE_PATH);
+}
+
 export async function attachUploadedPostVideo(
   postId: string,
   shape: "reels" | "feed" | "feed-blur"

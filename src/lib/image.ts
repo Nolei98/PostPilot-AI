@@ -603,6 +603,26 @@ interface OverlayContrast {
   alpha: number;
 }
 
+/**
+ * Overlay 1080×1920 100% transparente — usado quando o post pede vídeo
+ * SEM título (migration 050). Existe pra não precisar de um caminho
+ * paralelo de composição: o `composeReelsVideo` continua enquadrando o
+ * vídeo em 9:16 (que é trabalho dele, não do texto) e simplesmente não
+ * desenha nada por cima.
+ */
+export async function transparentOverlayPng(): Promise<Buffer> {
+  return sharp({
+    create: {
+      width: REELS_W,
+      height: REELS_H,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .png()
+    .toBuffer();
+}
+
 export async function buildReelsVideoOverlayPng(
   headline: string,
   cardBrand: CardBrand,

@@ -254,6 +254,10 @@ export interface RenderSpec {
   closingPage: boolean;
   /** Véu sobre a foto de fundo (migration 048) — congelado como o resto. */
   bgOverlay?: "auto" | "on" | "off";
+  /** Reels: título+marca carimbados sobre o vídeo, ou vídeo limpo
+   *  (migration 050). Congelado junto: um post aprovado com o título
+   *  desligado não pode ganhá-lo de volta num re-render. */
+  videoTitle?: "on" | "off";
   templates: Partial<Record<Surface, { id: string; spec: TemplateSpec }>>;
   watermark: boolean;
 }
@@ -420,6 +424,9 @@ export interface Post {
   mark_color: string | null;
   /** Rótulo do topo da capa (migration 046). null = padrão do preset. */
   eyebrow: string | null;
+  /** Título sobre o vídeo no Reels (migration 050). 'off' entrega o
+   *  vídeo limpo — pra quando ele já tem texto próprio. */
+  video_title_mode: "on" | "off";
   /** Foto de FUNDO deste post (migration 048) — coluna própria porque
    * base_image_url guarda o pôster do vídeo, não uma escolha da pessoa. */
   bg_image_url: string | null;

@@ -185,6 +185,8 @@ export interface RenderSpecPostInput {
   eyebrow?: string | null;
   /** Véu sobre a foto de fundo (migration 048). */
   bg_overlay?: "auto" | "on" | "off" | null;
+  /** Título sobre o vídeo no Reels (migration 050). */
+  video_title_mode?: "on" | "off" | null;
   template_applied?: boolean | null;
   video_shape?: VideoShape | null;
   tpl_keyword?: string | null;
@@ -237,6 +239,7 @@ export function withPost(base: RenderSpec, post: RenderSpecPostInput): RenderSpe
     videoShape: post.video_shape ?? base.videoShape,
     closingPage: post.template_applied ?? false,
     bgOverlay: post.bg_overlay ?? "auto",
+    videoTitle: post.video_title_mode ?? "on",
     identity: {
       colorBackground: post.tpl_color_background ?? base.identity.colorBackground,
       colorAccent: post.tpl_color_accent ?? base.identity.colorAccent,
@@ -308,6 +311,7 @@ export async function resolveRenderSpec(input: {
     identity: identityFromPost(input.post, bk),
     closingPage: input.post.template_applied ?? false,
     bgOverlay: input.post.bg_overlay ?? "auto",
+    videoTitle: input.post.video_title_mode ?? "on",
     templates,
     watermark,
   };

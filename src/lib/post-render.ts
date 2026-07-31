@@ -248,9 +248,15 @@ export async function renderVideoPost(
   if (shape === "reels") {
     // Reels 9:16: overlay em 1080x1350 encaixado no rodapé do quadro maior.
     // Regra do kit: contraste medido pelo FRAME DE PÔSTER, não pelo vídeo.
-    const { buildReelsVideoOverlayPng } = await import("@/lib/image");
+    const { buildReelsVideoOverlayPng, transparentOverlayPng } = await import("@/lib/image");
     const poster = await extractPosterFrame(source, 0.5);
-    const overlay = await buildReelsVideoOverlayPng(hook, spec.cardBrand, poster);
+    // Título desligado (050): overlay VAZIO em vez de pular a composição.
+    // O compose é quem enquadra o vídeo em 9:16 — pular ele entregaria o
+    // arquivo cru, com a proporção que o usuário mandou.
+    const overlay =
+      spec.videoTitle === "off"
+        ? await transparentOverlayPng()
+        : await buildReelsVideoOverlayPng(hook, spec.cardBrand, poster);
     finalVideo = await composeReelsVideo(source, overlay);
   } else if (shape === "feed-blur") {
     // Feed 4:5 com fundo BORRADO: o mesmo vídeo vira o fundo inteiro
