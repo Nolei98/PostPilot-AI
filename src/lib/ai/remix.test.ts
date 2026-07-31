@@ -4,6 +4,7 @@ import {
   mockBrief,
   validateBrief,
   pareceCopia,
+  sanitizeBrief,
   MIN_GANCHOS,
   MAX_GANCHOS,
   type RemixBrief,
@@ -111,8 +112,52 @@ describe("pareceCopia — a guarda contra plágio maquiado", () => {
     expect(pareceCopia("Como escolher banco de dados em 2026", titulos)).toBe(false);
   });
 
+  it("não acusa gancho CURTO que só divide um assunto", () => {
+    // Falso positivo real visto em produção: "Design é redefinição" tem
+    // dois termos úteis e um deles é "design" — 50% batia o limiar antigo.
+    expect(pareceCopia("Design é redefinição", titulos)).toBe(false);
+    expect(pareceCopia("Design que ninguém ensina", titulos)).toBe(false);
+  });
+
+  it("continua acusando quando duas palavras batem", () => {
+    expect(pareceCopia("Design é sempre compromise", titulos)).toBe(true);
+  });
+
   it("gancho vazio não acusa", () => {
     expect(pareceCopia("   ", titulos)).toBe(false);
+  });
+});
+
+describe("sanitizeBrief — descarta o gancho ruim, não o brief", () => {
+  const titulos = ["Design is compromise"];
+
+  it("remove só o gancho que é reescrita", () => {
+    const sujo: RemixBrief = {
+      ...briefValido,
+      ganchos: ["Design is compromise", "O custo do inference", "Latência é preço", "Quem paga a conta"],
+    };
+    const limpo = sanitizeBrief(sujo, titulos);
+    expect(limpo.ganchos).toHaveLength(3);
+    expect(limpo.ganchos).not.toContain("Design is compromise");
+  });
+
+  it("não mexe em brief que já está limpo", () => {
+    const limpo = sanitizeBrief(briefValido, titulos);
+    expect(limpo.ganchos).toEqual(briefValido.ganchos);
+  });
+
+  it("sem títulos de referência, não filtra nada", () => {
+    expect(sanitizeBrief(briefValido, []).ganchos).toEqual(briefValido.ganchos);
+  });
+
+  it("se sobrar pouco, a validação seguinte é quem reprova", () => {
+    const quaseTudoCopia: RemixBrief = {
+      ...briefValido,
+      ganchos: ["Design is compromise", "Compromise is design", "Design is compromise!"],
+    };
+    const limpo = sanitizeBrief(quaseTudoCopia, titulos);
+    expect(limpo.ganchos.length).toBeLessThan(MIN_GANCHOS);
+    expect(() => validateBrief(limpo, titulos)).toThrow(/ganchos/i);
   });
 });
 

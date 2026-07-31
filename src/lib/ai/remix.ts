@@ -95,11 +95,35 @@ export function pareceCopia(gancho: string, titulos: string[]): boolean {
     if (t.size === 0) continue;
     let comuns = 0;
     for (const token of g) if (t.has(token)) comuns++;
-    // Metade dos termos significativos do gancho vindos do mesmo título
-    // já é reescrita, não inspiração.
-    if (comuns / g.size >= 0.5) return true;
+    const proporcao = comuns / g.size;
+    // DUAS palavras em comum, ou quase o gancho inteiro vindo do mesmo
+    // título. Só a proporção não servia: "Design é redefinição" tem dois
+    // termos úteis, um deles "design", e 1 de 2 batia os 50% — um assunto
+    // em comum virava acusação de plágio (falso positivo real, visto em
+    // produção em 31/07).
+    if ((comuns >= 2 && proporcao >= 0.5) || proporcao >= 0.85) return true;
   }
   return false;
+}
+
+/**
+ * Tira do brief os ganchos que parecem reescrita, em vez de reprovar o
+ * brief inteiro.
+ *
+ * Um gancho suspeito entre cinco não justifica devolver erro pra quem
+ * clicou: o resto do brief continua útil. Só falha quando sobram poucos
+ * demais — aí não há o que entregar.
+ */
+export function sanitizeBrief(brief: RemixBrief, titulos: string[]): RemixBrief {
+  if (!Array.isArray(brief.ganchos) || titulos.length === 0) return brief;
+  const limpos = brief.ganchos.filter(
+    (g) => typeof g === "string" && g.trim() && !pareceCopia(g, titulos)
+  );
+  const descartados = brief.ganchos.length - limpos.length;
+  if (descartados > 0) {
+    console.warn(`[remix] ${descartados} gancho(s) descartado(s) por parecerem reescrita`);
+  }
+  return { ...brief, ganchos: limpos };
 }
 
 /**
@@ -249,13 +273,17 @@ export async function generateRemixBrief(
     validateBrief(brief, titulos);
     return brief;
   }
+  // Filtrar ANTES de validar: gancho parecido com a referência é
+  // descartado, e só falta de gancho reprova o brief. Reprovar tudo por
+  // causa de um gancho fazia o usuário receber erro por um brief que
+  // estava 80% bom.
   try {
-    const brief = await gen(input);
+    const brief = sanitizeBrief(await gen(input), titulos);
     validateBrief(brief, titulos);
     return brief;
   } catch (err) {
     console.warn("[remix] 1º brief inválido, tentando de novo:", (err as Error).message);
-    const brief = await gen(input);
+    const brief = sanitizeBrief(await gen(input), titulos);
     validateBrief(brief, titulos); // falhou de novo → propaga
     return brief;
   }
