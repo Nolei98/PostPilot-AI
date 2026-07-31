@@ -673,7 +673,7 @@ export default async function SettingsPage({
                       multi-mensagem (402 em 07/2026) e ficou como armadilha
                       — quem lesse "grátis, sem key" escolhia e a fila
                       parava calada. */}
-                  <option value="nvidia">NVIDIA (Llama 3.1 70B) — grátis, cota generosa</option>
+                  <option value="nvidia">NVIDIA (DeepSeek Flash) — grátis, cota generosa</option>
                   <option value="gemini">Gemini (Google AI Studio) — grátis, só 20 por DIA</option>
                   <option value="claude">Claude (Anthropic) — pago, exige chave</option>
                   <option value="pollinations">Pollinations.ai — exige créditos pagos</option>

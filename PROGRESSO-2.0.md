@@ -80,7 +80,31 @@ três, e esquecer um faz o cliente cair calado no default.
 
 Sem migration: `brand_kits.text_provider` não tem CHECK.
 
-### 0-I.4 Pendências
+### 0-I.4 Imagem pela NVIDIA: testada e DESCARTADA (por ora)
+
+As NIMs de imagem ficam noutro host (`ai.api.nvidia.com/v1/genai/...`),
+não no `integrate` do texto, e exigem chave gerada NA PÁGINA do modelo —
+a do catálogo de texto devolve `404 Function not found for account`.
+
+Com a chave certa do `flux.1-schnell` o acesso é real: o gateway
+respondeu `422` apontando que `cfg_scale` precisa ser ≤ 0 (schnell é
+destilado). Corrigido o payload, a inferência **não voltou em 120s nem em
+150s**.
+
+O padrão diz tudo: **validação é instantânea, inferência fica em fila.**
+O gateway aceita e a GPU nunca chega. É o mesmo congestionamento do
+llama-70b no texto, só que pior — e inviável pro pipeline, onde o
+`generate-post` roda por notícia e a função serverless estoura muito
+antes.
+
+**Decisão: fica no `stock`.** Não é só custo (que já estava resolvido): a
+escolha por foto real de banco existe pra não ter artefato de IA em
+rosto, mão e dente (§0-F.3), e o FLUX não resolve isso. Onde ele valeria
+é fundo abstrato e textura, sem rosto pra errar — aí seria provider
+extra, nunca troca do padrão. Vale retestar depois: fila de tier grátis
+varia.
+
+### 0-I.5 Pendências
 
 - **Nenhum post foi gerado pelo pipeline com a NVIDIA ainda** — o teste
   foi direto nos módulos (`generatePostPackage` e `generateVideoScript`).
