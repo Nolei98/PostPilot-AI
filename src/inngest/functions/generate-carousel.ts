@@ -140,7 +140,7 @@ export const generateCarousel = inngest.createFunction(
     // determinístico e não custa requisição nenhuma.
     const bgUrls = await step.run("resolve-backgrounds", async () => {
       const { getCardBg } = await import("@/lib/card-bg");
-      const { buildGeneratedCardBgPng } = await import("@/lib/card-bg-generated");
+      const { buildGeneratedCardBgJpeg } = await import("@/lib/card-bg-generated");
       const cores = {
         colorBackground: prefs.card.colorBackground,
         colorAccent: prefs.card.colorAccent,
@@ -150,11 +150,13 @@ export const generateCarousel = inngest.createFunction(
       /** Sobe o PNG gerado e devolve a URL pública com cache-buster. */
       const subirGerado = async (idx: number): Promise<string | null> => {
         try {
-          const png = buildGeneratedCardBgPng(`${postId}:${idx}`, cores);
-          const caminho = `${postId}-card-${idx}-bg.png`;
+          // JPEG e não PNG: fundo não tem transparência, e o mesmo desenho
+          // cai de ~135KB pra ~16KB — o bucket é finito.
+          const jpg = await buildGeneratedCardBgJpeg(`${postId}:${idx}`, cores);
+          const caminho = `${postId}-card-${idx}-bg.jpg`;
           const { error } = await supabase.storage
             .from("post-images")
-            .upload(caminho, png, { contentType: "image/png", upsert: true });
+            .upload(caminho, jpg, { contentType: "image/jpeg", upsert: true });
           if (error) throw new Error(error.message);
           const { data } = supabase.storage.from("post-images").getPublicUrl(caminho);
           return `${data.publicUrl}?v=${Date.now()}`;

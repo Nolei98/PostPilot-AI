@@ -156,7 +156,24 @@ export function buildGeneratedCardBgSvg(seed: string, brand: BgBrandColors): str
 </svg>`;
 }
 
-/** PNG do fundo gerado, pronto pra virar `bg_url` depois do upload. */
+/** PNG do fundo gerado. Útil pra teste e pra quem precisa de sem-perda. */
 export function buildGeneratedCardBgPng(seed: string, brand: BgBrandColors): Buffer {
   return rasterizeSvg(buildGeneratedCardBgSvg(seed, brand));
+}
+
+/**
+ * JPEG do fundo gerado — é este que vai pro Storage.
+ *
+ * Medido em 31/07: o mesmo fundo pesa ~135KB em PNG e ~16KB em JPEG, e
+ * fundo não precisa de canal alfa. Nos 670 cards já existentes isso é a
+ * diferença entre 94MB e 11MB no bucket — e o plano gratuito do Supabase
+ * dá 1GB. Gradiente é exatamente o conteúdo em que o JPEG não deixa
+ * artefato visível nessa qualidade.
+ */
+export async function buildGeneratedCardBgJpeg(
+  seed: string,
+  brand: BgBrandColors
+): Promise<Buffer> {
+  const sharp = (await import("sharp")).default;
+  return sharp(buildGeneratedCardBgPng(seed, brand)).jpeg({ quality: 88 }).toBuffer();
 }
