@@ -37,9 +37,32 @@ Cada um tem 3 "modos" de card: **capa**, **interior**, **fechamento**. Abaixo, s
 ### Capa / Fechamento
 - Bloco ancorado no RODAPÉ, alinhamento central.
 - Divisor: `——— WORDMARK® ———` (linhas finas dos dois lados do wordmark da marca).
+  - **O que centraliza é o conjunto `wordmark + ®`, não só o wordmark**
+    (2026-07-31). O `®` é vetor desenhado à parte (`registeredMarkGlyph`),
+    e enquanto o texto era ancorado no eixo com o símbolo pendurado à
+    direita, sobravam 54px de respiro à esquerda contra 17px à direita.
+    Agora o texto desloca meia largura do símbolo pra esquerda e os dois
+    vãos ficam em **24px**. Travado por `src/lib/wordmark-divider.test.ts`,
+    que mede os vãos no SVG.
 - Headline grande abaixo do divisor.
 - Corpo de apoio (opcional) abaixo da headline.
-- Capa: "Deslize para ver mais" pequeno embaixo. Fechamento: sem essa linha; mostra chip (esq.) + ícones (dir.) nos cantos.
+- Capa: "Deslize para ver mais" pequeno embaixo.
+- **Fechamento** (revisado 2026-07-31): sem a linha de deslize — ela vinha
+  de um texto embutido no fallback do `content.cta` e convidava a deslizar
+  pra uma página que não existe. O chip de perfil aparece **sempre**, em
+  qualquer preset, **centralizado e ancorado logo abaixo do texto** (não
+  mais no canto): a altura vem da medida real do bloco
+  (`lowestTextBottomFrac`), e cai pro rodapé quando o título é longo demais
+  pra caber um chip abaixo dele.
+
+### Fundo dos cards (2026-07-31)
+- **Capa:** foto da notícia — a única imagem do carrossel com significado.
+- **Demais cards:** fundo GERADO em gradiente nas cores do Brand Kit
+  (`card-bg-generated.ts`), semente `postId:idx`, 5 variantes. Antes todos
+  buscavam foto de banco com a MESMA consulta do nicho, sem usar o texto do
+  card — nove fotos aleatórias sem relação entre si.
+- Regra que vale pra todas as variantes: **o terço inferior fica limpo**, é
+  onde o texto e o chip sentam.
 
 ### Interior
 - Rótulo (`@handle · palavras-chave`) no topo OU no rodapé, alternando por paridade do índice do card (ritmo editorial — card par mostra embaixo, ímpar em cima).

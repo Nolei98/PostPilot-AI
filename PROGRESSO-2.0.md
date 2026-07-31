@@ -1530,10 +1530,12 @@ verdes**. Working tree limpa em `870f45f`.
 - [x] **Migrations 041, 042, 043, 044 e 045 aplicadas no Supabase em
       29/07.** O `setval` final da 045 retornou **582**, ou seja, ~581
       posts existentes receberam `ref` e a sequência segue a partir daí.
-- [ ] **`PUT` manual em `/api/inngest`** depois do deploy da 041 — ela
-      REMOVE o `resync-layout-preset`, e sem a integração Vercel↔Inngest
-      (§0-A.6) todo deploy que adiciona/remove função exige o registro à
-      mão (`curl -X PUT https://<app>/api/inngest`).
+- [x] **`PUT` manual em `/api/inngest`** — feito em 31/07 (duas vezes, ao
+      registrar o `scan-radar` novo e depois do teto de concorrência do
+      `scan-news`). Resposta: `{"message":"Successfully registered","modified":true}`.
+      Continua valendo como regra: **todo deploy que adiciona ou remove
+      função Inngest exige esse PUT à mão** enquanto não houver a
+      integração Vercel↔Inngest.
 - [ ] **Verificar em produção com a conta real** (herdado de §0-B.2, agora
       com mais superfície): aprovar um post de cada formato (single,
       carrossel, Reels, vídeo feed) e conferir `render_status='ready'` +
@@ -2239,8 +2241,10 @@ O que falta, separado por quem consegue fazer:
 - [x] **Rodapé da landing** aponta pras três (`/privacidade`, `/termos`,
       `/exclusao-de-dados`); `app.html`/`brand.html` não existem mais em
       `public/index.html`.
-- [ ] Conferir as três URLs no domínio de produção antes de submeter — o
-      revisor navega o site, e link quebrado reprova sozinho.
+- [x] Conferir as três URLs no domínio de produção antes de submeter —
+      **feito em 31/07**: `/privacidade` (275ms), `/termos` (316ms) e
+      `/exclusao-de-dados` (247ms) respondem **200** sem login. Reconferir
+      no dia da submissão, porque link quebrado reprova sozinho.
 
 > **Dossiê pronto (29/07): `docs/meta-app-review.md`.** Traz a descrição do
 > app, a categoria sugerida, as TRÊS justificativas de permissão já
@@ -2279,8 +2283,17 @@ O que falta, separado por quem consegue fazer:
 - [x] **E2** (2026-07-31) — Brief de remix: extrai a FÓRMULA das referências de topo (`src/lib/ai/remix.ts`), com guarda `pareceCopia` contra gancho que seja reescrita do título alheio. Painel na tela do Radar. 19 testes. **Aceite da E cumprido** ("dado o nicho, retorna top referências com score + brief de remix") — com a fonte trocada de Instagram para Hacker News, ver §0-M.
 - [x] **E1** (2026-07-31) — Coleta + score normalizado + tela `/radar`. `viral_references` (migration 051), `src/lib/radar/*` (coletor HN, score log com desconto por idade, consultas por nicho), job `scan-radar` (cron 12h + `radar/scan.requested`). 19 testes. Medido: 134 referências únicas numa varredura real.
 - [ ] Coleta pay-per-use (Apify/similar) — **descartado por ora**: choca com a política de custo zero. Só volta se HN+Reddit se mostrarem insuficientes.
-- [ ] Viral Score normalizado por tamanho do perfil; extrair fórmula (gancho/estrutura)
-      → alimenta `generate-*` para gerar **original** no nicho do cliente.
+- [x] Viral Score normalizado — feito em `src/lib/radar/score.ts`, mas
+      **por plataforma**, não por tamanho de perfil: a fonte é o Hacker
+      News, onde não existe "perfil" com seguidores. Escala log + peso
+      menor pro comentário + desconto por idade.
+- [x] Extrair a fórmula (gancho/estrutura) — `src/lib/ai/remix.ts`.
+- [ ] **E3 — a fórmula ALIMENTAR o `generate-*`.** Hoje o brief é sob
+      demanda e o usuário lê na tela; o pipeline de geração não o consome.
+      É o que falta pra fechar a promessa original da sprint ("gerar
+      original no nicho a partir do que performou"). Não comecei porque
+      muda o comportamento da geração automática — **decisão de produto do
+      João**, não trabalho bloqueado.
 - **Aceite:** dado um @, retorna top referências com score + brief de remix.
 
 ### 4.55 SPRINT G — Auditoria da tela de Ajustes — ✅ COMPLETA (2026-07-31)
