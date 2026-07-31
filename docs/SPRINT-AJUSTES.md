@@ -130,11 +130,41 @@ Estas eu **não** decido sozinho:
 
 ---
 
-## Execução (depois das respostas)
+## Passagem clicada — feita em 2026-07-31
 
-1. **Passagem clicada em Ajustes**, controle por controle, com a extensão:
-   salvar cada campo e conferir no banco que o valor gravou. É o "testar se
-   tudo funciona" do pedido — nunca foi feito de ponta a ponta.
-2. Aplicar as remoções aprovadas.
-3. Corrigir o que a passagem revelar quebrado.
-4. Registrar em `PROGRESSO-2.0.md`.
+**Método:** snapshot do banco → submeter cada formulário **sem alterar nada**
+→ comparar. Salvar sem mudar não pode alterar campo nenhum. Foi exatamente
+esse critério que teria pego, sozinho, o defeito do `ig_verified`.
+
+**10 formulários submetidos** (perfil, marca/cores, contra-capa, identidade
+de rótulo, layout, estilo do post único, geração automática, formato
+padrão, nicho, providers/idioma/Telegram).
+
+**Resultado: uma única diferença**, e cosmética — `color_keyword_box` de
+`#E0219C` para `#e0219c`. O `<input type="color">` normaliza para
+minúsculo. Hex não é sensível a caixa; não vale código pra consertar.
+
+O que isso PROVA: nenhum formulário apaga campo de outro ao salvar. E o
+`text_provider` permaneceu `nvidia` — antes do conserto de hoje, submeter o
+formulário de providers o teria rebaixado para `gemini` calado.
+
+**Escritas exercidas de verdade:**
+
+| Caminho | Resultado |
+|---|---|
+| `text_provider` nvidia → gemini | gravou; a tela recarregada mostrou gemini |
+| `text_provider` gemini → nvidia | gravou — **é o caminho que estava quebrado** |
+| Adicionar fonte (nome, URL, threshold 82) | gravou com `client_id` correto, sem vazar entre clientes |
+| Remover fonte | modal de confirmação → apagou do banco |
+
+**Dois falsos alarmes meus, registrados pra não virarem lenda:**
+
+1. "O botão de remover não funciona" — funciona: ele abre um **modal de
+   confirmação**, que é o certo para ação destrutiva. Eu tinha clicado e
+   conferido o banco sem confirmar.
+2. Não achei o botão procurando por texto: ele é um ícone, com o rótulo em
+   `aria-label`. Acessibilidade correta; minha busca é que estava errada.
+
+**Não exercido:** validação de SSRF pela interface — o ambiente bloqueou a
+tentativa com URL de metadados (`169.254.169.254`), e com razão. A proteção
+tem cobertura em `src/lib/feed-url.ts` e nos testes.

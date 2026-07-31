@@ -139,6 +139,38 @@ escala linear.
 Palavra-chave curta demais (`IA`, `AI`) é descartada em `topicsForClient` —
 duas letras num índice anglófono devolvem ruído.
 
+### 0-M.15 Sprint G executada — Ajustes auditado campo a campo
+
+Detalhe completo em [`docs/SPRINT-AJUSTES.md`](./docs/SPRINT-AJUSTES.md).
+
+**O defeito que a auditoria existia pra achar:** `actions.ts` normalizava o
+provider de texto com lista escrita à mão — aceitava `claude` e
+`pollinations` e jogava **todo o resto** em `gemini`. Escolher NVIDIA na
+tela salvava Gemini, calado. O kit do cliente só estava em `nvidia` porque
+foi setado por script. Consequência real: o usuário escolhe o provider de
+cota generosa, o app grava o de 20 requisições por DIA, e a fila para de
+manhã sem explicação. Trocado por `resolveTextProvider`, com teste.
+
+**Método da passagem clicada:** snapshot do banco → submeter os 10
+formulários **sem alterar nada** → comparar. Resultado: uma única diferença,
+cosmética (`#E0219C` → `#e0219c`, o `<input type="color">` normaliza para
+minúsculo). Prova que nenhum formulário apaga campo de outro — e que o
+`text_provider` sobrevive a um save, o que antes não acontecia.
+
+**Podas aplicadas** (decisões do usuário): Claude e Pollinations fora da
+lista de texto (sem chave em produção); seletor de imagem removido, `stock`
+escrito explícito no save pra kit preso em provider pago voltar ao gratuito;
+selo de verificado fora da tela, **em standby** (coluna e desenho intactos).
+Telegram fica. Template Studio fica — e aqui eu corrigi duas premissas
+minhas: remover estava fora de cogitação (a contra-capa corrigida em §0-J É
+um modelo) e ele já estava recolhido numa aba. O problema real era a
+precedência não estar escrita: agora a tela diz que o modelo vence o layout
+e mostra em quais superfícies isso vale.
+
+**Cuidado que a remoção do input exigiu:** `saveIgProfile` lia checkbox
+ausente como `false` — sem o input, cada save apagaria o `ig_verified`
+guardado. Passou a só gravar quando o form manda o campo.
+
 ### 0-M.14 Fundos existentes regerados + Sprint G criada
 
 **Regeneração:** 117 carrosséis não publicados, 787 cards, **670 fundos
@@ -2215,13 +2247,13 @@ O que falta, separado por quem consegue fazer:
       → alimenta `generate-*` para gerar **original** no nicho do cliente.
 - **Aceite:** dado um @, retorna top referências com score + brief de remix.
 
-### 4.55 SPRINT G — Auditoria da tela de Ajustes (pedida em 2026-07-31)
-> Inventário, evidência e propostas em [`docs/SPRINT-AJUSTES.md`](./docs/SPRINT-AJUSTES.md).
-> **Nada removido ainda** — depende de 4 respostas do usuário.
-- [ ] Passagem clicada em Ajustes, campo por campo, conferindo no banco que grava. Nunca foi feito de ponta a ponta.
-- [ ] Podar as opções de provider que **não funcionam em produção**: `ANTHROPIC_API_KEY`, `FAL_KEY` e `POLLINATIONS_API_KEY` não existem, mas a tela oferece Claude, Fal e Pollinations. A Pollinations já parou a fila calada por dias em julho (§0-C.6) — rótulo de aviso não bastou.
-- [ ] Decidir: Telegram (nunca confirmado em uso), `image_provider` com valor único vira padrão fixo, selo `ig_verified`, e se o Template Studio se paga ao lado do `layout_preset`.
-- **Aceite:** todo controle que fica na tela grava, chega no produto e funciona com as chaves que existem.
+### 4.55 SPRINT G — Auditoria da tela de Ajustes — ✅ COMPLETA (2026-07-31)
+> Inventário, evidência e resultado em [`docs/SPRINT-AJUSTES.md`](./docs/SPRINT-AJUSTES.md). Ver §0-M.15.
+- [x] Passagem clicada campo a campo, por snapshot/diff do banco: 10 formulários salvos sem alteração, uma única diferença e cosmética.
+- [x] Podados os providers sem chave em produção (Claude, Pollinations no texto; Gemini/Fal/Pollinations na imagem, cujo seletor deixou de existir).
+- [x] Decidido: Telegram fica; imagem vira padrão fixo; selo de verificado sai da tela em standby; Template Studio fica, com a precedência sobre o layout agora escrita na tela.
+- [x] **Defeito corrigido:** escolher NVIDIA salvava Gemini calado.
+- **Aceite cumprido:** todo controle que ficou na tela grava, chega no produto e funciona com as chaves que existem.
 
 ### 4.6 SPRINT F — Expor como ações do agente
 - [ ] Cada função Inngest vira ação chamável: `minerar_referencias`, `gerar_brief`,
