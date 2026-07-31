@@ -167,6 +167,20 @@ como "não autenticado".
 > cai por cascata. `/pricing` abriu sem login e as rotas de API passaram a
 > responder 401 (commit `cc9e555`). ⚠️ A exclusão ainda NÃO foi exercida no
 > browser: só tipo, lint, testes e build.
+>
+> **Revisão de 31/07 — vazamento encontrado na leitura do código, não em
+> teste:** a limpeza do bucket `avatars` removia apenas `{client_id}.png|jpg`.
+> Ficavam para trás **a logo** (`{client_id}-logo.*`, gravada em
+> `actions.ts:1317`) e **os arquivos anteriores ao multi-tenant**, nomeados
+> com o `user_id` — o avatar da conta do próprio dono é um desses. Resultado:
+> foto de rosto continuava pública no Storage depois de "excluir conta", que
+> é exatamente o que a LGPD manda apagar. Corrigido: a lista passou a cobrir
+> avatar e logo, por cliente E pelo user_id legado. Remover nome inexistente
+> não é erro no Storage, então a lista pode ser generosa.
+>
+> ⚠️ Continua valendo: **o fluxo nunca foi exercido no browser**. Falta uma
+> conta descartável percorrer Ajustes → excluir → confirmar, e conferir no
+> painel que os arquivos sumiram dos dois buckets.
 
 ### 🟡 2.9 Publicação no Instagram só funciona para contas de teste
 

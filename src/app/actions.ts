@@ -834,7 +834,19 @@ export async function attachUploadedPostVideo(
 
   const { error } = await supabase
     .from("posts")
-    .update({ video_status: "processing", video_error: null })
+    .update({
+      video_status: "processing",
+      video_error: null,
+      // Zerar o pôster e o composto do vídeo ANTERIOR é o que conserta o
+      // "pôster antigo ao trocar de vídeo" (§0-I.7a). O caminho no Storage
+      // é fixo, mas quem mostrava a imagem velha não era o cache do
+      // browser: era esta coluna, que continuava apontando pro pôster do
+      // vídeo passado (com o `?v=` antigo) durante todo o processamento —
+      // e pra sempre, se o job falhasse. O attach-video grava os valores
+      // novos ao terminar; até lá, nada é melhor do que errado.
+      video_poster_url: null,
+      video_url: null,
+    })
     .eq("id", postId)
     .eq("user_id", user.id);
   if (error) return { ok: false, error: error.message };
@@ -920,7 +932,14 @@ export async function attachUploadedCardVideo(
 
   const { error } = await supabase
     .from("carousel_cards")
-    .update({ video_status: "processing", video_error: null })
+    .update({
+      video_status: "processing",
+      video_error: null,
+      // Mesmo motivo do post (§0-I.7a): sem zerar, o card mostra o pôster
+      // do vídeo anterior enquanto o novo processa.
+      video_poster_url: null,
+      video_url: null,
+    })
     .eq("id", cardId);
   if (error) return { ok: false, error: error.message };
 
@@ -2386,7 +2405,22 @@ export async function deleteMyAccount(formData: FormData): Promise<void> {
       .from("clients")
       .select("id")
       .eq("user_id", user.id);
-    const avatares = (clientes ?? []).flatMap((c) => [`${c.id}.png`, `${c.id}.jpg`]);
+    // Quatro nomes por dono, não um: o upload grava `{id}.ext` (avatar) E
+    // `{id}-logo.ext` (logo) — a logo nunca era removida. E os arquivos
+    // anteriores ao multi-tenant foram gravados com o USER id no lugar do
+    // client id, então uma conta antiga deixava a própria foto de rosto
+    // pública no bucket depois de "excluir conta". Remover nome que não
+    // existe não é erro no Storage, então a lista pode ser generosa.
+    const nomesDeImagem = (id: string) => [
+      `${id}.png`,
+      `${id}.jpg`,
+      `${id}-logo.png`,
+      `${id}-logo.jpg`,
+    ];
+    const avatares = [
+      ...(clientes ?? []).flatMap((c) => nomesDeImagem(c.id)),
+      ...nomesDeImagem(user.id), // legado pré-multitenant
+    ];
     if (avatares.length > 0) {
       const { error: avErr } = await admin.storage.from("avatars").remove(avatares);
       if (avErr) console.error("[deleteMyAccount] falha ao apagar avatares:", avErr.message);

@@ -65,10 +65,19 @@ export async function getMonthlyQuota(userId: string): Promise<{
   monthStart.setHours(0, 0, 0, 0);
 
   const supabase = createAdminClient();
+  // Post DESCARTADO não queima cota. Até 31/07 a conta era de toda linha
+  // criada no mês, e o post nasce antes do usuário ver: quem descartasse 25
+  // de 30 e aprovasse 5 teria pago por 30 e levado 5 — a cota puniria
+  // justamente o uso correto da fila de aprovação. Cobrar pelo que o
+  // usuário ACEITA é o que o plano promete.
+  //
+  // Invisível na conta do João (unlimited), então isto nunca apareceu em
+  // teste — só apareceria no primeiro cliente pagante.
   const { count } = await supabase
     .from("posts")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
+    .neq("status", "discarded")
     .gte("created_at", monthStart.toISOString());
 
   const used = count ?? 0;

@@ -5,7 +5,7 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga não recebe mais commits.
-**Última atualização:** 2026-07-31 — **chaves da NVIDIA rotacionadas** (4 revogadas, 1 ativa; ver §0-J.4) e **contra-capa**: o convite a deslizar sai (vinha de um texto embutido no fallback do `content.cta`), o chip de perfil passa a valer em qualquer layout e ancora na medida real do texto, 35% maior — ver §0-J. **Nenhuma migration nova**; 2 presets de sistema atualizados na tabela `templates`. Antes: 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Última atualização:** 2026-07-31 (tarde) — **quatro pendências fechadas** (emoji/tofu no motor de template, cota deixa de contar descarte, pôster antigo ao trocar vídeo, divisor do wordmark) + **vazamento na exclusão de conta** corrigido (logo e avatar legado ficavam públicos) — ver §0-K. Antes: **chaves da NVIDIA rotacionadas** (4 revogadas, 1 ativa; ver §0-J.4) e **contra-capa**: o convite a deslizar sai (vinha de um texto embutido no fallback do `content.cta`), o chip de perfil passa a valer em qualquer layout e ancora na medida real do texto, 35% maior — ver §0-J. **Nenhuma migration nova**; 2 presets de sistema atualizados na tabela `templates`. Antes: 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
 ### Bloqueio ENCERRADO em 29/07: Pollinations.ai exigia pagamento pra requests multi-mensagem
 > ✅ Resolvido trocando os dois clientes afetados pra `gemini` (ver §0-C.6).
@@ -28,6 +28,79 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0-K. Sessão 2026-07-31 (tarde) — quatro pendências fechadas
+
+**Nenhuma migration nova.** Quatro itens que estavam em aberto, resolvidos
+com o diagnóstico de cada um — em dois deles a causa registrada antes
+estava errada.
+
+### 0-K.1 Emoji virava quadradinho no motor de template
+
+`template-render.ts` não passava o texto por `stripEmoji`; o motor sem
+template já passava. O mesmo headline saía limpo num caminho e com tofu no
+outro — apareceu numa contra-capa de produção com "🔖 Salve e siga...".
+
+A limpeza entrou em `measureTextElement`, que é por onde medição e desenho
+já passam. **Só para bind `content.*`**: `®` é `Extended_Pictographic`, então
+limpar `brand.wordmark` apagaria o símbolo da marca do cliente — o `®` do
+`JOAORODRIGUES®` sumiria.
+
+### 0-K.2 Cota deixou de contar post descartado
+
+`getMonthlyQuota` contava toda linha criada no mês. Como o post nasce antes
+de o usuário ver, quem descartasse 25 de 30 e aprovasse 5 teria pago por 30
+e levado 5 — a cota punia justamente o uso correto da fila de aprovação.
+Agora exclui `status='discarded'`.
+
+**Contrapartida aceita:** ficou possível gerar muito e descartar tudo sem
+consumir cota. É um teto mais frouxo em custo de IA, e a alternativa
+(cobrar pelo que a IA gera) é pior de explicar para quem paga. Se o custo
+apertar, o caminho é limitar geração por dia, não voltar a contar descarte.
+
+Invisível na conta do João (`unlimited`), então isto nunca apareceria em
+teste — só no primeiro cliente pagante.
+
+### 0-K.3 Pôster antigo ao trocar o vídeo (§0-I.7a) — não era cache
+
+O diagnóstico anterior culpava o cache do browser sobre um caminho fixo no
+Storage. Não era: `attachUploadedPostVideo` marcava `video_status='processing'`
+e **deixava `video_poster_url` apontando para o pôster do vídeo anterior**,
+com o `?v=` antigo. A fila lia essa coluna durante todo o processamento — e
+para sempre, se o job falhasse. O `?v=timestamp` do `attach-video` sempre
+esteve certo; só chegava tarde.
+
+Corrigido zerando `video_poster_url` e `video_url` no mesmo update que marca
+`processing`, no post e no card. Nada é melhor do que errado enquanto o novo
+não chega.
+
+### 0-K.4 Divisor do wordmark desalinhado (§0-I.7b) — era o ®
+
+Também não era "margem assimétrica em algum preset". O `®` é desenhado como
+VETOR à parte (`registeredMarkGlyph`), pendurado à direita de um texto
+ancorado em `cx`, enquanto o vão reservava espaço para o símbolo dos DOIS
+lados. Media 54px de respiro à esquerda contra 17px à direita, e a marca
+inteira ficava deslocada do eixo.
+
+Passou a centrar o conjunto "wordmark + ®": o texto desloca meia largura do
+símbolo para a esquerda, e os dois vãos ficam em 24px. Coberto por
+`src/lib/wordmark-divider.test.ts`, que mede os vãos no SVG em vez de
+depender de leitura visual.
+
+### 0-K.5 Exclusão de conta: vazamento achado na revisão
+
+Ao preparar o teste da exclusão, a leitura do código mostrou que a limpeza
+do bucket `avatars` cobria só `{client_id}.png|jpg`. Ficavam para trás a
+**logo** (`{client_id}-logo.*`) e os arquivos **anteriores ao multi-tenant**,
+nomeados com o `user_id` — o avatar da conta do próprio João é um desses.
+Foto de rosto seguia pública depois de "excluir conta". Corrigido em
+`actions.ts`; detalhe em `docs/auditoria-lancamento.md` §2.6.
+
+**Ainda em aberto:** o fluxo nunca foi exercido no browser. Falta conta
+descartável percorrer Ajustes → excluir → confirmar. Criar conta e digitar
+senha é passo do usuário, não meu.
 
 ---
 

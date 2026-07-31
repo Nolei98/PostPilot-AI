@@ -283,14 +283,26 @@ export function buildCoverSvg(
   const { dividerY, headStartY, bodyStartY, swipeY } = layout(startCursor);
 
   // ® sai do texto e vira um vetor desenhado à parte (ver registeredMarkGlyph).
+  //
+  // O conjunto CENTRADO é "wordmark + ®", não só o wordmark. Até 31/07 o
+  // texto era ancorado em `cx` e o ® pendurado à direita dele, com o vão
+  // reservando espaço pro símbolo dos DOIS lados: sobrava 54px de respiro
+  // à esquerda contra 17px à direita, e a marca inteira ficava deslocada
+  // pra direita do eixo. Centrar o bloco todo (deslocando o texto meia
+  // largura do ® pra esquerda) dá 24px iguais nos dois lados — que é o
+  // "mesma margem à esquerda e à direita" pedido em §0-I.7b.
   const hasRegMark = wm.endsWith("®");
   const wmBase = hasRegMark ? wm.slice(0, -1).trimEnd() : wm;
-  const halfText = wm ? (wmBase.length * 22) / 2 + 24 + (hasRegMark ? 30 : 0) : 0;
-  const regMarkX = cx + (wmBase.length * 22) / 2 + 28;
+  const wmBaseW = wmBase.length * 22;
+  /** Do fim do wordmark até a borda externa do ®: 28 de avanço + 9 de raio. */
+  const regExtra = hasRegMark ? 37 : 0;
+  const textCx = cx - regExtra / 2;
+  const halfText = wm ? (wmBaseW + regExtra) / 2 + 24 : 0;
+  const regMarkX = textCx + wmBaseW / 2 + 28;
   const divider = wm
     ? `<line x1="${pad}" y1="${dividerY}" x2="${cx - halfText}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.45" stroke-width="1.5"/>
   <line x1="${cx + halfText}" y1="${dividerY}" x2="${CARD_W - pad}" y2="${dividerY}" stroke="${text}" stroke-opacity="0.45" stroke-width="1.5"/>
-  <text x="${cx}" y="${dividerY + 8}" font-family="${family}" font-weight="600" font-size="26" letter-spacing="6" fill="${mark}" text-anchor="middle">${escapeXml(wmBase)}</text>
+  <text x="${textCx}" y="${dividerY + 8}" font-family="${family}" font-weight="600" font-size="26" letter-spacing="6" fill="${mark}" text-anchor="middle">${escapeXml(wmBase)}</text>
   ${hasRegMark ? registeredMarkGlyph(regMarkX, dividerY + 8, mark) : ""}`
     : "";
   const swipeHint =

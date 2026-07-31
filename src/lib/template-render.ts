@@ -7,7 +7,7 @@
 // Reusa o pipeline SVG+resvg existente (decisão: sem Satori).
 // ============================================================
 import sharp from "sharp";
-import { wrapText, type CardBrand } from "@/lib/carousel-render";
+import { wrapText, stripEmoji, type CardBrand } from "@/lib/carousel-render";
 import { brandLabelText } from "@/lib/carousel-render";
 import { rasterizeSvg } from "@/lib/svg-render";
 import {
@@ -140,7 +140,17 @@ function measureTextElement(
   W: number,
   H: number
 ): TextBlockMetrics | null {
-  const raw = resolveText(el, brand, content);
+  // stripEmoji só no texto vindo do CONTEÚDO (headline/body/cta), que é
+  // onde a IA põe emoji: as fontes embutidas não têm esses glifos e o resvg
+  // desenha um quadrado com "?" (tofu). O motor SEM template já limpava
+  // (carousel-render.ts); este não, então o MESMO texto saía limpo num
+  // caminho e quebrado no outro — visto numa contra-capa de produção em
+  // 31/07, com "🔖 Salve e siga...".
+  //
+  // NÃO vale pro texto de marca: `®` é Extended_Pictographic, então limpar
+  // `brand.wordmark` apagaria o símbolo da marca do cliente.
+  const bruto = resolveText(el, brand, content);
+  const raw = (el.bind ?? "").startsWith("content.") ? stripEmoji(bruto) : bruto;
   if (!raw) return null;
   const text = el.style?.case === "upper" ? raw.toUpperCase() : raw;
   const x = Math.round((el.offset?.x ?? 0.5) * W);
