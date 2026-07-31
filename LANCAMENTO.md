@@ -2,30 +2,60 @@
 
 > Regra: 10 usuários reais que usam todo dia > 1.000 cadastros que não voltam.
 
-> ⚠️ **O checklist do §1 está desatualizado** (vários itens já estão prontos).
-> A versão viva dele, em portões, está em
-> **[`ESTADO-DO-PROJETO.md`](./ESTADO-DO-PROJETO.md) §7**. As seções §2–§6
-> daqui (canais, roteiro do dia, funil, feedback, métrica) continuam válidas.
+> **Estado em 2026-07-31.** O §1 abaixo foi revisado contra o código e a
+> produção — antes ele listava como pendente várias coisas que já estavam
+> prontas, e quem lesse tirava conclusão errada sobre o que falta. As
+> seções §2–§6 (canais, roteiro do dia, funil, feedback, métrica) nunca
+> dependeram do estado técnico e seguem válidas.
 
 ---
 
 ## 1. Checklist de pré-lançamento
 
-### Bloqueadores (sem isso o link NÃO circula)
+### Bloqueadores REAIS (sem isso o link NÃO circula)
 
-- [ ] **Onboarding de usuário novo** — hoje quem cria conta chega num app vazio (sem `notification_configs`, sem fontes, fila vazia). Implementar: signup cria config default + 4 fontes padrão + dispara primeiro scan. Aha moment: 2-3 posts na fila em ~10 min após o cadastro.
-- [ ] **Marca "feito com PostPilot" na arte do plano free** — definida no plano de monetização (`customClosingPage: false` em `plans.ts`), mas a renderização não existe em `image.ts`. É o loop viral: cada post free publicado divulga o app.
-- [ ] **Deploy em produção** (Vercel) + env vars + migrations 001–009 no Supabase de produção.
-- [ ] **Stripe live mode**: chaves `sk_live_`, produtos recriados, webhook endpoint no dashboard → domínio real (`/api/stripe/webhook`) + novo `STRIPE_WEBHOOK_SECRET`.
-- [ ] **Caps de gasto** na Anthropic e Fal.ai (freemium sem cap = fatura surpresa). Free ≈ R$3/usuário/mês.
-- [ ] Cota free testada em produção (6º post não gera; notícia fica `candidate` esperando upgrade).
+Sobraram dois, e **nenhum é código** — os dois estão desligados por decisão
+do usuário em 31/07:
 
-### Verificações (2h)
+- [ ] **Stripe em live mode** — hoje o checkout roda em teste: ninguém
+  consegue virar pagante e todo mundo fica no free, o que torna os tetos de
+  plano decorativos. Chaves `sk_live_`, produtos recriados, webhook no
+  domínio real (`/api/stripe/webhook`) + novo `STRIPE_WEBHOOK_SECRET`.
+- [ ] **App Review do Meta** — sem ele a publicação automática só funciona
+  em contas de teste, e o produto entrega *até o download da arte*. É o
+  item de maior PRAZO (semanas de espera da Meta), então começa primeiro.
+  Material pronto em [`docs/meta-app-review.md`](./docs/meta-app-review.md);
+  falta Business Verification, screencast e ícone.
 
-- [ ] Fluxo completo em aba anônima + celular: cadastro → ajustes → scan → aprovar → baixar → checkout (cartão teste).
-- [ ] `/pricing` acessível deslogado ou landing mínima com CTA de cadastro.
+### Verificações que ainda não foram feitas
+
+- [ ] **Exclusão de conta exercida no browser**, com conta descartável, e
+  conferência de que os arquivos somem dos dois buckets. O código foi
+  corrigido em 31/07 (a limpeza deixava logo e avatar legado pra trás), mas
+  o fluxo nunca rodou de ponta a ponta.
+- [ ] **Carga/concorrência** — ninguém testou com vários usuários ao mesmo
+  tempo. `generate-post` tem `concurrency: 3` POR FUNÇÃO, não por usuário:
+  dez pessoas varrendo juntas enfileiram atrás umas das outras.
+- [ ] Fluxo completo em aba anônima + celular: cadastro → ajustes → scan →
+  aprovar → baixar → checkout (cartão teste).
 - [ ] E-mail de confirmação do Supabase chegando (checar spam).
-- [ ] Vercel Analytics ligado (sem medição, a métrica dos 7 dias não existe).
+
+### Já pronto — não confundir com pendência
+
+- [x] **Onboarding de usuário novo** — trigger `handle_new_user` (migrations
+  017/018) + `FirstScanKickoff`: conta nova nasce com config, fontes do
+  nicho e primeira varredura.
+- [x] **Marca "feito com PostPilot" no plano free** — `cover-svg.ts`, via
+  `getUserPlan(...) === "free"`.
+- [x] **Deploy em produção** — no ar, migrations 001–051 aplicadas.
+- [x] **Vercel Analytics** — ligado em 30/07.
+- [x] **`/pricing` acessível deslogado** — corrigido em 30/07 (era 307).
+- [x] **Cota free** — teto aplicado e avisado na fila. Em 31/07 passou a
+  NÃO contar post descartado, senão a cota punia quem usa a fila de
+  aprovação direito.
+- [x] **Caps de gasto** — resolvidos por outro caminho: a política de custo
+  zero (texto na NVIDIA/Gemini, imagem em stock) tirou o provider pago da
+  jogada. ⚠️ Voltam a ser necessários no dia em que um provider pago entrar.
 
 ---
 

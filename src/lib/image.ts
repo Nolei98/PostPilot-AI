@@ -1036,25 +1036,31 @@ export async function buildFeedVideoOverlayPhotoBg(
 export async function buildFeedVideoOverlayBlurBg(
   headline: string,
   cardBrand: CardBrand,
-  posterFrame: Buffer
+  /** Um frame, ou VÁRIOS ao longo do vídeo — ver a nota abaixo. */
+  posterFrame: Buffer | Buffer[]
 ): Promise<{ overlayPng: Buffer; frame: FeedVideoFrame }> {
-  const textColorBrand = cardBrand.colorText || "#FFFFFF";
   const { frame, dividerSvg, headlineSvg } = feedVideoLayoutParts(headline, cardBrand);
 
-  // Fundo aqui é o vídeo borrado (luminância desconhecida até render) —
-  // mede a banda onde o texto realmente senta (logo abaixo da moldura)
-  // no frame de pôster, cover-fit igual ao vídeo final, e só desenha
-  // placa quando o contraste local não é suficiente pro texto da marca.
-  const covered = await sharp(posterFrame).resize(WIDTH, HEIGHT, { fit: "cover", position: "attention" }).toBuffer();
+  // Fundo aqui é o VÍDEO borrado, não uma foto: a luminância muda ao
+  // longo da reprodução. Mede a banda onde o texto senta (logo abaixo da
+  // moldura), cover-fit igual ao vídeo final, em VÁRIOS momentos — mesma
+  // correção que o Reels precisou em 31/07, pelo mesmo motivo: com um
+  // frame só, b-roll que troca de cena apagava o texto nos trechos
+  // claros. `videoScrimContrast` decide tema pela média e véu pelo pior.
+  const frames = Array.isArray(posterFrame) ? posterFrame : [posterFrame];
   const bandTop = frame.y + frame.h;
-  const band = await sharp(covered)
-    .extract({ left: 0, top: bandTop, width: WIDTH, height: HEIGHT - bandTop })
-    .toBuffer();
-  const luminance = await measureImageLuminance(band);
-  const theme = pickTheme(luminance);
-  // Mesmo piso do Reels: aqui o fundo TAMBÉM é o vídeo, então um trecho
-  // claro no meio da reprodução apagaria o texto se o véu pudesse zerar.
-  const alpha = Math.max(VIDEO_SCRIM_FLOOR, overlayAlphaFor(theme, textColorBrand, luminance));
+  const luminances = await Promise.all(
+    frames.map(async (f) => {
+      const covered = await sharp(f)
+        .resize(WIDTH, HEIGHT, { fit: "cover", position: "attention" })
+        .toBuffer();
+      const band = await sharp(covered)
+        .extract({ left: 0, top: bandTop, width: WIDTH, height: HEIGHT - bandTop })
+        .toBuffer();
+      return measureImageLuminance(band);
+    })
+  );
+  const { theme, alpha } = videoScrimContrast(luminances);
   // Gradiente (não mais placa sólida) — ancorado no RODAPÉ do quadro
   // (mesma direção da capa): sólido na base, funde subindo até a
   // moldura do vídeo. Só aparece quando o contraste local não é

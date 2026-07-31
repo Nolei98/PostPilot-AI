@@ -139,6 +139,32 @@ escala linear.
 Palavra-chave curta demais (`IA`, `AI`) é descartada em `topicsForClient` —
 duas letras num índice anglófono devolvem ruído.
 
+### 0-M.9 `feed-blur` recebeu a mesma correção de contraste do Reels
+
+Fechando o item que §0-L.2 deixou apontado. `buildFeedVideoOverlayBlurBg`
+media um frame só, e ali o fundo **é o próprio vídeo borrado** — mesma
+situação do Reels, mesmo defeito latente. Agora recebe as mesmas 5
+amostras e decide por `videoScrimContrast`.
+
+Não foi mexido o `buildFeedVideoOverlayPhotoBg`: lá o fundo é uma FOTO
+estática, e um frame representa o quadro inteiro. Medir cinco vezes a
+mesma imagem seria custo sem ganho.
+
+### 0-M.10 `LANCAMENTO.md` revisado contra a realidade
+
+A auditoria (§3) já apontava o arquivo como enganoso: listava como
+bloqueador o onboarding, a marca do plano free, o deploy e o Analytics —
+todos prontos há dias. Quem lesse concluiria que faltava muito mais do que
+falta.
+
+Revisado: sobraram **dois bloqueadores reais, nenhum de código** (Stripe
+live e App Review), mais as verificações que de fato não foram feitas
+(exclusão de conta no browser, carga/concorrência). O que está pronto foi
+para uma seção própria, marcado, pra não voltar a ser confundido com
+pendência. Os caps de gasto ficaram registrados como resolvidos POR OUTRO
+CAMINHO (política de custo zero) e com a ressalva de que voltam a ser
+necessários se algum provider pago entrar.
+
 ### 0-M.7 BOM na chave da NVIDIA quebrou TODA chamada em produção
 
 O botão do brief devolvia "não foi possível gerar" com o provider

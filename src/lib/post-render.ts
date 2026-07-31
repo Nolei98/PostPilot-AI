@@ -331,8 +331,12 @@ export async function renderVideoPost(
     // sólido) e um post feito em "feed-blur" perdia o fundo borrado.
     // Estava documentado como limitação conhecida em attach-video.ts.
     const { buildFeedVideoOverlayBlurBg, roundedRectMaskPng } = await import("@/lib/image");
-    const poster = await extractPosterFrame(source, 0.5);
-    const { overlayPng, frame } = await buildFeedVideoOverlayBlurBg(hook, spec.cardBrand, poster);
+    // Cinco frames, como no Reels: aqui o fundo também é o vídeo (borrado),
+    // então um frame só não representa a reprodução inteira.
+    const amostras = await Promise.all(
+      [0.1, 0.3, 0.5, 0.7, 0.9].map((t) => extractPosterFrame(source, t))
+    );
+    const { overlayPng, frame } = await buildFeedVideoOverlayBlurBg(hook, spec.cardBrand, amostras);
     const maskPng = roundedRectMaskPng(frame.w, frame.h, frame.radius);
     finalVideo = await composeFeedVideoBlurBg(source, overlayPng, maskPng, frame);
   } else {
