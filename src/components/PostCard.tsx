@@ -23,6 +23,7 @@ import {
   createVideoUploadTicket,
   convertPostFormat,
   savePostVideoShape,
+  generateVideoForPost,
   uploadPostBackgroundImage,
   removePostBackgroundImage,
   savePostBackgroundOverlay,
@@ -292,6 +293,28 @@ export function PostCard({
     startBgSave(async () => {
       await savePostBackgroundOverlay(post.id, modo);
       router.refresh();
+    });
+  }
+
+  // Gerar vídeo do zero (Sprint D): roteiro + b-roll + legenda, sem
+  // arquivo nenhum da parte da pessoa. Trava LOCAL pelo mesmo motivo da
+  // conversão — `video_status` só chega no próximo refresh, e dois
+  // cliques rápidos enfileirariam dois jobs pro mesmo post.
+  const [gerandoVideo, startGerarVideo] = useTransition();
+  const [videoPedido, setVideoPedido] = useState(false);
+
+  function pedirVideoGerado() {
+    if (videoPedido || videoOcupado) return;
+    setVideoPedido(true);
+    setVideoError(null);
+    startGerarVideo(async () => {
+      try {
+        const r = await generateVideoForPost(post.id);
+        if (!r.ok) setVideoError(r.error ?? "Não foi possível gerar o vídeo.");
+        router.refresh();
+      } finally {
+        setVideoPedido(false);
+      }
     });
   }
 
@@ -592,6 +615,22 @@ export function PostCard({
                   onChange={handleVideoUpload(videoAtivo ?? "reels")}
                 />
               </label>
+            )}
+            {/* Gerar vídeo do zero (Sprint D, migration 049). Só aparece
+                sem vídeo anexado: com um pronto, a decisão vira
+                reenquadrar ou trocar o arquivo, e mais um botão aqui
+                empurraria a barra de volta pro que ela era antes da
+                faxina (8 controles empilhados). */}
+            {!videoPronto && !videoOcupado && !isCarousel && (
+              <button
+                type="button"
+                onClick={pedirVideoGerado}
+                disabled={gerandoVideo || videoPedido}
+                title="Gerar um vídeo com roteiro por IA e imagens de banco — sem enviar arquivo"
+                className="ml-1 text-micro text-subtle underline-offset-2 transition-colors hover:text-content hover:underline disabled:opacity-40"
+              >
+                {gerandoVideo || videoPedido ? "gerando…" : "gerar vídeo"}
+              </button>
             )}
             {videoOcupado && (
               <span className="ml-1 text-micro text-warning">

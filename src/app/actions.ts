@@ -826,6 +826,57 @@ export async function attachUploadedPostVideo(
 }
 
 /**
+ * Gera um vídeo do ZERO pro post (Sprint D, migration 049): roteiro por
+ * IA, b-roll do Pexels, legenda queimada. O trabalho todo roda em
+ * background (Inngest) — só a montagem já leva dezenas de segundos.
+ *
+ * Marca 'processing' aqui, e não só no job, pra fila reagir no mesmo
+ * clique: sem isso o botão parecia não ter feito nada até o job pegar.
+ *
+ * Não sobrescreve vídeo existente sem querer: com vídeo pronto o botão
+ * nem aparece na fila, e o filtro de status protege o resto.
+ */
+export async function generateVideoForPost(
+  postId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+
+  const { data: post, error: readErr } = await supabase
+    .from("posts")
+    .select("id, video_status")
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .eq("status", "pending_approval")
+    .maybeSingle();
+  if (readErr || !post) return { ok: false, error: "Post não encontrado na fila." };
+  if (post.video_status === "processing") {
+    return { ok: false, error: "Já tem um vídeo sendo montado pra este post." };
+  }
+
+  const { error } = await supabase
+    .from("posts")
+    .update({ video_status: "processing", video_error: null })
+    .eq("id", postId)
+    .eq("user_id", user.id);
+  if (error) return { ok: false, error: error.message };
+
+  // COM await (ver enqueue() em @/lib/enqueue): sem ele a função
+  // serverless congela no return antes de o evento sair, e o post fica
+  // "processando" pra sempre.
+  await enqueue("generateVideoForPost", {
+    name: "post/generate-video.requested",
+    data: { postId, userId: user.id },
+  });
+
+  revalidatePath(QUEUE_PATH);
+  return { ok: true };
+}
+
+/**
  * Passo 2 do upload de vídeo de um CARD de carrossel (migration 037) —
  * mesmo desenho do post: o arquivo já subiu direto pro Storage, aqui só
  * marca 'processing' e enfileira a composição do card "interior com

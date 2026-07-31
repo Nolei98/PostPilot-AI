@@ -4,8 +4,10 @@
 > está pronto, o que falta, e em que ordem fazer. Os outros documentos são
 > aprofundamento — a lista deles está no fim (§8).
 >
-> Atualizado em **2026-07-30** (noite). Commit de referência: `97b4355` (`main`,
+> Atualizado em **2026-07-30** (noite). Commit de referência: `ad8d885` (`main`,
 > ainda não enviado pro origin).
+>
+> ⚠️ **A migration 049 ainda não foi aplicada no Supabase de produção.** Ver §5.
 
 ---
 
@@ -39,7 +41,7 @@ com Brand Kit próprio (logo, cores, nicho, idioma, providers de IA).
 ```bash
 npm run dev                                                     # app  → localhost:3000
 npx inngest-cli@latest dev -u http://localhost:3000/api/inngest  # jobs → localhost:8288
-npm test          # 478 testes (unitários + RLS via pglite). Rodam sem chave, custo $0
+npm test          # 487 testes (unitários + RLS via pglite). Rodam sem chave, custo $0
 npm run test:e2e  # 3 testes Playwright — LOCAL only, usa Supabase real
 npx tsc --noEmit  # typecheck
 ```
@@ -61,6 +63,7 @@ cron 3h (ou "Varrer agora")
       └─ generate-post  escreve legenda + escolhe/gera imagem → fila
           (ou generate-carousel, para clientes em modo carrossel)
               └─ notify         avisa no Telegram
+      (ou, por botão na fila: generate-video-post → roteiro + b-roll → attach-video)
                   └─ [pessoa APROVA na /fila]
                       └─ render-approved-post   desenha a arte definitiva
                           └─ /ready             copiar texto + baixar arte
@@ -79,7 +82,7 @@ Arquivos-chave:
 | Arte (SVG → PNG) | `src/lib/image.ts`, `src/lib/cover-svg.ts`, `src/lib/carousel-render.ts` |
 | Vídeo | `src/lib/video-assembly.ts`, `src/lib/stock-videos.ts` |
 | Cliente ativo (multi-tenant) | `src/lib/client-context.ts`, `src/lib/shell.ts` |
-| Migrations (001–048, todas aplicadas) | `supabase/migrations/` |
+| Migrations (001–049; a 049 falta aplicar) | `supabase/migrations/` |
 
 ---
 
@@ -97,8 +100,11 @@ Arquivos-chave:
   post, rótulo do topo editável, contraste automático.
 - **Carrossel completo**: estrutura por IA, render, galeria, editar card,
   baixar zip.
-- **Vídeo**: upload manual → Reels 9:16 e feed 4:5 com foto de fundo, véu
+- **Vídeo por upload**: Reels 9:16 e feed 4:5 com foto de fundo, véu
   escolhível, reenquadre, vídeo como carrossel.
+- **Vídeo GERADO do zero** (Sprint D, migration 049): botão "gerar vídeo" na
+  fila → roteiro por IA → b-roll do Pexels → legenda queimada → entra como
+  fonte e ganha a marca na aprovação. Manual, nunca no cron.
 - **Fila**: card minimalista, aprovar/descartar em lote, pausa do piloto
   automático, conversão entre formatos.
 - **Anti-duplicata por embedding** (pgvector), dentro do mesmo cliente.
@@ -106,7 +112,7 @@ Arquivos-chave:
 - **Páginas legais** (`/privacidade`, `/termos`, `/exclusao-de-dados`) no ar,
   respondendo 200.
 - **Vercel Analytics** ligado.
-- **Qualidade**: `tsc` limpo, `lint` limpo, build limpo, 478 testes + 3 e2e
+- **Qualidade**: `tsc` limpo, `lint` limpo, build limpo, 487 testes + 3 e2e
   passando. CI no GitHub Actions em todo push.
 
 ---
@@ -143,7 +149,9 @@ Numeração igual à de `docs/auditoria-lancamento.md`, pra dar pra cruzar.
 | 2.10 | **Stripe em modo de teste** — ninguém consegue pagar de verdade | trava a receita |
 | 2.9 | **App Review do Meta não submetido** — publicação automática só em contas de teste. Para o público, o produto entrega até o download da arte | dossiê pronto em `docs/meta-app-review.md`; falta Business Verification, screencast, ícone/categoria |
 | — | Presets de nicho (confeitaria, saúde, advocacia) prontos porém **em standby** | decisão de produto |
-| — | Vídeo Sprint D: roteiro (D1) e montagem com b-roll (D2) são **módulos testados mas não ligados** a nenhum job/fila | falta decidir onde persistir e quando disparar |
+| — | **Migration 049 não aplicada em produção** — o botão "gerar vídeo" grava numa coluna que ainda não existe lá | rodar `supabase/migrations/049_video_script.sql` antes do próximo deploy |
+| — | Vídeo gerado (Sprint D) **nunca rodou com o Pexels real** — os testes usam clipes sintéticos | gerar 3-4 vídeos e olhar a saída antes de confiar |
+| — | Publicação de Reels (Graph API) e TikTok | Sprint D segue aberto nesse ponto |
 | — | Sprints E (Viral Radar) e F (ações de agente) | não começados |
 
 ### Nunca foi testado

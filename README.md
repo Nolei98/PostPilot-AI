@@ -6,7 +6,8 @@ Monitora notícias por RSS, pontua potencial viral, escreve o post no tom da
 marca, desenha a arte com a identidade visual dela e entrega numa **fila de
 aprovação**. Você aprova, baixa e posta.
 
-Entrega **post único, carrossel (7–10 cards) e vídeo** (Reels 9:16 / feed 4:5).
+Entrega **post único, carrossel (7–10 cards) e vídeo** (Reels 9:16 / feed 4:5),
+por upload ou gerado do zero (roteiro por IA + b-roll de banco).
 Um dono pode ter vários **clientes** (marcas), cada um com Brand Kit próprio.
 
 > 📍 **Este README é só o setup.** Para saber o que está pronto, o que falta e
@@ -78,7 +79,7 @@ foi possível iniciar a varredura".
 ### 5. Testes
 
 ```bash
-npm test          # 478 testes: unitários + RLS/uniqueness (pglite) — mock, sem chave, $0
+npm test          # 487 testes: unitários + RLS/uniqueness (pglite) — mock, sem chave, $0
 npm run test:e2e  # 3 e2e (Playwright) — LOCAL only: cria e apaga usuário no Supabase real
 npx tsc --noEmit  # typecheck
 npm run lint
@@ -144,7 +145,7 @@ de verdade. Ver `ESTADO-DO-PROJETO.md` §7.2.
 ## Estrutura
 
 ```
-supabase/migrations/       # 001–048, todas aplicadas em produção
+supabase/migrations/       # 001–049 (a 049 ainda não aplicada em produção)
 src/middleware.ts          # guard de sessão; define as rotas públicas
 src/lib/plans.ts           # limites de plano — fonte única da verdade
 src/lib/ai/                # triagem, geração, carrossel, roteiro de vídeo, embedding
@@ -152,7 +153,7 @@ src/lib/image.ts           # escolha da imagem + arte da capa
 src/lib/cover-svg.ts       # SVG da capa (marca, wordmark, contraste)
 src/lib/carousel-render.ts # cards do carrossel SVG → PNG
 src/lib/video-assembly.ts  # montagem de vídeo (ffmpeg)
-src/inngest/functions/     # scan, geração, render, publicação, métricas, notificação
+src/inngest/functions/     # scan, geração (post/carrossel/vídeo), render, publicação, métricas
 src/app/fila/              # fila de aprovação
 src/app/ready/             # prontos pra publicar
 src/app/settings/          # Brand Kit, fontes, templates, conta

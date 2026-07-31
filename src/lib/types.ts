@@ -209,6 +209,19 @@ export type RenderStatus = "none" | "pending" | "rendering" | "ready" | "error";
  * a migration 040 persistir em posts.video_shape. */
 export type VideoShape = "reels" | "feed" | "feed-blur";
 
+/** Roteiro guardado em `posts.video_script` (migration 049). Espelha o
+ *  `VideoScript` de `@/lib/ai/video-script` — repetido aqui porque types.ts
+ *  é importado por componente de cliente, e o módulo de roteiro puxa os
+ *  SDKs de IA junto. */
+export interface VideoScriptRow {
+  hook: string;
+  beats: { idx: number; text: string; seconds: number }[];
+  cta: string;
+  caption: string;
+  hashtags: string;
+  totalSeconds: number;
+}
+
 /** Fundo escolhido por post (migration 042). */
 export type BackgroundMode = "brand" | "light" | "dark" | "custom";
 
@@ -363,6 +376,13 @@ export interface Post {
   video_poster_url: string | null;
   video_status: "none" | "processing" | "ready" | "error";
   video_error: string | null;
+  /** Roteiro do vídeo GERADO (migration 049) — só existe quando
+   *  `video_origin === 'generated'`. Guardado pra re-render não precisar
+   *  chamar a IA de novo e devolver um texto diferente do aprovado. */
+  video_script: VideoScriptRow | null;
+  /** De onde veio o vídeo (migration 049). Os dois caminhos gravam no
+   *  MESMO arquivo no Storage, então só esta coluna distingue. */
+  video_origin: "upload" | "generated";
   // Sprint C — publicação automática via Graph API. Erro do último
   // tentativa de publicação (não derruba o status, que continua
   // 'scheduled' até o próximo tick do job de publicação).

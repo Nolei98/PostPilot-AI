@@ -5,7 +5,7 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga não recebe mais commits.
-**Última atualização:** 2026-07-30 (noite) — documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Última atualização:** 2026-07-30 (noite) — **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 — PENDENTE de aplicar em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
 ### Bloqueio ENCERRADO em 29/07: Pollinations.ai exigia pagamento pra requests multi-mensagem
 > ✅ Resolvido trocando os dois clientes afetados pra `gemini` (ver §0-C.6).
@@ -28,6 +28,95 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0-H. Sessão 2026-07-30 (noite) — Sprint D ligado: o vídeo gerado entra na fila (migration 049)
+
+D1 (roteiro) e D2 (montagem com b-roll) estavam testados desde 23/07 mas
+eram **módulos soltos**: nenhum job, nenhuma coluna, nenhum botão. Esta
+sessão ligou os dois ao produto.
+
+### 0-H.1 A decisão: dados novos, render reusado
+
+Duas opções estavam na mesa (levantadas lendo o código dos dois lados):
+
+**A — reusar o slot do upload, sem migration.** Grava o mp4 montado como
+`{postId}-video-source.mp4` e deixa o pipeline existente assumir.
+*Contra:* o roteiro se perde, então re-render exigiria chamar a IA de novo
+— pagando outra vez por um texto que já tínhamos e devolvendo um resultado
+DIFERENTE do aprovado. E o banco ficaria sem saber se um vídeo veio da
+máquina ou da pessoa.
+
+**B — job novo + colunas novas.** Persiste tudo, mas precisa decidir a
+marcação do vídeo do zero.
+
+**Escolhido: os dados da B, o render da A.** Migration 049 traz
+`posts.video_script` (o roteiro inteiro) e `posts.video_origin`
+(`upload` | `generated`); a montagem entrega o mp4 como **fonte** e a
+aprovação carimba a marca pelo caminho que já existe.
+
+O que decidiu: a montagem do D2 sai **sem marca nenhuma** — sem wordmark,
+sem chip, sem título (era escopo declarado da v1, ver §4.4/D2). Marcar
+aqui significaria um segundo código de marca rodando em paralelo com o do
+`renderVideoPost` — exatamente o jeito como a arte do post e a do
+carrossel divergiram antes.
+
+**Custo assumido:** encoda duas vezes (montagem + overlay da aprovação).
+Sabemos que isso é o defeito de §0-D.1 visto de outro ângulo. Fica assim
+de propósito: são ~10s por vídeo na medição do teste, e resolver de
+verdade é fazer a montagem já sair com a marca — trabalho que só vale
+depois de ver a qualidade do resultado real.
+
+### 0-H.2 `brollQueries` — por que a busca não usa o texto do beat
+
+O roteiro sai no idioma da marca (pt-BR) e a busca do Pexels é indexada em
+inglês: "o mercado reagiu rápido" devolve zero resultado. Traduzir cada
+beat custaria outra chamada de IA por vídeo, contra a política de custo
+zero, por um ganho duvidoso — b-roll é PANO DE FUNDO, não ilustração
+literal da legenda.
+
+Então o tema visual vem do **nicho** (estável, já escolhido pela pessoa) e
+cada segmento pega uma consulta diferente da lista, em rodízio. Isso
+resolve o problema que realmente aparece na tela: ninguém repara se o
+clipe do beat 2 "casa" com a frase, mas todo mundo repara se os 5 clipes
+são o mesmo. `src/lib/video-brief.ts`, 6 testes.
+
+### 0-H.3 Disparo manual, não no cron
+
+Botão "gerar vídeo" no card da fila, só quando não há vídeo anexado. Três
+motivos pra não automatizar agora: `auto_generate` está desligado em todos
+os clientes de propósito; a montagem baixa **um clipe por segmento** (4–6
+por vídeo) e o Pexels free limita 200 requisições/hora; e ninguém viu a
+qualidade da saída ainda.
+
+### 0-H.4 Estados e falha
+
+O step pesado nunca deixa exceção escapar — retorna `{ok:false,error}` e o
+step seguinte grava `video_status='error'` + `video_error`. Mesmo desenho
+do `attach-video`, pelo mesmo motivo: sem isso o post fica "processando"
+pra sempre, que é o modo de falha que custou dias em julho.
+
+O roteiro é persistido **antes** da montagem: se o ffmpeg falhar, o texto
+que custou IA sobrevive e a nova tentativa não paga de novo por ele.
+
+### 0-H.5 Verificação
+
+`tsc` limpo · `next lint` limpo · **487 testes** (38 arquivos, +9 nesta
+sessão) · build de produção limpo. A 049 é aplicada pelo harness de pglite
+em todo `npm test`, então as migrations seguem exercitadas de ponta a
+ponta.
+
+### 0-H.6 Pendências
+
+- ⚠️ **A migration 049 ainda NÃO foi aplicada no Supabase de produção** —
+  sem ela, o botão grava numa coluna que não existe. Rodar antes do
+  próximo deploy.
+- **Nunca rodou de ponta a ponta com Pexels real.** Os testes cobrem as
+  consultas e a montagem com clipes sintéticos; a busca real de b-roll
+  nunca foi exercida por este job.
+- Publicação de Reels (Graph API) e TikTok continuam fora — §4.4 segue
+  aberto nesse ponto.
 
 ---
 
@@ -1323,7 +1412,7 @@ O que falta, separado por quem consegue fazer:
 > foto/carrossel). O que falta abaixo continua de pé.
 - [x] **D1** (2026-07-23) — Roteiro (`src/lib/ai/video-script.ts`, `generateVideoScript`): mesmo padrão multi-provider de carousel.ts (claude/gemini/pollinations, mock em $0). Contrato: hook (0-3s) + 2-4 beats com duração + CTA, validado contra a janela de duração da rede (Reels 7-15s, TikTok 15-34s). 14 testes.
 - [x] **D2** (2026-07-23) — Montagem (`src/lib/video-assembly.ts` + `src/lib/stock-videos.ts`): **decisão — sem Remotion** (usuário pediu só ferramentas grátis; licença comercial do Remotion era a pendência travada aqui). B-roll real via **Pexels Video** (mesma key de stock-photos.ts, testado contra a API real) + montagem via **ffmpeg** (já no projeto): `buildScriptTimeline` deriva hook/beats/cta em janelas de tempo, `assembleScriptVideo` normaliza+concatena 1 clipe por segmento e queima a legenda de cada um só na sua janela (`overlay` + `enable=between(t,start,end)`; legenda = PNG via SVG+resvg, não ffmpeg drawtext — evita depender de .ttf). Testado ponta a ponta com ffmpeg real (clipes sintéticos): mp4 válido, transições corretas, acentos PT-BR ok, conferido visualmente. Logo/chip de marca fica pra depois (escopo desta v1 é b-roll+legenda). 9 testes.
-- [ ] **Falta pra fechar D1+D2**: decidir onde persistir o roteiro/vídeo montado e quando disparar (job Inngest + campo novo ou reuso de `posts.video_url`?) — D1/D2 hoje são módulos isolados testados, ainda não ligados a nenhum pipeline/fila.
+- [x] **D1+D2 LIGADOS** (2026-07-30, migration 049) — `generate-video-post.ts`. A decisão foi híbrida: os DADOS ganham coluna (`posts.video_script` guarda o roteiro, `posts.video_origin` separa upload de gerado), mas o RENDER reusa o caminho do upload — o mp4 montado é gravado como `{postId}-video-source.mp4` e o job dispara `post/attach-video.requested`. Motivo: a montagem do D2 sai sem marca nenhuma (escopo declarado da v1), e o caminho do upload já aplica a marca na aprovação; duplicar isso aqui manteria dois códigos de marca em paralelo. Disparo MANUAL (botão "gerar vídeo" na fila), nunca pelo cron. Ver §0-H.
 - [ ] Publicação Reels (Graph API) + TikTok (**Content Posting API** — pedir acesso cedo).
 - **Aceite:** Reel 9:16 com b-roll real + legendas + marca, aprovável na mesma fila.
 

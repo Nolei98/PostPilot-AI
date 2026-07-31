@@ -52,6 +52,15 @@ type Events = {
   "post/attach-video.requested": {
     data: { postId: string; userId: string; shape?: "reels" | "feed" | "feed-blur" };
   };
+  // Gerar um vídeo do ZERO pra um post que já está na fila (Sprint D,
+  // migration 049): roteiro por IA → b-roll do Pexels → montagem com
+  // legenda queimada. O mp4 entra como FONTE e o attach-video assume, do
+  // mesmo jeito que num upload — a marca é aplicada na aprovação.
+  // Disparo manual (botão na fila), nunca pelo cron: são 4-6 clipes
+  // baixados por vídeo e o Pexels free limita 200 req/h.
+  "post/generate-video.requested": {
+    data: { postId: string; userId: string; network?: "reels" | "tiktok" };
+  };
   // Usuário anexou um vídeo a um CARD de carrossel (migration 037) →
   // compõe o quadro "interior com vídeo" (título + moldura 16:9 + corpo)
   // em background (ffmpeg) — mesma técnica do vídeo feed do post único.

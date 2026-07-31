@@ -14,6 +14,7 @@ import { notifyPostReady } from "@/inngest/functions/notify";
 import { renderApprovedPost } from "@/inngest/functions/render-approved-post";
 import { convertPostFormat } from "@/inngest/functions/convert-post-format";
 import { attachVideo } from "@/inngest/functions/attach-video";
+import { generateVideoPost } from "@/inngest/functions/generate-video-post";
 import { attachCardVideo } from "@/inngest/functions/attach-card-video";
 import { publishScheduledPosts } from "@/inngest/functions/publish-scheduled-posts";
 import { collectInsights } from "@/inngest/functions/collect-insights";
@@ -29,6 +30,7 @@ export const { GET, POST, PUT } = serve({
     renderApprovedPost,
     convertPostFormat,
     attachVideo,
+    generateVideoPost,
     attachCardVideo,
     publishScheduledPosts,
     collectInsights,
