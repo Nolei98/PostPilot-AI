@@ -2192,3 +2192,137 @@ export async function signOut() {
   // pro /login é imediata (mesma resposta do server action).
   redirect("/login");
 }
+
+/**
+ * EXCLUSÃO DE CONTA (auditoria §2.6).
+ *
+ * A página /exclusao-de-dados descrevia o processo desde o dossiê do App
+ * Review, mas não existia ação nenhuma — a pessoa lia como excluir e não
+ * tinha onde clicar. LGPD (e o próprio App Review do Meta) pedem caminho
+ * efetivo, não instruções.
+ *
+ * Ordem importa:
+ *  1. Storage primeiro. Os arquivos NÃO têm chave estrangeira pro banco;
+ *     apagar o usuário antes deixaria arte e vídeo órfãos pra sempre, sem
+ *     nem dar pra descobrir de quem eram.
+ *  2. Depois o usuário em auth.users. O resto do banco cai por cascata
+ *     (posts, clients → brand_kits, source_configs, notification_configs,
+ *     subscriptions; carousel_cards caem junto com os posts).
+ *
+ * Os nomes dos arquivos saem das COLUNAS de URL, não de `storage.list()`.
+ * Listar custava uma requisição por post — numa conta com centenas de posts
+ * a server action estourava o tempo e morria ANTES do `deleteUser`, ou seja,
+ * falhava exatamente onde não pode falhar. A URL pública já carrega o nome
+ * do objeto, então derivar dela é exato e cabe em poucas chamadas.
+ *
+ * São DOIS buckets: `post-images` (arte, foto base, fundo, vídeo, pôster,
+ * contra-capa e os mesmos campos de cada card) e `avatars` (a foto de perfil
+ * do Brand Kit, gravada como `{client_id}.png|jpg`). Esquecer o segundo
+ * deixaria justamente o dado mais pessoal para trás.
+ *
+ * A limpeza do Storage é BEST-EFFORT e registrada no log: um arquivo que
+ * resista não pode impedir a exclusão da conta, que é o direito exercido.
+ */
+
+/** Extrai o nome do objeto de uma URL pública do Storage.
+ *  `.../object/public/post-images/abc-cover.png?v=123` → `abc-cover.png` */
+function nomeNoBucket(url: string | null, bucket: string): string | null {
+  if (!url) return null;
+  const marca = `/object/public/${bucket}/`;
+  const i = url.indexOf(marca);
+  if (i === -1) return null;
+  const nome = url.slice(i + marca.length).split("?")[0];
+  return nome ? decodeURIComponent(nome) : null;
+}
+export async function deleteMyAccount(formData: FormData): Promise<void> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  // Confirmação digitada: exclusão é irreversível e não tem "desfazer".
+  const confirmacao = String(formData.get("confirmacao") ?? "").trim().toUpperCase();
+  if (confirmacao !== "EXCLUIR") {
+    throw new Error('Digite EXCLUIR para confirmar a exclusão da conta.');
+  }
+
+  const admin = createAdminClient();
+
+  // 1. Arquivos do Storage, derivados das colunas de URL.
+  try {
+    const { data: posts } = await admin
+      .from("posts")
+      .select(
+        "id, image_url, closing_image_url, base_image_url, bg_image_url, video_url, video_poster_url"
+      )
+      .eq("user_id", user.id);
+
+    const doPost = posts ?? [];
+    const nomes = new Set<string>();
+    for (const p of doPost) {
+      for (const url of [
+        p.image_url,
+        p.closing_image_url,
+        p.base_image_url,
+        p.bg_image_url,
+        p.video_url,
+        p.video_poster_url,
+      ]) {
+        const nome = nomeNoBucket(url, "post-images");
+        if (nome) nomes.add(nome);
+      }
+    }
+
+    // Cards do carrossel: têm as próprias fotos e vídeos, e caem por cascata
+    // no banco — no Storage, não.
+    if (doPost.length > 0) {
+      const { data: cards } = await admin
+        .from("carousel_cards")
+        .select("image_url, bg_url, video_url, video_poster_url")
+        .in(
+          "post_id",
+          doPost.map((p) => p.id)
+        );
+      for (const c of cards ?? []) {
+        for (const url of [c.image_url, c.bg_url, c.video_url, c.video_poster_url]) {
+          const nome = nomeNoBucket(url, "post-images");
+          if (nome) nomes.add(nome);
+        }
+      }
+    }
+
+    // O remove() aceita lote; 100 por vez pra não montar payload gigante.
+    const lote = [...nomes];
+    for (let i = 0; i < lote.length; i += 100) {
+      const { error: rmErr } = await admin.storage
+        .from("post-images")
+        .remove(lote.slice(i, i + 100));
+      if (rmErr) console.error("[deleteMyAccount] falha ao apagar artes:", rmErr.message);
+    }
+
+    // Avatares: um por cliente, nome = `{client_id}.png|jpg`. Não dá pra
+    // saber a extensão sem ler a URL do kit, então tenta as duas — remover
+    // um nome inexistente não é erro no Storage.
+    const { data: clientes } = await admin
+      .from("clients")
+      .select("id")
+      .eq("user_id", user.id);
+    const avatares = (clientes ?? []).flatMap((c) => [`${c.id}.png`, `${c.id}.jpg`]);
+    if (avatares.length > 0) {
+      const { error: avErr } = await admin.storage.from("avatars").remove(avatares);
+      if (avErr) console.error("[deleteMyAccount] falha ao apagar avatares:", avErr.message);
+    }
+  } catch (err) {
+    // Best-effort: arquivo preso não pode travar o direito de exclusão.
+    console.error("[deleteMyAccount] limpeza do Storage incompleta:", err);
+  }
+
+  // 2. O usuário. Cascata do Postgres leva o resto.
+  const { error } = await admin.auth.admin.deleteUser(user.id);
+  if (error) throw new Error(`Falha ao excluir a conta: ${error.message}`);
+
+  await supabase.auth.signOut();
+  revalidatePath("/", "layout");
+  redirect("/login?conta=excluida");
+}

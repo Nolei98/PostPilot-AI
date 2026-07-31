@@ -30,6 +30,7 @@ import { getShellData } from "@/lib/shell";
 import { Card } from "@/components/ui/Card";
 import { DeleteSourceButton } from "@/components/DeleteSourceButton";
 import { SubmitButton } from "@/components/SubmitButton";
+import { DeleteAccountForm } from "@/components/DeleteAccountForm";
 import { SaveLockForm } from "@/components/SaveLockForm";
 import { TemplatePickButton } from "@/components/TemplatePickButton";
 import { getMonthlyQuota } from "@/lib/subscription";
@@ -885,6 +886,17 @@ export default async function SettingsPage({
           </form>
         </Card>
         )}
+      </section>
+
+      {/* Zona de risco: exclusão de conta (auditoria §2.6). No fim da
+          página e visualmente separada — a página de exclusão de dados
+          descrevia o processo desde o dossiê do App Review, mas não
+          existia onde clicar. */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-title text-muted">Conta</h2>
+        <Card className="border-error/25 p-4">
+          <DeleteAccountForm />
+        </Card>
       </section>
     </AppShell>
   );
