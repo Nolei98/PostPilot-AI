@@ -40,26 +40,35 @@ export const scanRadar = inngest.createFunction(
     // pelo mesmo motivo: não multiplicar trabalho por cliente parado.
     const alvos = await step.run("alvos", async () => {
       if (clienteManual) {
-        const { data } = await supabase
+        // owner_user_id, não user_id: é o nome da coluna em `clients`
+        // desde a migration 020. `viral_references.user_id` guarda esse
+        // mesmo dono, pra RLS conseguir filtrar sem join.
+        const { data, error } = await supabase
           .from("brand_kits")
-          .select("client_id, niche, keywords, clients!inner(user_id)")
+          .select("client_id, niche, keywords, clients!inner(owner_user_id)")
           .eq("client_id", clienteManual)
           .maybeSingle();
+        // Lançar, e não devolver lista vazia: na primeira versão um nome
+        // de coluna errado virou "0 clientes" e o job terminou com
+        // sucesso aparente — o defeito só apareceu porque a tabela ficou
+        // vazia. Erro de query tem que falhar alto.
+        if (error) throw new Error(`alvos (manual): ${error.message}`);
         if (!data) return [];
         return [
           {
             clientId: data.client_id as string,
-            userId: (data.clients as unknown as { user_id: string }).user_id,
+            userId: (data.clients as unknown as { owner_user_id: string }).owner_user_id,
             niche: data.niche as string | null,
             keywords: (data.keywords as string[] | null) ?? [],
           },
         ];
       }
 
-      const { data: configs } = await supabase
+      const { data: configs, error: erroConfigs } = await supabase
         .from("notification_configs")
         .select("user_id, active_client_id")
         .not("active_client_id", "is", null);
+      if (erroConfigs) throw new Error(`alvos (cron): ${erroConfigs.message}`);
 
       const ativos = (configs ?? []).map((c) => ({
         userId: c.user_id as string,
@@ -67,13 +76,14 @@ export const scanRadar = inngest.createFunction(
       }));
       if (ativos.length === 0) return [];
 
-      const { data: kits } = await supabase
+      const { data: kits, error: erroKits } = await supabase
         .from("brand_kits")
         .select("client_id, niche, keywords")
         .in(
           "client_id",
           ativos.map((a) => a.clientId)
         );
+      if (erroKits) throw new Error(`alvos (kits): ${erroKits.message}`);
 
       const porCliente = new Map(
         (kits ?? []).map((k) => [
