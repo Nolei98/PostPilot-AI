@@ -275,7 +275,44 @@ export const scanNews = inngest.createFunction(
 
     // Só tria as pendentes cujas fontes este scan processa (cliente ativo) —
     // ignora 'new' de outros clientes que ficaram de scans anteriores.
-    const pendingForScan = pending.filter((n) => sourceClient.has(n.source_id));
+    let pendingForScan = pending.filter((n) => sourceClient.has(n.source_id));
+
+    // TETO DE CUSTO DA TRIAGEM (auditoria §2.3).
+    //
+    // A triagem chama IA por notícia e roda a cada 3h. O teto do plano
+    // (postsPerMonth) só valia na GERAÇÃO, então quem já tinha estourado a
+    // cota do mês seguia gastando triagem sem poder gerar nada — dinheiro
+    // torrado num resultado que o próprio código já tinha decidido não
+    // usar.
+    //
+    // Quem está sem cota tem as notícias GRAVADAS (elas continuam 'new' e
+    // são triadas no mês seguinte); só não passam pela IA agora. Não é
+    // perda de conteúdo, é adiamento.
+    const donoDaFonte = new Map(sources.map((s) => [s.id, s.user_id]));
+    const semCota = new Set<string>();
+    const donos = [...new Set(sources.map((s) => s.user_id))];
+    const cotas = await step.run("check-quotas", async () => {
+      const { getMonthlyQuota } = await import("@/lib/subscription");
+      const pares = await Promise.all(
+        donos.map(async (uid) => [uid, (await getMonthlyQuota(uid)).remaining] as const)
+      );
+      return Object.fromEntries(pares) as Record<string, number>;
+    });
+    for (const [uid, restante] of Object.entries(cotas)) {
+      if (restante <= 0) semCota.add(uid);
+    }
+    if (semCota.size > 0) {
+      const antes = pendingForScan.length;
+      pendingForScan = pendingForScan.filter(
+        (n) => !semCota.has(donoDaFonte.get(n.source_id) ?? "")
+      );
+      const pulados = antes - pendingForScan.length;
+      if (pulados > 0) {
+        console.log(
+          `[scan] triagem pulada em ${pulados} notícia(s): dono sem cota no mês (ficam 'new' para o próximo ciclo)`
+        );
+      }
+    }
 
     const byNiche = new Map<string, typeof pending>();
     for (const news of pendingForScan) {
