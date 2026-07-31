@@ -139,6 +139,53 @@ escala linear.
 Palavra-chave curta demais (`IA`, `AI`) é descartada em `topicsForClient` —
 duas letras num índice anglófono devolvem ruído.
 
+### 0-M.7 BOM na chave da NVIDIA quebrou TODA chamada em produção
+
+O botão do brief devolvia "não foi possível gerar" com o provider
+funcionando. O log de produção deu o motivo exato:
+
+> `Cannot convert argument to a ByteString because the character at index 7 has a value of 65279`
+
+65279 é **BOM** (U+FEFF), no header `Authorization: Bearer <chave>`, na
+primeira posição da chave. Causado por mim na rotação de §0-J.4: no
+PowerShell 5.1, `$chave | npx vercel env add` prefixa BOM ao encanar pro
+processo filho. Ajustar `$OutputEncoding` **não resolve** — testado.
+
+O que funciona: escrever a chave num arquivo com
+`[System.IO.File]::WriteAllText(path, valor, (New-Object System.Text.UTF8Encoding $false))`
+e redirecionar por `cmd /c "npx vercel env add ... < arquivo"` — o
+PowerShell 5.1 não tem `<`. Conferido pelos primeiros bytes do arquivo
+(`110,118,97,112` = `nvap`, sem BOM).
+
+**O alcance era muito maior que o brief:** qualquer chamada à NVIDIA a
+partir da Vercel falhava — inclusive a geração de texto dos posts. Como
+`auto_generate` só está ligado no cliente do João e nenhum post nasceu
+nesse intervalo, ninguém viu. Teria aparecido como fila parada.
+
+**Lição de processo:** o teste da chave em §0-J.4 rodou da minha máquina,
+não de produção. Chave "testada" e chave "funcionando no ambiente que a
+usa" são coisas diferentes quando o transporte pode corromper o valor.
+
+### 0-M.8 A guarda de plágio precisou de dado real pra ficar certa
+
+Dois defeitos que só apareceram com o brief rodando em produção:
+
+1. **Falso positivo em gancho curto.** "Design é redefinição" tem dois
+   termos úteis e um é "design", presente na referência "Design is
+   compromise" — 1 de 2 batia o limiar de 50%. Um assunto em comum virava
+   acusação de plágio. Agora exige DUAS palavras em comum, ou ≥85% do
+   gancho vindo do mesmo título.
+2. **Reprovar o brief inteiro era desproporcional.** Um gancho suspeito
+   entre cinco derrubava tudo e o usuário via erro por um resultado 80%
+   bom. `sanitizeBrief` descarta os suspeitos e deixa a validação reprovar
+   só quando sobram poucos demais.
+
+Também: cheguei a trocar o modelo pelo rápido achando que o erro era
+timeout — era o BOM. Revertido, porque a diferença de qualidade é grande:
+o pequeno devolveu "O conhecimento é uma arma"; o padrão devolveu "O
+próximo gargalo da IA não é computação, é curadoria de dados". Medido em
+produção depois da correção: **12s**, dentro do `maxDuration = 60`.
+
 ### 0-M.6 O job falhou em silêncio na primeira execução
 
 A primeira coleta em produção gravou ZERO linhas. Causa: o passo `alvos`
