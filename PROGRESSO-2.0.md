@@ -104,6 +104,38 @@ rosto, mão e dente (§0-F.3), e o FLUX não resolve isso. Onde ele valeria
 extra, nunca troca do padrão. Vale retestar depois: fila de tier grátis
 varia.
 
+### 0-I.6 "Deslize para ver" nunca aparecia no post de duas páginas — CORRIGIDO
+
+Relatado pelo usuário em 31/07 (exemplo #0274). Não era layout: em
+`image.ts` (`composeCoverStyleContent`) e em `post-preview.ts` a página 1
+do post único era montada com `showSwipeHint: false` **fixo**. Post com
+contra-capa nunca convidava a deslizar — a segunda página existia e
+morria sem público.
+
+A decisão agora sobe pra quem sabe se há página 2: `spec.closingPage`.
+O *probe* que mede a banda do véu recebeu o MESMO flag — o gancho ocupa
+74px de altura, e medir sem ele calcularia o escurecimento numa faixa
+diferente da desenhada (o defeito clássico de "duas contas para a mesma
+geometria", igual ao que o `captionGeometry` resolveu no vídeo).
+
+### 0-I.7 Pendências abertas — relatadas em 31/07, ainda NÃO corrigidas
+
+**a) Pôster antigo aparece quando o vídeo é trocado** (relatado no #0586,
+que já não existe no banco — provavelmente foi de um dos usuários
+apagados). Diagnóstico provável, ainda não reproduzido: o caminho no
+Storage é FIXO (`{postId}-video-poster-raw.jpg`), então trocar o vídeo
+sobrescreve o arquivo sem mudar a URL, e o browser serve o pôster velho
+do cache até algo forçar recarga. O `attach-video` já anexa
+`?v=timestamp` ao GRAVAR; falta conferir se a Fila reusa a URL antiga
+guardada no post (`video_poster_url` / `base_image_url`) em vez da nova.
+Reproduzir subindo dois vídeos diferentes no mesmo post.
+
+**b) Divisor `———— WORDMARK ————` desalinhado.** A régua precisa ficar
+centralizada onde quer que esteja, com a mesma margem à esquerda e à
+direita. Não investigado. Atenção: a régua é desenhada POR PRESET (cada
+`layout-*.ts` tem seu `brandRowSvg`), então provavelmente é margem
+assimétrica em um ou mais presets — não um bug único num lugar só.
+
 ### 0-I.5 Pendências
 
 - **Nenhum post foi gerado pelo pipeline com a NVIDIA ainda** — o teste

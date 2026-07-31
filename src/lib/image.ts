@@ -527,9 +527,19 @@ async function composeCoverStyleContent(
    * foto era respeitada aqui: escolher 'on'/'off' não mudava nada na
    * página 1. 'auto' (padrão) é o comportamento de sempre.
    */
-  bgOverlay: "auto" | "on" | "off" = "auto"
+  bgOverlay: "auto" | "on" | "off" = "auto",
+  /**
+   * "DESLIZE PARA VER" na página 1. Só faz sentido quando EXISTE página
+   * 2: até 31/07 isto era `false` fixo aqui e no preview, então post com
+   * contra-capa nunca convidava a deslizar — o leitor via uma página só e
+   * a segunda morria sem público. Quem sabe se há página 2 é o
+   * `spec.closingPage`, então a decisão sobe pra quem tem a spec.
+   */
+  showSwipeHint = false
 ): Promise<Buffer> {
-  const probe = buildPageOneCoverSvg(hook, { ...cardBrand, colorText: "#FFFFFF" }, true, { showSwipeHint: false });
+  // O probe usa o MESMO flag: o gancho ocupa 74px de altura, e medir a
+  // banda sem ele calcularia o véu numa faixa diferente da desenhada.
+  const probe = buildPageOneCoverSvg(hook, { ...cardBrand, colorText: "#FFFFFF" }, true, { showSwipeHint });
   const covered = await sharp(baseImage).resize(WIDTH, HEIGHT, { fit: "cover", position: "attention" }).toBuffer();
   const band = await sharp(covered)
     .extract({ left: 0, top: probe.blurBandTop, width: WIDTH, height: HEIGHT - probe.blurBandTop })
@@ -547,7 +557,7 @@ async function composeCoverStyleContent(
   const topMedido = overlayAlphaFor(theme, textColor, topLuminance);
   const topAlpha = bgOverlay === "off" ? 0 : bgOverlay === "on" ? Math.max(0.55, topMedido) : topMedido;
   const { svg, blurBandTop } = buildPageOneCoverSvg(hook, { ...cardBrand, colorText: textColor }, true, {
-    showSwipeHint: false,
+    showSwipeHint,
     overlay: { theme, alpha },
     topOverlay: { theme, alpha: topAlpha },
   });
@@ -1744,9 +1754,10 @@ async function composeCoverImage(
   cardBrand: CardBrand,
   brand: BrandTemplate,
   watermark: boolean,
-  bgOverlay: "auto" | "on" | "off" = "auto"
+  bgOverlay: "auto" | "on" | "off" = "auto",
+  showSwipeHint = false
 ): Promise<Buffer> {
-  let final = await composeCoverStyleContent(base, hook, cardBrand, bgOverlay);
+  let final = await composeCoverStyleContent(base, hook, cardBrand, bgOverlay, showSwipeHint);
 
   const layers: CompositeLayer[] = [];
   const logoLayer = brand.showLogo ? await buildLogoLayer(brand.logoUrl, WIDTH) : null;
@@ -1774,7 +1785,9 @@ export async function composeFromSpec(
     spec.cardBrand,
     spec.brandTemplate,
     spec.watermark,
-    spec.bgOverlay
+    spec.bgOverlay,
+    // Tem contra-capa? Então a página 1 convida a deslizar.
+    spec.closingPage
   );
 }
 

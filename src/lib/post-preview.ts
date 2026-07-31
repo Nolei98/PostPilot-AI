@@ -240,8 +240,10 @@ function buildPageOne(post: PreviewPostInput, spec: RenderSpec, photoUrl: string
   // Duas medições, exatamente como composeCoverStyleContent faz: a banda
   // de identidade (que começa onde o layout disser) e a meta-linha do
   // topo, que fica fora dela e precisa do próprio véu.
+  // Mesmo flag do desenho: o gancho ocupa 74px, e medir a banda sem ele
+  // calcularia o véu numa faixa diferente da que aparece.
   const probe = buildPageOneCoverSvg(post.hook ?? "", { ...spec.cardBrand, colorText: "#FFFFFF" }, true, {
-    showSwipeHint: false,
+    showSwipeHint: spec.closingPage,
   });
   const band = contrastFor(grid, { top: probe.blurBandTop, height: canvas.h - probe.blurBandTop }, canvas);
 
@@ -264,7 +266,9 @@ function buildPageOne(post: PreviewPostInput, spec: RenderSpec, photoUrl: string
     { ...spec.cardBrand, colorText: band.textColor },
     !!photoUrl,
     {
-      showSwipeHint: false,
+      // Mesma regra do render (image.ts): só convida a deslizar quando
+      // existe página 2. A prévia tem que mostrar o que a arte terá.
+      showSwipeHint: spec.closingPage,
       overlay: { theme: band.theme, alpha: veil(band.alpha) },
       topOverlay: { theme: top.theme, alpha: veil(top.alpha) },
     }
