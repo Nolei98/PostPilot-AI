@@ -301,10 +301,18 @@ export async function renderVideoPost(
   let finalVideo: Buffer;
   if (shape === "reels") {
     // Reels 9:16: overlay em 1080x1350 encaixado no rodapé do quadro maior.
-    // Regra do kit: contraste medido pelo FRAME DE PÔSTER, não pelo vídeo.
+    //
+    // Contraste medido em CINCO frames ao longo do vídeo, não só no do
+    // meio. Um frame bastava quando todo vídeo era upload de cena
+    // contínua; o vídeo gerado (Sprint D) troca de b-roll a cada
+    // segmento, e um Reel de 31/07 saiu com o wordmark invisível nos
+    // trechos claros porque o frame medido era escuro. O overlay é um só
+    // pro vídeo inteiro, então ele tem que servir ao pior momento.
     const { buildReelsVideoOverlayPng } = await import("@/lib/image");
-    const poster = await extractPosterFrame(source, 0.5);
-    const overlay = await buildReelsVideoOverlayPng(hook, spec.cardBrand, poster);
+    const amostras = await Promise.all(
+      [0.1, 0.3, 0.5, 0.7, 0.9].map((t) => extractPosterFrame(source, t))
+    );
+    const overlay = await buildReelsVideoOverlayPng(hook, spec.cardBrand, amostras);
     // Título "some depois" (050): o texto SEMPRE aparece — o que muda é
     // se ele fica. Fixo entrega o assunto o vídeo inteiro; temporário
     // entrega nos primeiros segundos (que é quando a pessoa decide se

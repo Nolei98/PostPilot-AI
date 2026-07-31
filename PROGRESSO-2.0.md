@@ -5,7 +5,7 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga não recebe mais commits.
-**Última atualização:** 2026-07-31 (tarde) — **quatro pendências fechadas** (emoji/tofu no motor de template, cota deixa de contar descarte, pôster antigo ao trocar vídeo, divisor do wordmark) + **vazamento na exclusão de conta** corrigido (logo e avatar legado ficavam públicos) — ver §0-K. Antes: **chaves da NVIDIA rotacionadas** (4 revogadas, 1 ativa; ver §0-J.4) e **contra-capa**: o convite a deslizar sai (vinha de um texto embutido no fallback do `content.cta`), o chip de perfil passa a valer em qualquer layout e ancora na medida real do texto, 35% maior — ver §0-J. **Nenhuma migration nova**; 2 presets de sistema atualizados na tabela `templates`. Antes: 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Última atualização:** 2026-07-31 (tarde) — **SPRINT D fechada de fato** (o primeiro Reel gerado foi aprovado e saiu com marca; só a publicação Reels/TikTok segue aberta, travada na Meta) e o **véu do vídeo passa a medir 5 frames** em vez de 1 — ver §0-L. Antes: **quatro pendências fechadas** (emoji/tofu no motor de template, cota deixa de contar descarte, pôster antigo ao trocar vídeo, divisor do wordmark) + **vazamento na exclusão de conta** corrigido (logo e avatar legado ficavam públicos) — ver §0-K. Antes: **chaves da NVIDIA rotacionadas** (4 revogadas, 1 ativa; ver §0-J.4) e **contra-capa**: o convite a deslizar sai (vinha de um texto embutido no fallback do `content.cta`), o chip de perfil passa a valer em qualquer layout e ancora na medida real do texto, 35% maior — ver §0-J. **Nenhuma migration nova**; 2 presets de sistema atualizados na tabela `templates`. Antes: 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
 ### Bloqueio ENCERRADO em 29/07: Pollinations.ai exigia pagamento pra requests multi-mensagem
 > ✅ Resolvido trocando os dois clientes afetados pra `gemini` (ver §0-C.6).
@@ -28,6 +28,53 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0-L. Sessão 2026-07-31 (tarde) — SPRINT D fechada de fato, e o véu do vídeo passa a medir vários frames
+
+### 0-L.1 O aceite da D só foi cumprido hoje
+
+D1, D2 e a ligação dos dois estavam marcados como prontos desde 30/07, mas
+o critério de aceite — *"Reel 9:16 com b-roll real + legendas + **marca**,
+aprovável na mesma fila"* — não tinha sido exercido: a marca só é carimbada
+na APROVAÇÃO, e o único post gerado pelo pipeline seguia em
+`pending_approval`. O vídeo gerado com marca nunca havia existido.
+
+Aprovado pela fila em 31/07 (post `adfb8915`, "Uma página só: o teste do
+preview ao vivo"). Resultado medido no arquivo: **1080x1920, 10.00s, h264,
+30fps**, b-roll trocando por segmento, legenda queimada só na janela do
+beat, título e wordmark presentes. Aceite cumprido.
+
+Continua aberto na D: **publicação Reels + TikTok**, que depende do App
+Review da Meta e do acesso à Content Posting API — ambos desligados por
+decisão do usuário em 31/07.
+
+Números da base no dia: 493 posts com vídeo de `upload` contra **1** de
+`generated`. O pipeline funciona, mas foi exercido uma vez só.
+
+### 0-L.2 Véu do Reels medido em cinco frames, não em um
+
+O primeiro Reel gerado expôs o defeito: o wordmark sumia nos trechos
+claros. Não era falta de placa — o scrim existe e cobre a zona segura
+inteira (`image.ts`, `buildReelsVideoOverlaySvg`). Era a MEDIÇÃO:
+`renderVideoPost` chamava `extractPosterFrame(source, 0.5)` e decidia o véu
+por esse frame único.
+
+Um frame bastava enquanto todo vídeo era upload de cena contínua. O vídeo
+gerado troca de b-roll 4-6 vezes: o frame do meio era escuro, o véu saiu
+fraco, e nos segmentos com laptop/mesa branca o wordmark desapareceu. O
+`VIDEO_SCRIM_FLOOR` existia pra "escurece e clareia", não pra troca de cena.
+
+Passou a amostrar `[0.1, 0.3, 0.5, 0.7, 0.9]` e a decidir em
+`videoScrimContrast` (nova, pura, exportada): **tema pela média, véu pelo
+pior frame**. A cor do texto não pode mudar no meio do vídeo — a placa,
+sim, precisa aguentar o momento mais claro. 6 testes em
+`src/lib/video-scrim.test.ts`.
+
+Aplica-se ao `reels`. O `feed-blur` mede pelo mesmo frame único e tem o
+mesmo risco: não foi tocado porque nenhum vídeo gerado usou esse shape
+ainda, e mudar sem caso real seria adivinhar.
 
 ---
 
@@ -1871,8 +1918,8 @@ O que falta, separado por quem consegue fazer:
 - [x] **D1** (2026-07-23) — Roteiro (`src/lib/ai/video-script.ts`, `generateVideoScript`): mesmo padrão multi-provider de carousel.ts (claude/gemini/pollinations, mock em $0). Contrato: hook (0-3s) + 2-4 beats com duração + CTA, validado contra a janela de duração da rede (Reels 7-15s, TikTok 15-34s). 14 testes.
 - [x] **D2** (2026-07-23) — Montagem (`src/lib/video-assembly.ts` + `src/lib/stock-videos.ts`): **decisão — sem Remotion** (usuário pediu só ferramentas grátis; licença comercial do Remotion era a pendência travada aqui). B-roll real via **Pexels Video** (mesma key de stock-photos.ts, testado contra a API real) + montagem via **ffmpeg** (já no projeto): `buildScriptTimeline` deriva hook/beats/cta em janelas de tempo, `assembleScriptVideo` normaliza+concatena 1 clipe por segmento e queima a legenda de cada um só na sua janela (`overlay` + `enable=between(t,start,end)`; legenda = PNG via SVG+resvg, não ffmpeg drawtext — evita depender de .ttf). Testado ponta a ponta com ffmpeg real (clipes sintéticos): mp4 válido, transições corretas, acentos PT-BR ok, conferido visualmente. Logo/chip de marca fica pra depois (escopo desta v1 é b-roll+legenda). 9 testes.
 - [x] **D1+D2 LIGADOS** (2026-07-30, migration 049) — `generate-video-post.ts`. A decisão foi híbrida: os DADOS ganham coluna (`posts.video_script` guarda o roteiro, `posts.video_origin` separa upload de gerado), mas o RENDER reusa o caminho do upload — o mp4 montado é gravado como `{postId}-video-source.mp4` e o job dispara `post/attach-video.requested`. Motivo: a montagem do D2 sai sem marca nenhuma (escopo declarado da v1), e o caminho do upload já aplica a marca na aprovação; duplicar isso aqui manteria dois códigos de marca em paralelo. Disparo MANUAL (botão "gerar vídeo" na fila), nunca pelo cron. Ver §0-H.
-- [ ] Publicação Reels (Graph API) + TikTok (**Content Posting API** — pedir acesso cedo).
-- **Aceite:** Reel 9:16 com b-roll real + legendas + marca, aprovável na mesma fila.
+- [ ] Publicação Reels (Graph API) + TikTok (**Content Posting API** — pedir acesso cedo). ⛔ Travado na decisão de 31/07 de deixar o App Review desligado.
+- **Aceite:** Reel 9:16 com b-roll real + legendas + marca, aprovável na mesma fila. — ✅ **CUMPRIDO 2026-07-31** (post `adfb8915`: 1080x1920, 10s, b-roll por segmento, legenda na janela do beat, marca na aprovação). Ver §0-L.1.
 
 ### 4.5 SPRINT E — Viral Radar + Remix
 - [ ] `content_sources` (rss | ig_handle | tiktok_handle | keyword | trend); colar @.

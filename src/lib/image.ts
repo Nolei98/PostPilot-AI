@@ -613,27 +613,58 @@ interface OverlayContrast {
   alpha: number;
 }
 
+/**
+ * Decide o véu de um vídeo a partir da luminância de VÁRIOS momentos dele.
+ *
+ * Tema pela MÉDIA e véu pelo PIOR frame, porque o overlay é um só pro
+ * vídeo inteiro: a cor do texto não pode mudar no meio, mas a placa
+ * precisa aguentar o trecho mais claro. Medir um frame só bastava
+ * enquanto todo vídeo era upload de cena contínua — o vídeo GERADO
+ * (Sprint D) troca de b-roll a cada segmento, e num Reel de 31/07 o frame
+ * medido era escuro, o véu saiu fraco e o wordmark sumia nos trechos
+ * claros. `VIDEO_SCRIM_FLOOR` continua como rede de segurança.
+ */
+export function videoScrimContrast(luminances: number[]): OverlayContrast {
+  const amostras = luminances.length > 0 ? luminances : [0.5];
+  const media = amostras.reduce((a, b) => a + b, 0) / amostras.length;
+  const theme = pickTheme(media);
+  const textColor = textColorForTheme(theme);
+  const alpha = Math.max(
+    VIDEO_SCRIM_FLOOR,
+    ...amostras.map((l) => overlayAlphaFor(theme, textColor, l))
+  );
+  return { theme, textColor, alpha };
+}
+
 export async function buildReelsVideoOverlayPng(
   headline: string,
   cardBrand: CardBrand,
-  posterFrame: Buffer
+  /**
+   * Um frame, ou VÁRIOS ao longo do vídeo. Vários é o certo quando o fundo
+   * troca de cena: ver a nota sobre b-roll abaixo.
+   */
+  posterFrame: Buffer | Buffer[]
 ): Promise<Buffer> {
   const { zone } = reelsTextZone(headline);
+  const frames = Array.isArray(posterFrame) ? posterFrame : [posterFrame];
 
   // Mede a luminância REAL da zona segura (divisor + título juntos, já
   // cover-fit igual ao vídeo final) — não a foto/vídeo inteiro.
-  const covered = await sharp(posterFrame).resize(REELS_W, REELS_H, { fit: "cover", position: "attention" }).toBuffer();
-  const zoneCrop = await sharp(covered)
-    .extract({ left: REELS_SAFE_MARGIN_X, top: zone.top, width: zone.width, height: REELS_H - zone.top })
-    .toBuffer();
-  const luminance = await measureImageLuminance(zoneCrop);
-  const theme = pickTheme(luminance);
-  const textColor = textColorForTheme(theme);
-  // Piso: a medição só enxerga o frame de pôster. Vídeo que começa
-  // escuro e clareia no meio fazia o texto branco sumir (2026-07-28).
-  const alpha = Math.max(VIDEO_SCRIM_FLOOR, overlayAlphaFor(theme, textColor, luminance));
+  const luminances = await Promise.all(
+    frames.map(async (frame) => {
+      const covered = await sharp(frame)
+        .resize(REELS_W, REELS_H, { fit: "cover", position: "attention" })
+        .toBuffer();
+      const zoneCrop = await sharp(covered)
+        .extract({ left: REELS_SAFE_MARGIN_X, top: zone.top, width: zone.width, height: REELS_H - zone.top })
+        .toBuffer();
+      return measureImageLuminance(zoneCrop);
+    })
+  );
 
-  return rasterizeSvg(buildReelsVideoOverlaySvg(headline, cardBrand, { theme, textColor, alpha }));
+  return rasterizeSvg(
+    buildReelsVideoOverlaySvg(headline, cardBrand, videoScrimContrast(luminances))
+  );
 }
 
 /**
