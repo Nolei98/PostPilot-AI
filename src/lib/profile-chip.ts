@@ -96,11 +96,51 @@ export interface ChipMarkup {
 }
 
 export interface ChipOptions {
-  position?: "top-center" | "bottom-left";
+  position?: "top-center" | "bottom-left" | "bottom-center";
   /** Altura do canvas — obrigatório pra calcular a margem inferior em "bottom-left". */
   canvasHeight?: number;
   /** Largura do chip em % do canvas (default 33%, "bottom-left" usa algo mais compacto). */
   widthPercent?: number;
+  /**
+   * Multiplicador do MIOLO do chip (avatar, tipografia, respiro, raio).
+   * Existe porque `widthPercent` só alarga a caixa: as medidas internas
+   * escalam por canvasWidth/1080, então aumentar a largura sozinha dava um
+   * chip comprido com o mesmo avatar miúdo dentro.
+   */
+  scale?: number;
+  /**
+   * Topo do chip em fração da altura (0..1), sobrepondo a vertical do
+   * `position`. Serve pra ancorar o chip logo ABAIXO do texto numa página
+   * onde o texto não vai até o rodapé — o caso da contra-capa.
+   */
+  topFrac?: number;
+}
+
+/** Chip da contra-capa: 35% maior que o de rodapé e centralizado. Os
+ * números vivem aqui pra arte final e preview não divergirem. */
+export const CLOSING_CHIP_SCALE = 1.35;
+export const CLOSING_CHIP_WIDTH_PERCENT = 0.42;
+/** Respiro entre a base do texto e o topo do chip, em fração da altura. */
+const CLOSING_CHIP_GAP_FRAC = 0.055;
+/** Ponto a partir do qual ancorar abaixo do texto empurraria o chip pra
+ * fora — daí em diante ele volta pro rodapé. */
+const CLOSING_CHIP_MAX_TOP_FRAC = 0.8;
+
+/**
+ * Posição do chip na contra-capa a partir de onde o texto termina
+ * (`lowestTextBottomFrac`, medido pelo motor de template). Texto curto:
+ * chip logo abaixo dele. Texto longo — ou sem texto medível: chip no
+ * rodapé, que é o único lugar onde ele nunca colide.
+ */
+export function closingChipPlacement(textBottomFrac: number | null): ChipOptions {
+  const base = {
+    position: "bottom-center" as const,
+    widthPercent: CLOSING_CHIP_WIDTH_PERCENT,
+    scale: CLOSING_CHIP_SCALE,
+  };
+  if (textBottomFrac == null) return base;
+  const topFrac = textBottomFrac + CLOSING_CHIP_GAP_FRAC;
+  return topFrac > CLOSING_CHIP_MAX_TOP_FRAC ? base : { ...base, topFrac };
 }
 
 /**
@@ -119,11 +159,14 @@ export function buildProfileChipSvg(
   opts: ChipOptions = {}
 ): ChipMarkup {
   const position = opts.position ?? "top-center";
-  const s = canvasWidth / 1080; // fator de escala
+  // `s` é escala do CANVAS (arte 1080 vs. preview menor); `k` é a escala
+  // pedida pro chip. Separados de propósito: mudar o tamanho do chip não
+  // pode depender do tamanho do quadro em que ele é desenhado.
+  const s = (canvasWidth / 1080) * (opts.scale ?? 1);
   const canvasHeight = opts.canvasHeight ?? Math.round(canvasWidth * 1.25);
 
   const chipW = Math.round(canvasWidth * (opts.widthPercent ?? 0.33));
-  const margin = Math.round(60 * s);
+  const margin = Math.round(60 * (canvasWidth / 1080));
 
   // Medidas internas (px @1080, escalonadas)
   const pad = Math.round(14 * s);
@@ -139,7 +182,12 @@ export function buildProfileChipSvg(
 
   const chipH = pad * 2 + avatarSize;
   const chipX = position === "bottom-left" ? margin : Math.round((canvasWidth - chipW) / 2);
-  const chipY = position === "bottom-left" ? canvasHeight - margin - chipH : Math.round(48 * s);
+  const chipYBase =
+    position === "bottom-left" || position === "bottom-center"
+      ? canvasHeight - margin - chipH
+      : Math.round(48 * s);
+  const chipY =
+    opts.topFrac != null ? Math.round(canvasHeight * opts.topFrac) : chipYBase;
 
   const rawName = profile.displayName || "Seu Perfil";
   const rawHandle = `@${profile.handle}`;

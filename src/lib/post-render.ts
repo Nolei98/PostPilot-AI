@@ -14,6 +14,7 @@
 // ============================================================
 import { createAdminClient } from "@/lib/supabase/admin";
 import { applyBackground } from "@/lib/render-spec";
+import { swipeHintFor } from "@/lib/render-shared";
 import type { CardLayoutOverride, RenderSpec, Surface, TemplateSpec } from "@/lib/types";
 
 const BUCKET = "post-images";
@@ -114,6 +115,39 @@ export async function renderSinglePost(
 // Carrossel
 // ------------------------------------------------------------
 
+/**
+ * Cola o chip de perfil (avatar + @handle) na contra-capa, CENTRALIZADO e
+ * logo abaixo do texto. A altura vem de `lowestTextBottomFrac` — medida
+ * real do bloco de texto da spec, não uma fração fixa: título de 2 linhas
+ * e de 5 ancoram em lugares diferentes, e um valor chutado colidiria com
+ * o segundo. Sem texto medível, cai no rodapé.
+ */
+async function withClosingChip(
+  png: Buffer,
+  kind: PageKind,
+  profile: RenderSpec["profile"],
+  brand: RenderSpec["cardBrand"],
+  spec: TemplateSpec,
+  content: Parameters<typeof import("@/lib/template-render").lowestTextBottomFrac>[2]
+): Promise<Buffer> {
+  // Sem checar showProfileChip: a contra-capa SEMPRE assina, em qualquer
+  // layout. A flag governa a capa/página 1, onde o chip é opcional porque
+  // o Instagram já mostra o perfil por cima do post — no fim do carrossel
+  // não há essa moldura, então a assinatura é o que identifica quem
+  // escreveu. É o que carousel-render.ts já fazia no caminho sem template.
+  if (kind !== "closing" || !profile) return png;
+  const sharp = (await import("sharp")).default;
+  const { buildProfileChipLayers } = await import("@/lib/profile-chip");
+  const { CARD_W, CARD_H } = await import("@/lib/render-shared");
+  const { lowestTextBottomFrac } = await import("@/lib/template-render");
+  const { closingChipPlacement } = await import("@/lib/profile-chip");
+  const layers = await buildProfileChipLayers(profile, CARD_W, brand.fontFamily, {
+    canvasHeight: CARD_H,
+    ...closingChipPlacement(lowestTextBottomFrac(spec, brand, content, CARD_W, CARD_H)),
+  });
+  return sharp(png).composite(layers).png().toBuffer();
+}
+
 /** Superfície do Template Studio correspondente à posição do card. */
 function surfaceForCard(idx: number, total: number): Surface {
   if (idx === 0) return "cover_image";
@@ -183,14 +217,24 @@ export async function renderCarouselPost(
     try {
       let url: string;
       if (chosen) {
-        const png = await renderTemplateCardPng(
-          chosen,
-          cardBrand,
-          { headline: card.headline ?? undefined, body: card.body ?? undefined },
-          bg,
-          { showLabel: override.showLabel, textColor: override.textColor }
-        );
-        url = await upload(`${postId}-card-${card.idx}.png`, png, "image/png");
+        const content = {
+          headline: card.headline ?? undefined,
+          body: card.body ?? undefined,
+          // Convite a deslizar SÓ na capa e SÓ quando existe página
+          // seguinte — mesma regra do motor sem template (image.ts).
+          cta: kind === "cover" && total > 1 ? swipeHintFor(cardBrand.layoutPreset) : undefined,
+        };
+        const png = await renderTemplateCardPng(chosen, cardBrand, content, bg, {
+          showLabel: override.showLabel,
+          textColor: override.textColor,
+        });
+        // Chip de perfil no FECHAMENTO — vale em qualquer layout, com ou
+        // sem modelo do Template Studio. O caminho sem template já fazia
+        // isso (carousel-render.ts) e o preview desenha o chip sempre
+        // (post-preview.ts), então a contra-capa COM modelo saía sem chip
+        // e a prévia prometia o que a arte final não entregava.
+        const comChip = await withClosingChip(png, kind, spec.profile, cardBrand, chosen, content);
+        url = await upload(`${postId}-card-${card.idx}.png`, comChip, "image/png");
       } else {
         url = await renderAndUploadCard(
           postId,

@@ -129,7 +129,9 @@ export const coverTagPreset: TemplateSpec = {
       anchor: "bottom-right",
       offset: { x: 0.91, y: 0.9 },
       size: { fontSize: 24 },
-      style: { weight: 600, tracking: 0.12, color: "accent" },
+      // "auto" pelo mesmo motivo do lastFechamentoPreset: convite a
+      // deslizar precisa ser LIDO, então segue o contraste da foto.
+      style: { weight: 600, tracking: 0.12, color: "auto" },
       bind: "content.cta",
       z: 3,
     },
@@ -399,7 +401,10 @@ export const lastFechamentoPreset: TemplateSpec = {
       anchor: "bottom-center",
       offset: { x: 0.5, y: 0.86 },
       size: { fontSize: 30 },
-      style: { weight: 600, tracking: 0.14, color: "accent" },
+      // "auto", não "accent": o CTA é texto de leitura, não assinatura de
+      // marca. Na cor de destaque ele sumia sobre foto escura/clara —
+      // "auto" resolve pela luminância medida da banda (contrast.ts).
+      style: { weight: 600, tracking: 0.14, color: "auto" },
       bind: "content.cta",
       z: 3,
     },

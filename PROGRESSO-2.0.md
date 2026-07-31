@@ -5,7 +5,7 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga não recebe mais commits.
-**Última atualização:** 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Última atualização:** 2026-07-31 — **contra-capa**: o convite a deslizar sai (vinha de um texto embutido no fallback do `content.cta`), o chip de perfil passa a valer em qualquer layout e ancora na medida real do texto, 35% maior — ver §0-J. **Nenhuma migration nova**; 2 presets de sistema atualizados na tabela `templates`. Antes: 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
 ### Bloqueio ENCERRADO em 29/07: Pollinations.ai exigia pagamento pra requests multi-mensagem
 > ✅ Resolvido trocando os dois clientes afetados pra `gemini` (ver §0-C.6).
@@ -28,6 +28,95 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0-J. Sessão 2026-07-31 — contra-capa: convite a deslizar removido, chip sempre presente e ancorado no texto
+
+Começou como investigação de "gera 1 post e acaba" e terminou em três
+defeitos de arte da contra-capa. **Nenhuma migration nova.** Duas linhas da
+tabela `templates` (presets de sistema) foram atualizadas.
+
+### 0-J.1 "Gera 1 post e acaba" era leitura da tela, não defeito
+
+Diagnóstico pelos números de produção, nesta ordem: triagem (1155 notícias
+em 7 dias, 168 candidatas — não era gargalo), cota (conta é `pro` com
+`unlimited: true` — nunca bloqueia), geração por dia. O buraco apareceu em
+**30/07: 63 candidatas, 0 posts** — que é a pausa deliberada de §0-F.1
+(`auto_generate=false` nos 6 clientes durante a auditoria). Julho fechou com
+**491 posts**, 18 em `pending_approval`.
+
+**Por que registrar:** a próxima vez que a fila parecer parada, a ordem de
+checagem é essa — e `scan_runs` NÃO serve pra isso, porque só grava scan
+manual (`scan-news.ts:47`), não o cron.
+
+**Achado lateral não corrigido:** `getMonthlyQuota` (`subscription.ts:68`)
+conta todo post criado no mês, **inclusive descartado**. Cliente que descarta
+10 e aprova 2 queima 12 da cota. Invisível hoje (a única conta é
+`unlimited`), vira problema no primeiro pagante. Decidir se descarte devolve
+cota antes de vender.
+
+### 0-J.2 A contra-capa pedia pra deslizar pro nada
+
+`template-render.ts` resolvia `content.cta` com um texto embutido no
+fallback: `content.cta ?? "DESLIZE PARA VER →"`. O template **Fechamento**
+tem elemento `cta`, e nem `post-render.ts` nem `post-preview.ts` passavam
+valor — então o fim do carrossel convidava a deslizar pra uma página que não
+existe.
+
+Corrigido tirando o texto do fallback (`?? ""`) e passando `cta`
+explicitamente de quem sabe a posição da página: só capa, e só com
+`total > 1`. É a mesma regra que o motor sem template já aplicava
+(`image.ts:1193`). A frase vem de `swipeHintFor(preset)` novo em
+`render-shared.ts`, pra cada preset manter o próprio tom.
+
+**Por que não bastou trocar a cor:** a primeira leitura foi de que o convite
+estava na cor do wordmark. Estava mesmo (`color: "accent"` nos presets
+**Fechamento** e **Tag**, corrigido pra `"auto"`), mas o elemento não devia
+existir naquela página — cor certa num texto que não deveria estar ali
+continua errado.
+
+### 0-J.3 Chip da contra-capa: sempre, maior, e ancorado no texto
+
+Três decisões, nesta ordem:
+
+1. **Sempre.** O chip só era desenhado no caminho SEM template
+   (`carousel-render.ts:792`). Com modelo do Template Studio a contra-capa
+   saía sem assinatura — e o preview desenhava mesmo assim, então a prévia
+   prometia o que a arte não entregava. `withClosingChip` em
+   `post-render.ts` fecha isso.
+2. **Sem consultar `show_profile_chip`.** A flag vale pra capa, onde o chip é
+   opcional porque o Instagram já mostra o perfil por cima do post. No fim do
+   carrossel não há essa moldura: a assinatura é o que identifica quem
+   escreveu. `carousel-render.ts` já ignorava a flag ali; o preview não —
+   agora os três concordam.
+3. **Ancorado na medida real do texto, não numa fração fixa.** `topFrac: 0.58`
+   funcionava no título curto e encostava no texto num título de 5 linhas —
+   defeito que só apareceria em produção. `lowestTextBottomFrac`
+   (`template-render.ts`) mede o bloco com a MESMA quebra de linha do
+   desenho, e `closingChipPlacement` (`profile-chip.ts`) devolve a posição:
+   abaixo do texto quando cabe, rodapé quando não cabe.
+
+A medição foi extraída pra `measureTextElement`, usada tanto pelo desenho
+quanto pela medida — duas implementações da mesma quebra de linha sairiam de
+sincronia na primeira mudança de tipografia.
+
+Tamanho: `scale` novo no chip (35% maior no fechamento). `widthPercent`
+sozinho não servia — as medidas internas escalam por `canvasWidth/1080`, então
+alargar a caixa dava um chip comprido com o mesmo avatar miúdo dentro.
+
+Coberto por `src/lib/closing-chip.test.ts` (6 casos: desce com o título, nunca
+ancora em cima do texto, cai no rodapé no título longo e sem texto, cabe no
+quadro, é maior que o de rodapé).
+
+### 0-J.4 Banco
+
+Presets de sistema **Fechamento** (`carousel_last`) e **Tag**
+(`cover_image`) tiveram `style.color` do elemento `cta` trocado de `accent`
+pra `auto`. Conferência pós-update: 0 templates com `cta` em `accent`.
+`template-presets.ts` corrigido junto, pra template novo nascer certo.
+
+Posts já renderizados mantêm a arte antiga — só re-render pega o ajuste.
 
 ---
 

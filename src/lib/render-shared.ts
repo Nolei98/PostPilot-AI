@@ -194,6 +194,13 @@ export function videoIdentityFor(
   return { ...base, display: { ...font, letterSpacing } };
 }
 
+/** Convite a deslizar no TOM do preset — o mesmo texto que o motor sem
+ * template desenha na capa. Existe separado de `videoIdentityFor` porque o
+ * motor de template só precisa da frase, não da tipografia inteira. */
+export function swipeHintFor(preset: LayoutPreset | undefined): string {
+  return PRESET_VIDEO_IDENTITY[preset ?? "editorial-noir"].swipeHint;
+}
+
 /** Variação de conteúdo da PÁGINA 1 do post único (kit v2 §3) — ortogonal
  * ao layoutPreset (que decide a tipografia/estrutura). "cover" = estilo
  * capa do carrossel (wordmark + título display). "centered" = fonte no

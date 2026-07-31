@@ -18,7 +18,7 @@
 // SVG desses mesmos builders no browser (previews de Ajustes).
 // ============================================================
 import { luminanceOfRegion, pickTheme, textColorForTheme, overlayAlphaFor } from "@/lib/contrast";
-import { buildProfileChipSvg } from "@/lib/profile-chip";
+import { buildProfileChipSvg, closingChipPlacement, type ChipOptions } from "@/lib/profile-chip";
 import { buildPageOneCoverSvg, buildClosingCoverSvg, buildWatermarkSvg } from "@/lib/cover-svg";
 import { buildCardSvgPlan, CARD_W, CARD_H } from "@/lib/carousel-render";
 import { applyBackground } from "@/lib/render-spec";
@@ -28,7 +28,8 @@ import {
   buildFeedVideoOverlaySvg,
   buildReelsVideoOverlaySvg,
 } from "@/lib/image";
-import { renderFromSpec } from "@/lib/template-render";
+import { renderFromSpec, lowestTextBottomFrac } from "@/lib/template-render";
+import { swipeHintFor } from "@/lib/render-shared";
 import type { LumGrid } from "@/lib/contrast";
 import type {
   CardLayoutOverride,
@@ -193,16 +194,25 @@ function topOverlayFor(
   return { theme: band.theme, alpha: overlayAlphaFor(band.theme, band.textColor, topLuminance) };
 }
 
-/** Chip + marca d'água, as duas sobreposições que independem do layout. */
-function overlaysFor(spec: RenderSpec, canvas: { w: number; h: number }, position: "top-center" | "bottom-left") {
+/** Chip + marca d'água, as duas sobreposições que independem do layout.
+ * `chipPlacement` chega pronto da contra-capa (chip maior, ancorado abaixo
+ * do texto); nas outras páginas o chip segue a posição simples. */
+function overlaysFor(
+  spec: RenderSpec,
+  canvas: { w: number; h: number },
+  position: "top-center" | "bottom-left",
+  chipPlacement?: ChipOptions
+) {
   const parts: string[] = [];
   const layers: PreviewLayer[] = [];
 
   if (spec.profile.showProfileChip) {
     const chip = buildProfileChipSvg(spec.profile, canvas.w, spec.brandTemplate.fontFamily, {
-      position,
       canvasHeight: canvas.h,
-      widthPercent: position === "bottom-left" ? 0.3 : 0.33,
+      ...(chipPlacement ?? {
+        position,
+        widthPercent: position === "bottom-left" ? 0.3 : 0.33,
+      }),
     });
     parts.push(chip.svg);
     if (chip.avatar && spec.profile.avatarUrl) {
@@ -322,16 +332,33 @@ async function buildCard(
   let svg: string;
   let blurBandTop: number | null = null;
 
+  // Onde o chip da contra-capa ancora. Só o motor de spec sabe medir o
+  // texto; sem template a posição vem do próprio builder do layout.
+  let chipPlacement: ChipOptions | undefined;
+
   if (chosen) {
     // Motor de spec: mede a imagem INTEIRA — renderTemplateCardPng faz
     // exatamente isso, não tem banda de identidade separada.
     const whole = contrastFor(grid, { top: 0, height: canvas.h }, canvas);
     const theme = forced ? (forced === "light" ? "dark" : "light") : whole.theme;
     const textColor = forced ? (forced === "light" ? "#FFFFFF" : "#111111") : whole.textColor;
+    const specToDraw = override.showLabel === false ? hideMarks(chosen) : chosen;
+    const content = {
+      headline: card.headline ?? undefined,
+      body: card.body ?? undefined,
+      // Mesma regra do post-render: só a capa com página seguinte
+      // convida a deslizar. Prévia e arte final precisam bater.
+      cta: pageKind === "cover" && total > 1 ? swipeHintFor(cardBrand.layoutPreset) : undefined,
+    };
+    if (isClosing) {
+      chipPlacement = closingChipPlacement(
+        lowestTextBottomFrac(specToDraw, cardBrand, content, canvas.w, canvas.h)
+      );
+    }
     svg = renderFromSpec(
-      override.showLabel === false ? hideMarks(chosen) : chosen,
+      specToDraw,
       { ...cardBrand, colorText: textColor },
-      { headline: card.headline ?? undefined, body: card.body ?? undefined },
+      content,
       undefined,
       photoUrl
         ? {
@@ -358,10 +385,13 @@ async function buildCard(
   if (photoUrl && blurBandTop != null) layers.push(blurLayer(blurBandTop, canvas.h));
 
   const extra = overlaysFor(
-    // chip só no fechamento (renderAndUploadCard faz o mesmo)
-    { ...spec, profile: { ...spec.profile, showProfileChip: spec.profile.showProfileChip && isClosing } },
+    // Chip só no fechamento — e LÁ sempre, sem consultar showProfileChip:
+    // a contra-capa assina em qualquer layout (mesma regra de
+    // post-render.ts e carousel-render.ts). A flag vale pra capa.
+    { ...spec, profile: { ...spec.profile, showProfileChip: isClosing } },
     canvas,
-    "bottom-left"
+    "bottom-left",
+    chipPlacement
   );
   layers.push(...extra.layers);
   return { svg: fill(stack(canvas, svg, ...extra.parts)), layers, aspect: "1080 / 1350" };

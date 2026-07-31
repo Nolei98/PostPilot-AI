@@ -85,7 +85,13 @@ function resolveText(
   const bind = el.bind ?? "";
   if (bind === "content.headline") return content.headline ?? "";
   if (bind === "content.body") return content.body ?? "";
-  if (bind === "content.cta") return content.cta ?? "DESLIZE PARA VER →";
+  // Sem texto fixo no fallback: quem sabe se a página convida a deslizar é
+  // o CHAMADOR (só a capa de um carrossel com página seguinte convida). O
+  // default "DESLIZE PARA VER →" que morava aqui vazava pro FECHAMENTO —
+  // o template dele tem elemento cta, e post-render/post-preview nunca
+  // mandam `cta`, então o fim do carrossel pedia pra deslizar pra lugar
+  // nenhum.
+  if (bind === "content.cta") return content.cta ?? "";
   if (bind === "brand.wordmark") return (brand.wordmark || brand.brandName || "").toUpperCase();
   if (bind === "brand.handle") return brand.handle ? `@${brand.handle}` : "";
   if (bind === "brand.name") return brand.brandName ?? "";
@@ -99,6 +105,80 @@ function tspans(lines: string[], x: number, startY: number, lineH: number): stri
     .join("");
 }
 
+/** Tipos que `renderTextElement` desenha — mesma lista do switch de
+ * `renderFromSpec`, extraída pra medição e desenho nunca discordarem
+ * sobre o que é texto. */
+const TEXT_ELEMENT_TYPES: TemplateElementType[] = [
+  "headline",
+  "body",
+  "cta",
+  "handleLabel",
+  "wordmark",
+];
+
+/** Geometria de um elemento de texto já quebrado em linhas. `baselineLast`
+ * é a baseline da ÚLTIMA linha — é o que permite ancorar algo logo abaixo
+ * do bloco (o chip da contra-capa) sem chutar uma fração fixa da altura. */
+interface TextBlockMetrics {
+  text: string;
+  x: number;
+  y: number;
+  lineH: number;
+  fontSize: number;
+  lines: string[];
+  baselineLast: number;
+}
+
+/** Mede um elemento de texto SEM desenhar. Uma conta só, usada tanto pelo
+ * desenho quanto por quem precisa saber onde o bloco termina — duas
+ * implementações da mesma quebra de linha sairiam de sincronia na primeira
+ * mudança de tipografia. */
+function measureTextElement(
+  el: TemplateElement,
+  brand: CardBrand,
+  content: TemplateContent,
+  W: number,
+  H: number
+): TextBlockMetrics | null {
+  const raw = resolveText(el, brand, content);
+  if (!raw) return null;
+  const text = el.style?.case === "upper" ? raw.toUpperCase() : raw;
+  const x = Math.round((el.offset?.x ?? 0.5) * W);
+  const y = Math.round((el.offset?.y ?? 0.5) * H);
+  const fontSize = el.size?.fontSize ?? 40;
+  const maxWidth = (el.size?.maxWidth ?? 0.84) * W;
+  const maxChars = Math.max(6, Math.floor(maxWidth / (fontSize * 0.56)));
+  const lineH = Math.round(fontSize * (el.style?.lineHeight ?? 1.15));
+  const lines = wrapText(text, maxChars).slice(0, 6);
+  return { text, x, y, lineH, fontSize, lines, baselineLast: y + (lines.length - 1) * lineH };
+}
+
+/**
+ * Onde termina o texto mais BAIXO da spec, em fração da altura (0..1).
+ * `null` quando a spec não desenha texto nenhum. Serve pra ancorar o chip
+ * de perfil logo abaixo do conteúdo da contra-capa: título de 2 linhas ou
+ * de 5, o chip acompanha em vez de colidir.
+ */
+export function lowestTextBottomFrac(
+  spec: TemplateSpec,
+  brand: CardBrand,
+  content: TemplateContent,
+  W = 1080,
+  H = 1350
+): number | null {
+  let lowest: number | null = null;
+  for (const el of spec.elements) {
+    if (el.visible === false) continue;
+    if (!TEXT_ELEMENT_TYPES.includes(el.type)) continue;
+    const m = measureTextElement(el, brand, content, W, H);
+    if (!m) continue;
+    // baseline + descida da última linha ≈ base visual do bloco.
+    const bottom = m.baselineLast + m.fontSize * 0.24;
+    if (lowest == null || bottom > lowest) lowest = bottom;
+  }
+  return lowest == null ? null : lowest / H;
+}
+
 /** Desenha um elemento de texto (headline/body/handleLabel/wordmark/cta). */
 function renderTextElement(
   el: TemplateElement,
@@ -108,16 +188,9 @@ function renderTextElement(
   H: number,
   legibility?: LegibilityResult
 ): string {
-  const raw = resolveText(el, brand, content);
-  if (!raw) return "";
-  const text = el.style?.case === "upper" ? raw.toUpperCase() : raw;
-  const x = Math.round((el.offset?.x ?? 0.5) * W);
-  const y = Math.round((el.offset?.y ?? 0.5) * H);
-  const fontSize = el.size?.fontSize ?? 40;
-  const maxWidth = (el.size?.maxWidth ?? 0.84) * W;
-  const maxChars = Math.max(6, Math.floor(maxWidth / (fontSize * 0.56)));
-  const lineH = Math.round(fontSize * (el.style?.lineHeight ?? 1.15));
-  const lines = wrapText(text, maxChars).slice(0, 6);
+  const m = measureTextElement(el, brand, content, W, H);
+  if (!m) return "";
+  const { x, y, lineH, fontSize, lines } = m;
   const family = el.style?.font === "heading" ? brand.fontFamily : brand.fontFamily;
   const color = resolveColor(el.style?.color, brand, legibility, isMarkElement(el.type));
   const anchor = textAnchor(el.anchor);
