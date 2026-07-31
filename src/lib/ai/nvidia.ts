@@ -56,10 +56,22 @@ export function nvidiaFallbackModel(): string {
 export async function nvidiaChatJson(
   systemPrompt: string,
   userPrompt: string,
-  opts: { maxTokens?: number; temperature?: number } = {}
+  opts: {
+    maxTokens?: number;
+    temperature?: number;
+    /**
+     * Começa pelo modelo RÁPIDO em vez do melhor.
+     *
+     * Existe pro que roda dentro de uma requisição do usuário, e não num
+     * job: o modelo padrão levou 21s num teste real (e ainda caiu em 529),
+     * o que estoura o teto da função serverless e o usuário recebe erro.
+     * Job do Inngest tem folga e continua no padrão.
+     */
+    preferirRapido?: boolean;
+  } = {}
 ): Promise<string> {
-  const principal = nvidiaModel();
-  const reserva = nvidiaFallbackModel();
+  const principal = opts.preferirRapido ? nvidiaFallbackModel() : nvidiaModel();
+  const reserva = opts.preferirRapido ? nvidiaModel() : nvidiaFallbackModel();
   try {
     return await chamar(principal, systemPrompt, userPrompt, opts);
   } catch (err) {

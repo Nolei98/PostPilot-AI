@@ -198,7 +198,11 @@ async function nvidiaBrief(input: RemixInput): Promise<RemixBrief> {
   const raw = await nvidiaChatJson(
     buildSystemPrompt(languageName(input.language ?? "pt-BR"), input.niche),
     `${userPrompt(input)}\n\nResponda APENAS com o JSON do brief.`,
-    { maxTokens: 1200 }
+    // Rápido primeiro: este brief roda DENTRO do clique do usuário, não
+    // num job. Com o modelo padrão levou 21s em teste real e a função
+    // serverless cortou antes — o usuário via "não foi possível gerar".
+    // O texto aqui é curto e estruturado; o modelo pequeno dá conta.
+    { maxTokens: 1200, preferirRapido: true }
   );
   return JSON.parse(raw) as RemixBrief;
 }

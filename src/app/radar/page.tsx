@@ -12,6 +12,13 @@ import { RadarScanButton } from "@/components/RadarScanButton";
 import { RemixBriefPanel } from "@/components/RemixBriefPanel";
 
 export const dynamic = "force-dynamic";
+/**
+ * O brief de remix chama a IA dentro da requisição do usuário. O teto
+ * padrão da função (10s) cortava a resposta e a tela mostrava "não foi
+ * possível gerar" mesmo com o provider funcionando. 60s é o máximo do
+ * plano atual e cobre o caso lento com folga.
+ */
+export const maxDuration = 60;
 
 interface ViralReference {
   id: string;
