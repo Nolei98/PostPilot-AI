@@ -2,6 +2,7 @@
 // /pricing — página de planos. Mostra o plano atual do usuário,
 // uso do mês e os 3 cards com checkout via Stripe.
 // ============================================================
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getMonthlyQuota } from "@/lib/subscription";
 import { AppShell } from "@/components/ui/AppShell";
@@ -23,17 +24,11 @@ export default async function PricingPage() {
 
   const pct = Math.min(100, Math.round((quota.used / quota.limit) * 100));
 
-  const shell = await getShellData();
-
-  return (
-    <AppShell
-      readyCount={shell.readyCount}
-      brandName={shell.brandName}
-      logoUrl={shell.logoUrl}
-      clients={shell.clients}
-      activeClientId={shell.activeClientId}
-    >
-      <div className="mx-auto max-w-4xl">
+  // Visitante DESLOGADO vê a mesma página sem a casca do app (auditoria
+  // §2.7): a sidebar depende de cliente ativo, que não existe sem conta.
+  // O miolo é o mesmo — preço é preço, logado ou não.
+  const conteudo = (
+      <div className="mx-auto max-w-4xl px-4 py-10">
         <div className="mb-8 text-center">
           <h1 className="text-display">Um social media custa R$1.500/mês.</h1>
           <p className="mt-1 text-body text-muted">
@@ -73,7 +68,32 @@ export default async function PricingPage() {
           Cancele quando quiser direto no painel — o acesso vale até o fim do
           período pago. Sem fidelidade, sem multa.
         </p>
+
+        {!user && (
+          <p className="mt-6 text-center text-body">
+            <Link
+              href="/login"
+              className="rounded-control bg-primary px-5 py-2.5 font-medium text-white transition-opacity hover:opacity-90"
+            >
+              Comece grátis
+            </Link>
+          </p>
+        )}
       </div>
+  );
+
+  if (!user) return conteudo;
+
+  const shell = await getShellData();
+  return (
+    <AppShell
+      readyCount={shell.readyCount}
+      brandName={shell.brandName}
+      logoUrl={shell.logoUrl}
+      clients={shell.clients}
+      activeClientId={shell.activeClientId}
+    >
+      {conteudo}
     </AppShell>
   );
 }

@@ -43,12 +43,27 @@ export async function middleware(request: NextRequest) {
     (p) => request.nextUrl.pathname.startsWith(p)
   );
 
+  // /pricing aberta (auditoria §2.7): é a página de conversão. Exigir
+  // conta pra ver preço perde justamente quem chegou pela landing e ainda
+  // está decidindo.
+  const isPricingPage = request.nextUrl.pathname.startsWith("/pricing");
+
+  // Rota de API sem sessão responde 401, não redirect (auditoria §2.8):
+  // nenhum cliente HTTP entende um 307 pro /login como "não autenticado",
+  // e o fetch do browser seguia o redirect e tentava parsear HTML como
+  // JSON.
+  const isApiRoute = request.nextUrl.pathname.startsWith("/api/");
+  if (!user && isApiRoute) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   // Sem sessão e fora das rotas públicas → manda para o login
-  if (!user && !isLoginPage && !isRootPage && !isLegalPage) {
+  if (!user && !isLoginPage && !isRootPage && !isLegalPage && !isPricingPage) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Já logado e tentando abrir /login ou a landing page (/) → manda para /fila
+  // Já logado e tentando abrir /login ou a landing page (/) → manda para /fila.
+  // /pricing NÃO entra aqui: quem já tem conta precisa dela pra fazer upgrade.
   if (user && (isLoginPage || isRootPage)) {
     return NextResponse.redirect(new URL("/fila", request.url));
   }
