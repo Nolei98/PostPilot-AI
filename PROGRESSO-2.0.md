@@ -174,6 +174,41 @@ depois das tentativas grava `video_status='error'` + `video_error`. Cobre
 o roteiro, o dispatch e o que vier depois — melhor que empilhar
 `try/catch` por step.
 
+### 0-H.10 Legenda no lugar certo + título do Reels opcional (migration 050)
+
+O rodapé do quadro estava disputado por três coisas: a legenda queimada
+(90px da base), a MARCA que o `renderVideoPost` carimba na aprovação
+(última linha em `REELS_H-220`) e a UI do Instagram (~220px). A legenda
+perdia pras duas outras.
+
+`CAPTION_SAFE_BOTTOM = 780` tira a legenda de lá. Dois efeitos que só
+apareceram ao olhar o frame:
+
+- O véu era preso na BASE do quadro — escurecia justamente onde a marca
+  entra depois, dois véus empilhados. Virou faixa em volta do texto.
+- Solto da âncora preta, o véu passou a usar a cor amostrada CRUA: num
+  b-roll claro isso devolve cinza-claro, e a banda ficava mais clara que
+  o texto branco. Ilegível pelo caminho oposto ao que o véu existe pra
+  resolver. Agora a cor entra escurecida (fator 0.4).
+
+`captionGeometry` virou conta única pro desenho e pra amostragem — quando
+eram duas, véu e texto podiam cair em lugares diferentes.
+
+**Título do Reels virou decisão do post (migration 050, aplicada em
+produção em 30/07).** `video_title_mode`: `on` (padrão, o de sempre) ou
+`off` (vídeo limpo, sem texto do render por cima) — pra quando o vídeo já
+traz texto próprio. Botão no card da fila; a prévia respeita a escolha,
+senão seria mais um "salvei e não mudou nada" (§0-E.5). Não vale pro feed
+4:5: lá o texto mora em faixa própria, fora da moldura.
+
+> ⚠️ **Armadilha de operação:** depois de mudar código de render, o job
+> rodou com a versão ANTIGA. O `npm run dev` reinicia, mas o cache do
+> `.next` serviu o chunk velho pro `/api/inngest` — o vídeo saiu com a
+> geometria antiga e parecia que a correção não tinha funcionado. O
+> standalone (`scripts/test-video-generated.ts`, que compila na hora)
+> mostrava o certo. Diagnóstico: comparar os dois. Cura: `rm -rf .next`
+> antes de subir o dev.
+
 ### 0-H.6 Pendências
 
 - ✅ **Migration 049 aplicada no Supabase de produção em 30/07** —

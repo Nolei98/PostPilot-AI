@@ -79,7 +79,7 @@ foi possível iniciar a varredura".
 ### 5. Testes
 
 ```bash
-npm test          # 491 testes: unitários + RLS/uniqueness (pglite) — mock, sem chave, $0
+npm test          # 495 testes: unitários + RLS/uniqueness (pglite) — mock, sem chave, $0
 npm run test:e2e  # 3 e2e (Playwright) — LOCAL only: cria e apaga usuário no Supabase real
 npx tsc --noEmit  # typecheck
 npm run lint
@@ -145,7 +145,7 @@ de verdade. Ver `ESTADO-DO-PROJETO.md` §7.2.
 ## Estrutura
 
 ```
-supabase/migrations/       # 001–049, todas aplicadas em produção
+supabase/migrations/       # 001–050, todas aplicadas em produção
 src/middleware.ts          # guard de sessão; define as rotas públicas
 src/lib/plans.ts           # limites de plano — fonte única da verdade
 src/lib/ai/                # triagem, geração, carrossel, roteiro de vídeo, embedding
