@@ -139,6 +139,28 @@ escala linear.
 Palavra-chave curta demais (`IA`, `AI`) é descartada em `topicsForClient` —
 duas letras num índice anglófono devolvem ruído.
 
+### 0-M.14 Fundos existentes regerados + Sprint G criada
+
+**Regeneração:** 117 carrosséis não publicados, 787 cards, **670 fundos
+trocados** pelo gerado, com `bg_luminance` recalculada. Capa preservada
+(foto da notícia) e post publicado intocado — a arte dele já foi pro
+Instagram. Sobraram 4 cards em stock, todos de publicados: bate com o
+escopo.
+
+**Decisão de formato, tomada antes de gravar:** medido que o mesmo fundo
+pesa ~135KB em PNG e ~16KB em JPEG. Nos 670 cards é 94MB contra 11MB, e o
+plano gratuito do Supabase dá 1GB. Fundo não tem canal alfa e gradiente é o
+conteúdo em que o JPEG não deixa artefato visível — trocado antes do
+carregamento em massa, não depois.
+
+**Sprint G** (`docs/SPRINT-AJUSTES.md`): auditoria da tela de Ajustes.
+Inventário feito, com o critério de três perguntas (chega no produto?
+funciona hoje? é decisão do usuário?). O achado principal é que **produção
+não tem `ANTHROPIC_API_KEY`, `FAL_KEY` nem `POLLINATIONS_API_KEY`**, mas a
+tela oferece Claude, Fal e Pollinations como opção — e a Pollinations já
+parou a fila calada por dias em julho. Nada removido: quatro decisões
+foram devolvidas ao usuário.
+
 ### 0-M.13 Fundo dos cards passa a ser GERADO, não foto de banco
 
 Relatado pelo João: os fundos dos cards estavam "estranhos". Não era
@@ -2192,6 +2214,14 @@ O que falta, separado por quem consegue fazer:
 - [ ] Viral Score normalizado por tamanho do perfil; extrair fórmula (gancho/estrutura)
       → alimenta `generate-*` para gerar **original** no nicho do cliente.
 - **Aceite:** dado um @, retorna top referências com score + brief de remix.
+
+### 4.55 SPRINT G — Auditoria da tela de Ajustes (pedida em 2026-07-31)
+> Inventário, evidência e propostas em [`docs/SPRINT-AJUSTES.md`](./docs/SPRINT-AJUSTES.md).
+> **Nada removido ainda** — depende de 4 respostas do usuário.
+- [ ] Passagem clicada em Ajustes, campo por campo, conferindo no banco que grava. Nunca foi feito de ponta a ponta.
+- [ ] Podar as opções de provider que **não funcionam em produção**: `ANTHROPIC_API_KEY`, `FAL_KEY` e `POLLINATIONS_API_KEY` não existem, mas a tela oferece Claude, Fal e Pollinations. A Pollinations já parou a fila calada por dias em julho (§0-C.6) — rótulo de aviso não bastou.
+- [ ] Decidir: Telegram (nunca confirmado em uso), `image_provider` com valor único vira padrão fixo, selo `ig_verified`, e se o Template Studio se paga ao lado do `layout_preset`.
+- **Aceite:** todo controle que fica na tela grava, chega no produto e funciona com as chaves que existem.
 
 ### 4.6 SPRINT F — Expor como ações do agente
 - [ ] Cada função Inngest vira ação chamável: `minerar_referencias`, `gerar_brief`,
