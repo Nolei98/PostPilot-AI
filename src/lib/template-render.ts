@@ -8,6 +8,7 @@
 // ============================================================
 import sharp from "sharp";
 import { wrapText, stripEmoji, type CardBrand } from "@/lib/carousel-render";
+import { fontFamilyFor, pesoMaisProximo } from "@/lib/template-fonts";
 import { brandLabelText } from "@/lib/carousel-render";
 import { rasterizeSvg } from "@/lib/svg-render";
 import {
@@ -201,10 +202,14 @@ function renderTextElement(
   const m = measureTextElement(el, brand, content, W, H);
   if (!m) return "";
   const { x, y, lineH, fontSize, lines } = m;
-  const family = el.style?.font === "heading" ? brand.fontFamily : brand.fontFamily;
+  const family = fontFamilyFor(el.style?.font, brand.fontFamily);
   const color = resolveColor(el.style?.color, brand, legibility, isMarkElement(el.type));
   const anchor = textAnchor(el.anchor);
-  const weight = el.style?.weight ?? 400;
+  // Encaixa no peso mais próximo que a família REALMENTE tem. Sem isto,
+  // um `weight: 437` (o editor deixava digitar qualquer número) fazia o
+  // resvg escolher outro arquivo de fonte e o texto saía com aparência
+  // errada — o "texto bugado" relatado no editor em 31/07.
+  const weight = pesoMaisProximo(el.style?.weight ?? 400, el.style?.font);
   const tracking = el.style?.tracking != null ? ` letter-spacing="${el.style.tracking * fontSize}"` : "";
   const opacity = el.style?.opacity != null ? ` fill-opacity="${el.style.opacity}"` : "";
 

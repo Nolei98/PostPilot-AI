@@ -13,6 +13,9 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
+// De template-fonts e NÃO de template-render: aquele importa `sharp`, que
+// não pode entrar no bundle do navegador.
+import { FONTES_DO_TEMPLATE, pesosDaFonte, pesoMaisProximo } from "@/lib/template-fonts";
 import type { Template, TemplateAnchor, TemplateElement, TemplateSpec } from "@/lib/types";
 
 const ANCHORS: TemplateAnchor[] = [
@@ -25,6 +28,29 @@ const fieldClasses =
   "w-full rounded-control border border-line bg-surface-2 px-2.5 py-2 text-caption text-content outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25";
 
 const TEXTLIKE_TYPES = new Set(["headline", "body", "cta", "handleLabel", "wordmark"]);
+
+/** Onde cada superfície aparece no produto — a prévia sozinha não conta. */
+const SUPERFICIE_LABEL: Record<string, string> = {
+  cover_image: "Capa do carrossel / post único",
+  carousel_page: "Cards do meio do carrossel",
+  carousel_last: "Contra-capa (última página)",
+  video_cover: "Capa do vídeo",
+};
+
+const SUPERFICIE_AJUDA: Record<string, string> = {
+  cover_image: "primeira imagem que aparece no feed",
+  carousel_page: "vale para todas as páginas do miolo",
+  carousel_last: "leva o chip de perfil e fecha o carrossel",
+  video_cover: "quadro de abertura do vídeo",
+};
+
+function proporcaoLegivel(canvas?: { w: number; h: number }): string {
+  const w = canvas?.w ?? 1080;
+  const h = canvas?.h ?? 1350;
+  const mdc = (a: number, b: number): number => (b === 0 ? a : mdc(b, a % b));
+  const d = mdc(w, h);
+  return `${w / d}:${h / d}`;
+}
 
 export function TemplateSpecEditor({ template }: { template: Template }) {
   const router = useRouter();
@@ -116,7 +142,22 @@ export function TemplateSpecEditor({ template }: { template: Template }) {
 
       {/* Prévia */}
       <div className="flex flex-col items-center gap-2">
-        <div className="relative aspect-[4/5] w-full max-w-sm overflow-hidden rounded-card bg-black">
+        {/* Onde este modelo é usado. Sem isso a pessoa abria o editor e não
+            tinha como saber se estava mexendo na capa, no miolo ou na
+            contra-capa — a prévia sozinha não diz. */}
+        <div className="w-full max-w-sm rounded-card bg-surface-2 px-3 py-2">
+          <p className="text-caption font-semibold text-content">
+            {SUPERFICIE_LABEL[spec.surface] ?? spec.surface}
+          </p>
+          <p className="text-micro text-subtle">
+            {SUPERFICIE_AJUDA[spec.surface] ?? ""} · {spec.canvas?.w ?? 1080}×
+            {spec.canvas?.h ?? 1350}px ({proporcaoLegivel(spec.canvas)})
+          </p>
+        </div>
+        <div
+          className="relative w-full max-w-sm overflow-hidden rounded-card bg-black"
+          style={{ aspectRatio: `${spec.canvas?.w ?? 1080} / ${spec.canvas?.h ?? 1350}` }}
+        >
           {previewSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={previewSrc} alt="Prévia do modelo" className="h-full w-full object-cover" />
@@ -247,18 +288,55 @@ export function TemplateSpecEditor({ template }: { template: Template }) {
                   </select>
                 </div>
 
+                {/* Fonte por elemento. Antes isto não existia na tela E o
+                    renderizador ignorava `style.font` (os dois ramos do
+                    ternário eram iguais) — então "mudar a fonte do modelo"
+                    era impossível por dois motivos ao mesmo tempo. */}
+                <div className="space-y-1.5">
+                  <label className="block text-caption text-muted">Fonte</label>
+                  <select
+                    value={selected.style?.font ?? "marca"}
+                    onChange={(e) => {
+                      const font = e.target.value;
+                      // Reencaixa o peso: Anton e Varela só têm 400, e
+                      // manter 800 aqui faria o texto sair com aparência
+                      // errada sem o usuário entender por quê.
+                      updateSelectedStyle({
+                        font,
+                        weight: pesoMaisProximo(selected.style?.weight ?? 400, font),
+                      });
+                    }}
+                    className={fieldClasses}
+                  >
+                    {FONTES_DO_TEMPLATE.map((f) => (
+                      <option key={f.valor} value={f.valor}>
+                        {f.rotulo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1.5">
                     <label className="block text-caption text-muted">Peso</label>
-                    <input
-                      type="number"
-                      min={100}
-                      max={900}
-                      step={100}
-                      value={selected.style?.weight ?? 400}
+                    {/* Só os pesos que a família REALMENTE tem gravados. O
+                        campo numérico livre deixava pedir 437, o
+                        rasterizador caía noutro arquivo e o texto saía
+                        deformado. */}
+                    <select
+                      value={String(
+                        pesoMaisProximo(selected.style?.weight ?? 400, selected.style?.font)
+                      )}
                       onChange={(e) => updateSelectedStyle({ weight: Number(e.target.value) })}
                       className={fieldClasses}
-                    />
+                    >
+                      {pesosDaFonte(selected.style?.font).map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                          {p === 400 ? " (normal)" : p >= 800 ? " (pesado)" : ""}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-1.5">
                     <label className="block text-caption text-muted">Opacidade</label>
@@ -287,6 +365,38 @@ export function TemplateSpecEditor({ template }: { template: Template }) {
                     <option value="center">Centro</option>
                     <option value="right">Direita</option>
                   </select>
+                </div>
+
+                {/* tracking e lineHeight já existiam no tipo e no
+                    renderizador, mas não tinham controle na tela — dava
+                    pra "mexer em tudo" menos nos dois. */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <label className="block text-caption text-muted">
+                      Espaçamento entre letras
+                    </label>
+                    <input
+                      type="number"
+                      min={-0.05}
+                      max={0.4}
+                      step={0.01}
+                      value={selected.style?.tracking ?? 0}
+                      onChange={(e) => updateSelectedStyle({ tracking: Number(e.target.value) })}
+                      className={fieldClasses}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-caption text-muted">Altura da linha</label>
+                    <input
+                      type="number"
+                      min={0.8}
+                      max={2}
+                      step={0.05}
+                      value={selected.style?.lineHeight ?? 1.15}
+                      onChange={(e) => updateSelectedStyle({ lineHeight: Number(e.target.value) })}
+                      className={fieldClasses}
+                    />
+                  </div>
                 </div>
 
                 <label className="flex cursor-pointer items-center gap-2 text-caption text-content">
