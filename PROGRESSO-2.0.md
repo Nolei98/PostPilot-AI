@@ -139,6 +139,42 @@ escala linear.
 Palavra-chave curta demais (`IA`, `AI`) é descartada em `topicsForClient` —
 duas letras num índice anglófono devolvem ruído.
 
+### 0-M.16 Validação do app inteiro — página por página
+
+Pedido do João: "você já testou todas as páginas e funcionalidades?" A
+resposta honesta era **não** — Ajustes tinha sido auditado, o resto não.
+Feito em 31/07.
+
+**Rotas públicas** (`/`, `/login`, `/pricing`, `/privacidade`, `/termos`,
+`/exclusao-de-dados`): todas **200**, entre 247ms e 677ms.
+**Rotas privadas** (`/fila`, `/ready`, `/radar`, `/settings`): **307** pro
+login sem sessão — correto pra página (o 401 é regra de API).
+**APIs protegidas** (`/api/checkout`, `/api/portal`,
+`/api/instagram/connect`): **401** sem sessão, como projetado.
+
+**Com sessão real, no browser:**
+
+| Tela | Resultado |
+|---|---|
+| `/fila` | 40 imagens, **0 quebradas**, 483 SVGs de preview ao vivo, 37 conjuntos de ação (Aprovar/Agendar/Editar/Descartar), 0 erro de console |
+| `/ready` | 60 imagens, **0 quebradas**, ações de copiar/baixar/marcar postado, 0 erro |
+| `/radar` | ranking + brief funcionando (§0-M.4) |
+| `/pricing` logado | planos e preços corretos, "Gerenciar assinatura" no plano atual |
+| `/settings/templates/[id]` | **nunca tinha sido aberto**. Preset do sistema redireciona pra Ajustes — comportamento correto e documentado no código. Duplicando pelo botão, o editor abre, a prévia renderiza e os controles respondem. Duplicar **não** mexeu na seleção do kit. Duplicata de teste removida. |
+
+**Suítes:** 570 unitários verdes · **3 e2e (Playwright) verdes**, incluindo
+signup com usuário efêmero e isolamento entre tenants — não rodavam desde
+antes da sessão · lint sem aviso · build de produção completo.
+
+**Dois alarmes falsos meus**, registrados: "erro" na fila era a manchete de
+um post ("IA falhou? E agora, Europa?"), e a contagem de botões deu zero
+porque rodou antes dos cards renderizarem.
+
+⚠️ **O que segue sem teste** — e não dá pra fechar sozinho: pagamento ponta
+a ponta (Stripe em teste), publicação real no Instagram (App Review),
+exclusão de conta no browser (exige criar conta), e-mail de confirmação do
+Supabase, celular real e acessibilidade.
+
 ### 0-M.15 Sprint G executada — Ajustes auditado campo a campo
 
 Detalhe completo em [`docs/SPRINT-AJUSTES.md`](./docs/SPRINT-AJUSTES.md).
