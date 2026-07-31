@@ -2198,10 +2198,15 @@ export async function previewTemplateSpec(spec: TemplateSpec): Promise<string> {
   const brand = buildCardBrand(bk as Record<string, unknown> | null);
   const { renderFromSpec } = await import("@/lib/template-render");
   const { rasterizeSvg } = await import("@/lib/svg-render");
+  // O `cta` só vai no que REALMENTE convida a deslizar: a capa. Mandar
+  // sempre fazia a prévia da contra-capa mostrar "DESLIZE PARA VER" —
+  // texto que o render de verdade não desenha mais lá (§0-J.2), e prévia
+  // que promete o que a arte não entrega é pior que prévia nenhuma.
+  const ehCapa = spec.surface === "cover_image" || spec.surface === "video_cover";
   const svg = renderFromSpec(spec, brand, {
     headline: "Um título forte que prende a atenção",
     body: "Um resumo curto que dá contexto pro leitor em uma frase.",
-    cta: "DESLIZE PARA VER →",
+    ...(ehCapa && { cta: "DESLIZE PARA VER →" }),
   });
   const png = rasterizeSvg(svg);
   return `data:image/png;base64,${png.toString("base64")}`;
