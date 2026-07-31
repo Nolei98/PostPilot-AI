@@ -135,13 +135,19 @@ Numeração igual à de `docs/auditoria-lancamento.md`, pra dar pra cruzar.
 | 2.7 | `/pricing` aberta sem login | `cc9e555` |
 | 2.8 | Rotas de API devolvem 401 em vez de 307 | `cc9e555` |
 
-⚠️ **Duas coisas antes de considerar isso encerrado:**
+✅ **Tudo isso está no ar** (deploy de 31/07, verificado em produção:
+`/pricing` responde 200 sem login e `POST /api/checkout` responde 401).
 
-1. **A exclusão de conta nunca foi testada no browser** — só passou por
-   `tsc`, lint, testes e build. A ação é irreversível: teste com uma conta
-   descartável, não com a sua.
-2. **Nada foi enviado pro `origin` ainda.** `git push` está pendente, e o push
-   dispara deploy automático na Vercel.
+⚠️ **A exclusão de conta nunca foi testada no browser** — passou por `tsc`,
+lint, testes e build, mas nenhum deles executa `deleteUser`. A ação é
+irreversível: teste com uma conta descartável, não com a sua.
+
+### Defeitos relatados em 31/07, ainda abertos
+
+| item | o que se sabe |
+|---|---|
+| Pôster antigo aparece ao trocar o vídeo | o caminho no Storage é fixo, então sobrescrever não muda a URL e o browser serve o cache. Falta reproduzir subindo dois vídeos no mesmo post — ver `PROGRESSO` §0-I.7a |
+| Divisor `———WORDMARK———` desalinhado | precisa de margem igual dos dois lados. A régua é desenhada POR PRESET (cada `layout-*.ts` tem o seu), então provavelmente não é um bug único — §0-I.7b |
 
 ### Ainda aberto
 
