@@ -139,6 +139,40 @@ escala linear.
 Palavra-chave curta demais (`IA`, `AI`) é descartada em `topicsForClient` —
 duas letras num índice anglófono devolvem ruído.
 
+### 0-M.13 Fundo dos cards passa a ser GERADO, não foto de banco
+
+Relatado pelo João: os fundos dos cards estavam "estranhos". Não era
+qualidade de foto — era a **busca**. `card-bg.ts` chamava
+`searchStockPhoto(nicheQuery(niche))` para TODOS os cards, e no nicho de
+tecnologia isso é literalmente `"technology abstract dark"`. O headline do
+card nem entrava na consulta (só era usado no Pollinations, e só na capa e
+no fechamento). A única coisa que variava entre cards era o `excludeIds`,
+que evita repetir a MESMA foto.
+
+Resultado: nove fotos aleatórias de gente digitando e placa de circuito,
+sem relação com o texto nem entre si, cada uma com luminância imprevisível
+brigando com o véu de contraste.
+
+**Trocado por fundo gerado** (`src/lib/card-bg-generated.ts`): gradiente e
+forma em SVG nas cores do próprio kit, semente `${postId}:${idx}`. Mesmo
+card sai igual em todo re-render (a arte não pode mudar sozinha entre uma
+aprovação e outra), cards diferentes saem diferentes, a série fica da mesma
+família. Cinco variantes. Zero requisição, zero custo.
+
+Regra de composição que vale pra todas: **o terço inferior fica limpo** —
+um véu vertical garante isso, porque é onde texto e chip sentam. Coberto
+por teste.
+
+**A capa continua com a foto da NOTÍCIA**, que é a única imagem com
+significado no carrossel: ela mostra o assunto. Sem foto na notícia, cai no
+fundo gerado — e não mais no Pollinations, porque uma imagem de IA genérica
+não tem relação com a manchete e reintroduziria a aleatoriedade.
+
+Detalhe de execução: o primeiro render de prova saiu com círculo e faixa de
+**borda dura**, parecendo adesivo colado em vez de luz. Corrigido com
+`feGaussianBlur` por variante — exceto na grade técnica, que só existe
+enquanto as linhas são nítidas.
+
 ### 0-M.11 Carga medida, e o teto que faltava
 
 "Carga/concorrência nunca testada" era o item mais citado da auditoria

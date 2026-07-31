@@ -86,6 +86,8 @@ export const generateCarousel = inngest.createFunction(
         textProvider,
         card,
         profile,
+        // Segunda cor de realce — usada pelos fundos gerados dos cards.
+        colorKeyword: (data?.color_keyword_box as string | null | undefined) ?? null,
         templateSelection:
           (data?.template_selection as Partial<Record<Surface, string>> | null | undefined) ?? {},
       };
@@ -124,25 +126,63 @@ export const generateCarousel = inngest.createFunction(
       return data.id as string;
     });
 
-    // Resolve o fundo de cada card: CAPA sempre tem imagem (notícia → banco
-    // → pollinations); internos tentam o banco (opcional). Retorna as URLs
-    // (serializável); o buffer é baixado no step de cada card.
-    const lastIdx = pkg.cards.length - 1;
+    // Resolve o fundo de cada card.
+    //
+    // CAPA: a foto da NOTÍCIA, que é a única imagem com significado no
+    // carrossel — ela mostra o assunto. Sem foto na notícia, cai no fundo
+    // gerado (não no banco de imagens: ver abaixo).
+    //
+    // DEMAIS CARDS: fundo GERADO nas cores da marca. Até 31/07 todos
+    // buscavam foto de banco com a MESMA consulta (`nicheQuery`), sem usar
+    // o texto do card — saíam nove fotos aleatórias de "tecnologia", sem
+    // relação com o conteúdo nem entre si, cada uma com luminância
+    // imprevisível brigando com o véu de contraste. O gerado é coerente,
+    // determinístico e não custa requisição nenhuma.
     const bgUrls = await step.run("resolve-backgrounds", async () => {
       const { getCardBg } = await import("@/lib/card-bg");
-      const exclude = new Set<string>();
+      const { buildGeneratedCardBgPng } = await import("@/lib/card-bg-generated");
+      const cores = {
+        colorBackground: prefs.card.colorBackground,
+        colorAccent: prefs.card.colorAccent,
+        colorKeyword: prefs.colorKeyword,
+      };
+
+      /** Sobe o PNG gerado e devolve a URL pública com cache-buster. */
+      const subirGerado = async (idx: number): Promise<string | null> => {
+        try {
+          const png = buildGeneratedCardBgPng(`${postId}:${idx}`, cores);
+          const caminho = `${postId}-card-${idx}-bg.png`;
+          const { error } = await supabase.storage
+            .from("post-images")
+            .upload(caminho, png, { contentType: "image/png", upsert: true });
+          if (error) throw new Error(error.message);
+          const { data } = supabase.storage.from("post-images").getPublicUrl(caminho);
+          return `${data.publicUrl}?v=${Date.now()}`;
+        } catch (err) {
+          // Fundo é acessório: sem ele o card cai na cor sólida da marca,
+          // que continua legível. Não vale derrubar a geração do post.
+          console.error(`[generate-carousel] fundo gerado do card ${idx} falhou:`, err);
+          return null;
+        }
+      };
+
       const out: (string | null)[] = [];
       for (const card of pkg.cards) {
-        const isCover = card.idx === 0;
-        const isClosing = card.idx === lastIdx;
-        const bg = await getCardBg({
-          newsImageUrl: isCover ? news.image_url : null,
-          niche: prefs.niche,
-          headline: card.headline,
-          excludeIds: exclude,
-          allowGen: isCover || isClosing, // capa e fechamento: pollinations garante imagem
-        });
-        out.push(bg?.url ?? null);
+        if (card.idx === 0) {
+          const bg = await getCardBg({
+            newsImageUrl: news.image_url,
+            niche: prefs.niche,
+            headline: card.headline,
+            excludeIds: new Set<string>(),
+            // allowGen desligado: a capa sem foto da notícia agora cai no
+            // fundo gerado, que é da marca — melhor que uma imagem de IA
+            // genérica que não tem relação com a manchete.
+            allowGen: false,
+          });
+          out.push(bg?.url ?? (await subirGerado(0)));
+          continue;
+        }
+        out.push(await subirGerado(card.idx));
       }
       return out;
     });
