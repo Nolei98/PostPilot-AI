@@ -9,7 +9,13 @@ import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import ffmpegPath from "ffmpeg-static";
-import { extractPosterFrame, composeReelsVideo, REELS_W, REELS_H } from "@/lib/video";
+import {
+  extractPosterFrame,
+  composeReelsVideo,
+  buildReelsOverlayFilter,
+  REELS_W,
+  REELS_H,
+} from "@/lib/video";
 
 const execFileAsync = promisify(execFile);
 
@@ -75,4 +81,29 @@ describe("composeReelsVideo", () => {
       fs.rmSync(outPath, { force: true });
     }
   }, 30_000);
+});
+
+describe("buildReelsOverlayFilter (título que sai — migration 050)", () => {
+  it("sem tempo de saída, o overlay entra direto e fica o vídeo inteiro", () => {
+    const f = buildReelsOverlayFilter();
+    expect(f).toContain("[bg][1:v]overlay=0:0[outv]");
+    expect(f).not.toContain("fade");
+  });
+
+  it("com tempo de saída, faz fade no ALPHA do overlay — o texto some, a imagem fica", () => {
+    const f = buildReelsOverlayFilter(4);
+    expect(f).toContain("alpha=1");
+    expect(f).toContain("fade=t=out:st=3.40:d=0.6");
+  });
+
+  it("termina junto com o vídeo: o PNG entra em loop e precisa de shortest", () => {
+    // Sem shortest=1 o loop infinito do overlay mandaria na duração do
+    // arquivo final.
+    expect(buildReelsOverlayFilter(4)).toContain("shortest=1");
+  });
+
+  it("tempo de saída zero ou negativo cai no modo fixo, não quebra", () => {
+    expect(buildReelsOverlayFilter(0)).not.toContain("fade");
+    expect(buildReelsOverlayFilter(-2)).not.toContain("fade");
+  });
 });

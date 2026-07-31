@@ -39,7 +39,7 @@ com Brand Kit próprio (logo, cores, nicho, idioma, providers de IA).
 ```bash
 npm run dev                                                     # app  → localhost:3000
 npx inngest-cli@latest dev -u http://localhost:3000/api/inngest  # jobs → localhost:8288
-npm test          # 495 testes (unitários + RLS via pglite). Rodam sem chave, custo $0
+npm test          # 499 testes (unitários + RLS via pglite). Rodam sem chave, custo $0
 npm run test:e2e  # 3 testes Playwright — LOCAL only, usa Supabase real
 npx tsc --noEmit  # typecheck
 ```
@@ -103,9 +103,9 @@ Arquivos-chave:
 - **Vídeo GERADO do zero** (Sprint D, migration 049): botão "gerar vídeo" na
   fila → roteiro por IA → b-roll do Pexels → legenda queimada → entra como
   fonte e ganha a marca na aprovação. Manual, nunca no cron.
-- **Título sobre o vídeo é escolha do post** (migration 050): no Reels dá pra
-  entregar o vídeo limpo, sem título/marca carimbados — pra vídeo que já tem
-  texto próprio.
+- **Título sobre o vídeo é escolha do post** (migration 050): no Reels ele pode
+  ficar fixo o vídeo inteiro ou sair aos 4s com fade — pra vídeo que já tem
+  texto próprio e não quer dois textos competindo.
 - **Fila**: card minimalista, aprovar/descartar em lote, pausa do piloto
   automático, conversão entre formatos.
 - **Anti-duplicata por embedding** (pgvector), dentro do mesmo cliente.
@@ -113,7 +113,7 @@ Arquivos-chave:
 - **Páginas legais** (`/privacidade`, `/termos`, `/exclusao-de-dados`) no ar,
   respondendo 200.
 - **Vercel Analytics** ligado.
-- **Qualidade**: `tsc` limpo, `lint` limpo, build limpo, 495 testes + 3 e2e
+- **Qualidade**: `tsc` limpo, `lint` limpo, build limpo, 499 testes + 3 e2e
   passando. CI no GitHub Actions em todo push.
 
 ---

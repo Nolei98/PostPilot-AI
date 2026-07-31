@@ -1,5 +1,28 @@
 # Regras do projeto — PostPilot AI
 
+## Execute você, não devolva tarefa
+
+O usuário não quer executar passos manuais. Se dá pra fazer com as
+ferramentas disponíveis, **faça** — não descreva o que ele deveria fazer.
+
+Vale para: rodar comandos, subir e derrubar servidores, abrir arquivos e
+pastas (`explorer.exe <pasta>`, `Start-Process <arquivo>`), extrair frames
+pra conferir resultado visual, commitar quando o trabalho está verificado,
+limpar temporários. Terminou algo que produz artefato pra olhar (vídeo,
+imagem, relatório)? **Abra o artefato**, não mande o caminho.
+
+Só devolve pro usuário o que é genuinamente impossível daqui:
+
+- SQL no painel do Supabase (não há credencial de banco no ambiente) —
+  entregue o SQL pronto pra colar, com uma conferência que devolva linha;
+- login interativo, senha, 2FA, aprovação em painel de terceiro;
+- decisão de produto, de custo, ou que mexe em dado de outra pessoa;
+- `git push` e qualquer coisa que publique — pedir antes.
+
+Antes de agir sozinho em algo destrutivo ou irreversível (apagar dado,
+sobrescrever arquivo de produção, mexer em conta que não é do usuário),
+confirme. O resto: faça e relate o resultado.
+
 ## Documentação sempre em dia
 
 A documentação deste projeto é o ativo que sobrevive à sessão. Código sem o

@@ -8,8 +8,14 @@
 -- captions do criador, tela gravada), porque viram dois textos brigando
 -- pelo mesmo rodapé.
 --
--- 'on'  = comportamento de sempre (título + marca sobre o vídeo);
--- 'off' = vídeo limpo, sem texto nenhum do render por cima.
+-- 'on'  = título FIXO: fica o vídeo inteiro (comportamento de sempre);
+-- 'off' = título TEMPORÁRIO: aparece no começo e sai com um fade depois
+--         de alguns segundos (TITLE_EXIT_SECONDS em post-render.ts).
+--
+-- Nos dois modos o título APARECE — o que muda é se ele fica. Um vídeo
+-- que já tem texto próprio não quer o título competindo o tempo todo,
+-- mas ainda ganha em entregar o assunto nos primeiros segundos, que é
+-- quando alguém decide se continua assistindo.
 --
 -- DEFAULT 'on': é o que todo post de vídeo já faz hoje. Ninguém pode
 -- acordar com a marca sumida da arte por causa de uma migration.
@@ -35,7 +41,7 @@ begin
 end $$;
 
 comment on column public.posts.video_title_mode is
-  'Reels: on = título+marca carimbados sobre o vídeo; off = vídeo limpo. Não afeta o feed 4:5.';
+  'Reels: on = título fixo o vídeo inteiro; off = título aparece e sai depois de alguns segundos. Não afeta o feed 4:5.';
 
 -- Conferência (devolve linha sempre — "Success. No rows returned" não
 -- distingue DDL que passou de select vazio).

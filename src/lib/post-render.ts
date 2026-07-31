@@ -234,6 +234,16 @@ export async function renderCarouselPost(
  * post único. O pôster salvo é extraído do vídeo FINAL (com overlay), não
  * do bruto — o bruto só serve pra medir contraste.
  */
+/**
+ * Quanto tempo o título fica quando o post pede que ele SAIA (050).
+ *
+ * 4s e não 3: o gancho do roteiro ocupa os primeiros 3s
+ * (HOOK_MAX_SECONDS), e sumir exatamente no fim dele deixaria a troca
+ * acontecendo no mesmo frame da primeira legenda — dois movimentos
+ * juntos. O fade de saída começa 0,6s antes.
+ */
+export const TITLE_EXIT_SECONDS = 4;
+
 export async function renderVideoPost(
   postId: string,
   hook: string,
@@ -248,16 +258,18 @@ export async function renderVideoPost(
   if (shape === "reels") {
     // Reels 9:16: overlay em 1080x1350 encaixado no rodapé do quadro maior.
     // Regra do kit: contraste medido pelo FRAME DE PÔSTER, não pelo vídeo.
-    const { buildReelsVideoOverlayPng, transparentOverlayPng } = await import("@/lib/image");
+    const { buildReelsVideoOverlayPng } = await import("@/lib/image");
     const poster = await extractPosterFrame(source, 0.5);
-    // Título desligado (050): overlay VAZIO em vez de pular a composição.
-    // O compose é quem enquadra o vídeo em 9:16 — pular ele entregaria o
-    // arquivo cru, com a proporção que o usuário mandou.
-    const overlay =
-      spec.videoTitle === "off"
-        ? await transparentOverlayPng()
-        : await buildReelsVideoOverlayPng(hook, spec.cardBrand, poster);
-    finalVideo = await composeReelsVideo(source, overlay);
+    const overlay = await buildReelsVideoOverlayPng(hook, spec.cardBrand, poster);
+    // Título "some depois" (050): o texto SEMPRE aparece — o que muda é
+    // se ele fica. Fixo entrega o assunto o vídeo inteiro; temporário
+    // entrega nos primeiros segundos (que é quando a pessoa decide se
+    // fica) e depois libera o quadro.
+    finalVideo = await composeReelsVideo(
+      source,
+      overlay,
+      spec.videoTitle === "off" ? TITLE_EXIT_SECONDS : undefined
+    );
   } else if (shape === "feed-blur") {
     // Feed 4:5 com fundo BORRADO: o mesmo vídeo vira o fundo inteiro
     // (borrado) e a moldura nítida fica por cima.

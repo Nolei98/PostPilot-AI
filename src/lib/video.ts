@@ -103,8 +103,40 @@ export async function extractPosterFrame(videoBuffer: Buffer, atSeconds = 0.5): 
  * contraste calculados a partir do frame de pôster e posicionados na
  * zona segura — ver buildReelsVideoOverlayPng em image.ts).
  * Retorna o .mp4 final (h264, mesmo áudio do original se houver).
+ *
+ * `exitAfterSeconds` faz o texto SAIR depois de N segundos, com um fade
+ * curto (migration 050, modo "some depois"): o título entrega o assunto
+ * nos primeiros segundos — que é quando alguém decide se fica — e depois
+ * libera o quadro pro vídeo. Sem ele, o texto fica o vídeo inteiro.
  */
-export async function composeReelsVideo(videoBuffer: Buffer, overlayPng: Buffer): Promise<Buffer> {
+export function buildReelsOverlayFilter(exitAfterSeconds?: number): string {
+  const base = `[0:v]scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=increase,crop=${REELS_W}:${REELS_H},setsar=1[bg]`;
+  if (!exitAfterSeconds || exitAfterSeconds <= 0) {
+    return [base, `[bg][1:v]overlay=0:0[outv]`].join(";");
+  }
+  // fade no ALPHA do overlay (não no vídeo): o texto some, a imagem
+  // continua. `st` é onde o fade começa; a duração fecha em exitAfter.
+  //
+  // O PNG entra com `-loop 1` (ver composeReelsVideo): sem isso ele é UM
+  // frame só, o `fade` nunca sai do instante zero e o overlay repete pra
+  // sempre o quadro totalmente opaco — o texto simplesmente não sumia.
+  // Com o loop, a entrada vira stream e o fade tem linha do tempo.
+  // `shortest=1` faz a saída terminar junto com o vídeo, senão o loop
+  // infinito do PNG mandaria no tamanho do arquivo.
+  const fadeDur = 0.6;
+  const st = Math.max(0, exitAfterSeconds - fadeDur).toFixed(2);
+  return [
+    base,
+    `[1:v]format=rgba,fade=t=out:st=${st}:d=${fadeDur}:alpha=1[ov]`,
+    `[bg][ov]overlay=0:0:shortest=1[outv]`,
+  ].join(";");
+}
+
+export async function composeReelsVideo(
+  videoBuffer: Buffer,
+  overlayPng: Buffer,
+  exitAfterSeconds?: number
+): Promise<Buffer> {
   const inPath = tmpPath("in.mp4");
   const overlayPath = tmpPath("overlay.png");
   const outPath = tmpPath("out.mp4");
@@ -112,14 +144,15 @@ export async function composeReelsVideo(videoBuffer: Buffer, overlayPng: Buffer)
     fs.writeFileSync(inPath, videoBuffer);
     fs.writeFileSync(overlayPath, overlayPng);
 
-    const filter = [
-      `[0:v]scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=increase,crop=${REELS_W}:${REELS_H},setsar=1[bg]`,
-      `[bg][1:v]overlay=0:0[outv]`,
-    ].join(";");
+    const filter = buildReelsOverlayFilter(exitAfterSeconds);
 
     await runFfmpeg([
       "-y",
       "-i", inPath,
+      // `-loop 1` só no modo com saída: transforma o PNG num stream pro
+      // fade ter linha do tempo. No modo fixo o overlay é estático e um
+      // frame só basta (e evita mexer no caminho que já roda em produção).
+      ...(exitAfterSeconds && exitAfterSeconds > 0 ? ["-loop", "1", "-framerate", "30"] : []),
       "-i", overlayPath,
       "-filter_complex", filter,
       "-map", "[outv]",

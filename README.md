@@ -79,7 +79,7 @@ foi possível iniciar a varredura".
 ### 5. Testes
 
 ```bash
-npm test          # 495 testes: unitários + RLS/uniqueness (pglite) — mock, sem chave, $0
+npm test          # 499 testes: unitários + RLS/uniqueness (pglite) — mock, sem chave, $0
 npm run test:e2e  # 3 e2e (Playwright) — LOCAL only: cria e apaga usuário no Supabase real
 npx tsc --noEmit  # typecheck
 npm run lint

@@ -622,13 +622,13 @@ export function PostCard({
                 disabled={salvandoTitulo}
                 title={
                   tituloLigado
-                    ? "Tirar o título de cima do vídeo (o vídeo já tem texto próprio)"
-                    : "Carimbar o título e a marca sobre o vídeo"
+                    ? "Fazer o título sair depois dos primeiros segundos"
+                    : "Deixar o título fixo durante o vídeo inteiro"
                 }
                 aria-pressed={tituloLigado}
                 className="ml-1 text-micro text-subtle underline-offset-2 transition-colors hover:text-content hover:underline disabled:opacity-40"
               >
-                {salvandoTitulo ? "salvando…" : tituloLigado ? "título: ligado" : "título: desligado"}
+                {salvandoTitulo ? "salvando…" : tituloLigado ? "título: fixo" : "título: some depois"}
               </button>
             )}
             {videoPronto && !videoOcupado && (

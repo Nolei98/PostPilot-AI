@@ -209,6 +209,38 @@ senão seria mais um "salvei e não mudou nada" (§0-E.5). Não vale pro feed
 > mostrava o certo. Diagnóstico: comparar os dois. Cura: `rm -rf .next`
 > antes de subir o dev.
 
+### 0-H.11 O título não some — ele SAI (correção do 050)
+
+O 050 tinha nascido errado: `off` era "nunca desenhar o título". O que o
+usuário queria é outra coisa — **o título aparece nos dois modos**, e o
+que muda é se ele FICA:
+
+- `on`  = fixo, o vídeo inteiro (comportamento de sempre);
+- `off` = sai aos **4s** com fade de 0,6s (`TITLE_EXIT_SECONDS`).
+
+4s e não 3 porque o gancho do roteiro ocupa os primeiros 3s: sumir no fim
+dele colocaria a saída do título e a entrada da primeira legenda no mesmo
+frame, dois movimentos juntos.
+
+**O bug de ffmpeg que isso destravou:** o PNG do overlay entra como
+imagem de UM frame só. O `fade` nunca saía do instante zero e o overlay
+repetia pra sempre o quadro opaco — o texto simplesmente não sumia, e o
+código parecia certo. Cura: `-loop 1` na entrada do PNG (vira stream, o
+fade ganha linha do tempo) + `overlay=...:shortest=1` (senão o loop
+infinito manda na duração do arquivo). Só o modo com saída usa `-loop`; o
+fixo segue como estava, pra não mexer no caminho que roda em produção.
+
+**E um erro de método meu:** conferi o primeiro corte com
+`extractPosterFrame(buf, 0.6)` achando que era FRAÇÃO da duração. É
+`atSeconds` — segundos. Tirei os dois frames antes dos 4s e concluí que
+funcionava quando não funcionava. Frame de verificação agora sai por
+`ffmpeg -ss` explícito.
+
+`transparentOverlayPng` foi removida: era do desenho antigo e ficou
+órfã. A prévia voltou a desenhar o título nos dois modos — ele aparece no
+começo, e a prévia é um quadro do começo; quem comunica a diferença é o
+rótulo do botão ("título: fixo" / "título: some depois").
+
 ### 0-H.6 Pendências
 
 - ✅ **Migration 049 aplicada no Supabase de produção em 30/07** —

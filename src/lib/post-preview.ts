@@ -475,21 +475,10 @@ function buildVideoPage(post: PreviewPostInput, spec: RenderSpec): PreviewPage |
   const headline = post.hook ?? "";
 
   if (shape === "reels") {
-    // Título desligado (050): a prévia mostra o vídeo LIMPO, igual ao que
-    // a aprovação vai renderizar. Se ela seguisse desenhando o texto, a
-    // pessoa escolheria "sem título" e continuaria vendo título — o
-    // mesmo "salvei e não mudou nada" de §0-E.5.
-    if (post.video_title_mode === "off") {
-      return {
-        // SVG vazio (não `null`): a prévia empilha vídeo + camada de
-        // desenho, e a camada precisa existir mesmo sem nada dentro.
-        svg: fill(
-          `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="${REELS_H}" viewBox="0 0 1080 ${REELS_H}"></svg>`
-        ),
-        layers: [{ kind: "video", url, poster, frame: null }],
-        aspect: "1080 / 1920",
-      };
-    }
+    // A prévia desenha o título nos DOIS modos (050): mesmo no modo
+    // "some depois" ele aparece no começo, e a prévia é um quadro
+    // parado do começo. Quem comunica a diferença é o rótulo do botão
+    // na fila, não a ausência do texto.
     const canvas = { w: 1080, h: REELS_H };
     // Mesmo piso de véu do render: a luminância medida vale só pro frame
     // de pôster, e o texto não pode sumir quando o vídeo clareia.
