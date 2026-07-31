@@ -252,21 +252,15 @@ export default async function SettingsPage({
                         className={fieldClasses}
                       />
                     </div>
-                    {/* Toggles: selo de verificado + chip na arte */}
-                    <label className="flex cursor-pointer items-center gap-3 rounded-control bg-surface-2 px-3 py-2.5">
-                      <input
-                        type="checkbox"
-                        name="ig_verified"
-                        defaultChecked={brandKit?.ig_verified ?? false}
-                        className="h-4 w-4 accent-[#3897F0]"
-                      />
-                      <span className="text-body">
-                        Selo de verificado{" "}
-                        <span className="text-caption text-subtle">
-                          (azul, ao lado do nome)
-                        </span>
-                      </span>
-                    </label>
+                    {/* Selo de verificado saiu da tela em 31/07 (Sprint G).
+                        Decisão do usuário: ele não tem conta verificada, e o
+                        controle marcava como verificado quem não é.
+                        EM STANDBY, não removido: a coluna `ig_verified`, o
+                        desenho do selo no chip (profile-chip.ts) e o campo no
+                        IgProfile continuam de pé — o dia em que a conta for
+                        verificada de verdade, é só devolver este bloco.
+                        Sem o input, o form não envia o campo e saveIgProfile
+                        preserva o valor que estiver no banco. */}
                     <label className="flex cursor-pointer items-center gap-3 rounded-control bg-surface-2 px-3 py-2.5">
                       <input
                         type="checkbox"
@@ -668,40 +662,34 @@ export default async function SettingsPage({
                   defaultValue={brandKit?.text_provider ?? "gemini"}
                   className={fieldClasses}
                 >
-                  {/* O rótulo diz o CUSTO, não só o nome: a Pollinations
+                  {/* Só entram providers com chave EM PRODUÇÃO (Sprint G,
+                      31/07). Claude e Pollinations saíram: não existe
+                      ANTHROPIC_API_KEY nem POLLINATIONS_API_KEY no servidor,
+                      então escolher qualquer uma caía num fallback
+                      silencioso. A Pollinations foi pior que inútil —
                       passou a exigir crédito pago em requests
-                      multi-mensagem (402 em 07/2026) e ficou como armadilha
-                      — quem lesse "grátis, sem key" escolhia e a fila
-                      parava calada. */}
+                      multi-mensagem (402 em 07/2026) e parou a fila de dois
+                      clientes por DIAS, mesmo com o rótulo avisando. Opção
+                      que não pode ser escolhida com segurança não é opção.
+                      O código dos dois providers continua no lugar. */}
                   <option value="nvidia">NVIDIA (DeepSeek Flash) — grátis, cota generosa</option>
                   <option value="gemini">Gemini (Google AI Studio) — grátis, só 20 por DIA</option>
-                  <option value="claude">Claude (Anthropic) — pago, exige chave</option>
-                  <option value="pollinations">Pollinations.ai — exige créditos pagos</option>
                 </select>
               </div>
-              <div className="space-y-1.5">
-                <label htmlFor="image_provider" className="block text-caption text-muted">
-                  Provider de imagem (arte do post)
-                </label>
-                <select
-                  id="image_provider"
-                  name="image_provider"
-                  defaultValue={brandKit?.image_provider ?? "stock"}
-                  className={fieldClasses}
-                >
-                  <option value="stock">Fotos reais (Pexels/Unsplash) — grátis, recomendado</option>
-                  <option value="gemini">Gemini (gera a imagem) — pago por imagem</option>
-                  <option value="fal">Fal.ai (Flux) — pago, exige chave</option>
-                  <option value="pollinations">Pollinations.ai — exige créditos pagos</option>
-                </select>
-              </div>
+              {/* Provider de IMAGEM não é mais escolha (Sprint G): das quatro
+                  opções, três eram pagas ou sem chave (Gemini por imagem,
+                  Fal, Pollinations) e furavam a política de custo zero.
+                  Sobrando uma só, deixou de ser decisão do usuário e virou
+                  padrão — os fundos dos cards de carrossel, aliás, nem
+                  passam por aqui desde 31/07: são gerados nas cores da
+                  marca. `image.ts` continua com o código dos outros
+                  providers, pronto pra voltar se houver chave e decisão de
+                  gasto. */}
               <p className="text-caption text-subtle">
-                &quot;Fotos reais&quot; busca uma foto de pessoa de verdade no
-                banco (sem os artefatos de IA em rosto/mãos) e aplica o
-                branding por cima; sem resultado, cai pra IA (ilustração sem
-                pessoas). Se o provider escolhido não tiver a chave
-                configurada no servidor, o app cai automaticamente pro outro
-                disponível (ou MOCK, sem custo).
+                <strong>Imagem:</strong> fotos reais de banco (Pexels/Unsplash),
+                com o branding aplicado por cima — sem artefato de IA em rosto
+                ou mão. Os fundos dos cards de carrossel são gerados nas cores
+                da sua marca.
               </p>
               <p className="text-caption text-subtle">
                 1. Crie um bot com o @BotFather e configure o token no servidor

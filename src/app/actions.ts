@@ -1194,18 +1194,22 @@ export async function saveTelegramChatId(formData: FormData) {
   const chatId = String(formData.get("telegram_chat_id") ?? "").trim() || null;
   const postLanguage =
     String(formData.get("post_language") ?? "").trim() || "pt-BR";
-  const textProviderRaw = formData.get("text_provider");
-  const textProvider =
-    textProviderRaw === "claude" || textProviderRaw === "pollinations"
-      ? textProviderRaw
-      : "gemini";
-  const imageProviderRaw = formData.get("image_provider");
-  const imageProvider =
-    imageProviderRaw === "fal" ||
-    imageProviderRaw === "pollinations" ||
-    imageProviderRaw === "gemini"
-      ? imageProviderRaw
-      : "stock";
+  // resolveTextProvider e não uma lista escrita à mão aqui: a versão
+  // manual listava só 'claude' e 'pollinations' e jogava TODO o resto em
+  // 'gemini' — então escolher NVIDIA na tela salvava Gemini calado, e o
+  // kit do cliente só estava em 'nvidia' porque foi setado por script.
+  // Achado na auditoria de Ajustes (Sprint G, 31/07). A função existe
+  // justamente pra que provider novo não precise ser lembrado em N lugares.
+  const { resolveTextProvider } = await import("@/lib/ai/provider");
+  const textProvider = resolveTextProvider(
+    formData.get("text_provider") as string | null
+  );
+
+  // Imagem deixou de ser escolha do usuário (Sprint G): das quatro opções,
+  // três eram pagas ou sem chave em produção. 'stock' é o único caminho de
+  // custo zero, e escrever explícito aqui garante que um kit antigo preso
+  // num provider pago volte ao gratuito no primeiro save.
+  const imageProvider = "stock";
 
   // Telegram é per-usuário (notifica o dono, não a marca).
   const { error } = await supabase.from("notification_configs").upsert(
@@ -1278,9 +1282,16 @@ export async function saveIgProfile(formData: FormData) {
     }
   }
 
-  // Checkboxes: presentes no form → "on"; ausentes → false
-  const verified = formData.get("ig_verified") === "on";
+  // Checkbox marcado vem como "on"; desmarcado não vem. Por isso o
+  // ausente vale `false` — é assim que se desliga um checkbox.
   const showChip = formData.get("show_profile_chip") === "on";
+
+  // `ig_verified` é a EXCEÇÃO: o controle saiu da tela em 31/07 (Sprint G,
+  // standby), então o campo não vem no form nem quando está ligado. Tratar
+  // ausência como `false` aqui apagaria o valor guardado a cada vez que o
+  // usuário salvasse o perfil. Só grava quando o form REALMENTE mandou.
+  const mandouVerificado = formData.has("ig_verified");
+  const verified = formData.get("ig_verified") === "on";
 
   const { error } = await supabase
     .from("brand_kits")
@@ -1288,7 +1299,7 @@ export async function saveIgProfile(formData: FormData) {
       ...(handle && { ig_handle: handle }),
       ...(displayName && { ig_display_name: displayName }),
       ...(avatarUrl && { ig_avatar_url: avatarUrl }),
-      ig_verified: verified,
+      ...(mandouVerificado && { ig_verified: verified }),
       show_profile_chip: showChip,
     })
     .eq("client_id", clientId);

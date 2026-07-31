@@ -72,20 +72,54 @@ deixa de ser um campo e vira um padrão — o que reduz a tela e a superfície
 de erro. O código dos providers **não** precisa sair junto: fica no lugar,
 pronto pra voltar à interface no dia em que houver chave e decisão de gasto.
 
+### C.1 EXECUTADO em 31/07 — e um defeito achado no caminho
+
+Decisões do João: Telegram **fica**; `image_provider` vira padrão fixo;
+selo de verificado **sai da tela, em standby**.
+
+Aplicado:
+
+- Provider de TEXTO: só NVIDIA e Gemini na tela. Claude e Pollinations
+  saíram — o código dos dois continua no lugar.
+- Provider de IMAGEM: seletor removido. `stock` é escrito explicitamente
+  no save, então kit antigo preso num provider pago volta ao gratuito na
+  primeira gravação. (Os dois clientes pausados estavam em
+  `image_provider='gemini'`, que é pago.)
+- `ig_verified`: input fora da tela. Coluna, desenho do selo e campo do
+  `IgProfile` intactos.
+
+**🐛 Defeito encontrado ao ler o save** — o motivo de a auditoria existir.
+`actions.ts` normalizava o provider de texto com uma lista escrita à mão:
+aceitava `claude` e `pollinations`, e jogava **todo o resto** em `gemini`.
+Ou seja: **escolher NVIDIA em Ajustes salvava Gemini, calado.** O kit do
+cliente só estava em `nvidia` porque foi setado por script, nunca pela
+tela. Trocado por `resolveTextProvider`, que existe exatamente pra isso —
+e coberto por teste.
+
+Efeito prático se ninguém tivesse achado: o usuário escolhe o provider com
+cota generosa, o app grava o de 20 requisições por dia, e a fila para de
+manhã sem explicação.
+
+**Cuidado que a remoção do input exigiu:** `saveIgProfile` lia checkbox
+ausente como `false`. Sem o input na tela, cada save do perfil apagaria o
+`ig_verified` guardado. Passou a só gravar quando o form realmente manda o
+campo.
+
 ### D. Dúvidas que preciso que você responda
 
 Estas eu **não** decido sozinho:
 
-1. **Telegram** — a chave existe e o código funciona, mas você chegou a
-   receber notificação? Se nunca usou, é campo pedindo `chat_id` obtido por
-   uma receita de 3 passos com `getUpdates`. Manter, ou remover a seção e
-   deixar a fila como único aviso?
-2. **`image_provider` com um valor só** — vira padrão fixo (recomendo) ou
-   você quer manter o seletor visível pensando em ligar Gemini/Fal depois?
-3. **`ig_verified`** — o selo azul é decorativo: marca como verificado quem
-   não é. Isso combina com o produto ou sai?
-4. **Template Studio** — vale uma pergunta à parte: são 3 seletores de
-   superfície + galeria. Você usa, ou o `layout_preset` já resolve?
+1. ~~Telegram~~ → **fica** (resposta em 31/07).
+2. ~~`image_provider`~~ → **padrão fixo**, seletor removido.
+3. ~~`ig_verified`~~ → **fora da tela, em standby**.
+4. **Template Studio** — ainda aberto. São 3 seletores de superfície +
+   galeria, e é o que mais ocupa a tela. Ele convive com o `layout_preset`:
+   o preset decide tipografia e assinatura; o modelo decide a planta baixa
+   (onde entra título, corpo, marca) e **vence o preset** na superfície em
+   que foi escolhido. Foi por isso que a contra-capa passou a usar o modelo
+   "Fechamento" em vez do desenho do Editorial Noir. A pergunta é se essa
+   segunda camada se paga, já que o preset entrega sozinho um resultado
+   completo — e quem usa os dois precisa saber qual manda em qual caso.
 
 ---
 
