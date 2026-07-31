@@ -5,7 +5,7 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga não recebe mais commits.
-**Última atualização:** 2026-07-31 (tarde) — **SPRINT D fechada de fato** (o primeiro Reel gerado foi aprovado e saiu com marca; só a publicação Reels/TikTok segue aberta, travada na Meta) e o **véu do vídeo passa a medir 5 frames** em vez de 1 — ver §0-L. Antes: **quatro pendências fechadas** (emoji/tofu no motor de template, cota deixa de contar descarte, pôster antigo ao trocar vídeo, divisor do wordmark) + **vazamento na exclusão de conta** corrigido (logo e avatar legado ficavam públicos) — ver §0-K. Antes: **chaves da NVIDIA rotacionadas** (4 revogadas, 1 ativa; ver §0-J.4) e **contra-capa**: o convite a deslizar sai (vinha de um texto embutido no fallback do `content.cta`), o chip de perfil passa a valer em qualquer layout e ancora na medida real do texto, 35% maior — ver §0-J. **Nenhuma migration nova**; 2 presets de sistema atualizados na tabela `templates`. Antes: 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Última atualização:** 2026-07-31 (noite) — **SPRINT E fatia 1 no código**: Viral Radar com engajamento REAL do Hacker News, sem Instagram e sem custo (Reddit fechou o `.json` público e agora exige OAuth). ⚠️ **Migration 051 pendente de aplicação.** Ver §0-M. Antes: **SPRINT D fechada de fato** (o primeiro Reel gerado foi aprovado e saiu com marca; só a publicação Reels/TikTok segue aberta, travada na Meta) e o **véu do vídeo passa a medir 5 frames** em vez de 1 — ver §0-L. Antes: **quatro pendências fechadas** (emoji/tofu no motor de template, cota deixa de contar descarte, pôster antigo ao trocar vídeo, divisor do wordmark) + **vazamento na exclusão de conta** corrigido (logo e avatar legado ficavam públicos) — ver §0-K. Antes: **chaves da NVIDIA rotacionadas** (4 revogadas, 1 ativa; ver §0-J.4) e **contra-capa**: o convite a deslizar sai (vinha de um texto embutido no fallback do `content.cta`), o chip de perfil passa a valer em qualquer layout e ancora na medida real do texto, 35% maior — ver §0-J. **Nenhuma migration nova**; 2 presets de sistema atualizados na tabela `templates`. Antes: 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
 ### Bloqueio ENCERRADO em 29/07: Pollinations.ai exigia pagamento pra requests multi-mensagem
 > ✅ Resolvido trocando os dois clientes afetados pra `gemini` (ver §0-C.6).
@@ -28,6 +28,73 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0-M. Sessão 2026-07-31 (noite) — SPRINT E fatia 1: Viral Radar sem Instagram e sem custo
+
+⚠️ **Migration 051 criada, AINDA NÃO APLICADA no Supabase.** Sem ela a
+tela `/radar` responde erro de tabela inexistente.
+
+### 0-M.1 A E não dependia do Instagram — dependia de número real
+
+O roadmap (§4.5) escreveu a E como "cola um @ do Instagram/TikTok". Com o
+App Review desligado por decisão de 31/07, ela parecia bloqueada. Não
+estava: o que a E precisa é de uma fonte que devolva **engajamento
+medido**, e Instagram era só o exemplo.
+
+Testado ao vivo antes de decidir:
+
+- **Reddit** — o endpoint público `.json` devolve **403**, inclusive com
+  User-Agent de browser. Fechado em 2025; hoje exige app OAuth (grátis,
+  sem review, mas é credencial que o usuário precisa criar).
+- **Hacker News** (API do Algolia) — responde `points` e `num_comments`
+  sem chave nenhuma. É a fonte da fatia 1.
+- **YouTube** — daria, mas exige criar API key do Google.
+
+Decisão: HN agora, Reddit encaixável depois atrás de `RadarCollector`
+(`src/lib/radar/types.ts`). O job, o score e a tela não mudam quando ele
+entrar.
+
+**Limite honesto:** o Radar responde "o que bombou no HN sobre o tema",
+não "o que o perfil @fulano publicou". Para o nicho de tecnologia/IA é
+praticamente equivalente — mesma audiência. Para confeitaria, não seria:
+lá o HN não tem nada, e a fatia 1 entregaria lista vazia.
+
+### 0-M.2 Tabela nova, e não `news_items`
+
+São coisas diferentes: `news_items` é PAUTA (a IA lê a manchete e opina se
+merece virar post) e custa IA por item; `viral_references` é REFERÊNCIA (já
+performou, com número medido) e **não gasta IA nenhuma** — o score é
+aritmética. Misturar faria o teto de triagem competir com a coleta e o
+`viral_score` da IA se confundir com engajamento real.
+
+`upsert` e não `insert`: o engajamento MUDA entre varreduras, e o que
+interessa é o número de agora.
+
+### 0-M.3 Por que o score é normalizado, e não upvote cru
+
+800 pontos no HN e 800 no r/artificial não significam a mesma coisa, e um
+campeão de três dias atrás não deve ganhar de um de hoje só por ter tido
+mais tempo acumulando. Ordenar pelo número cru entregaria sempre a mesma
+lista velha da comunidade maior.
+
+`src/lib/radar/score.ts`: escala **logarítmica** (engajamento é cauda
+longa — sem log, um outlier achata todo o resto), comentário pesa menos que
+upvote mas pesa (0.3 contra 0.7: comentário é engajamento ativo, e vale
+sinal), e desconto por idade que **nunca zera** — item velho perde posição,
+não desaparece. Função pura, 13 testes.
+
+### 0-M.4 Medido contra a API real
+
+Rodado com o kit do cliente João Rodrigues (nicho tecnologia + palavras
+`DESIGN, IA, TECH`): 6 consultas, **138 coletados, 134 únicos**. Topo do
+ranking com 431 pontos/170 comentários pontuando 96; a lista desce de forma
+suave em vez de despencar depois do primeiro, que era exatamente o risco da
+escala linear.
+
+Palavra-chave curta demais (`IA`, `AI`) é descartada em `topicsForClient` —
+duas letras num índice anglófono devolvem ruído.
 
 ---
 
@@ -1922,8 +1989,13 @@ O que falta, separado por quem consegue fazer:
 - **Aceite:** Reel 9:16 com b-roll real + legendas + marca, aprovável na mesma fila. — ✅ **CUMPRIDO 2026-07-31** (post `adfb8915`: 1080x1920, 10s, b-roll por segmento, legenda na janela do beat, marca na aprovação). Ver §0-L.1.
 
 ### 4.5 SPRINT E — Viral Radar + Remix
-- [ ] `content_sources` (rss | ig_handle | tiktok_handle | keyword | trend); colar @.
-- [ ] Coleta pay-per-use (Apify/similar) + **cache no Supabase por X dias**; custo por cliente.
+> **Reformulado em 2026-07-31 (ver §0-M):** a sprint foi escrita assumindo
+> Instagram/TikTok como fonte, o que a prendia ao App Review e a um scraper
+> pago. O requisito real é *engajamento medido*, e o Hacker News entrega
+> isso de graça e sem credencial. Fatia 1 entregue com HN; Reddit encaixa
+> atrás de `RadarCollector` quando houver app OAuth.
+- [x] **E1** (2026-07-31) — Coleta + score normalizado + tela `/radar`. `viral_references` (migration 051), `src/lib/radar/*` (coletor HN, score log com desconto por idade, consultas por nicho), job `scan-radar` (cron 12h + `radar/scan.requested`). 19 testes. Medido: 134 referências únicas numa varredura real.
+- [ ] Coleta pay-per-use (Apify/similar) — **descartado por ora**: choca com a política de custo zero. Só volta se HN+Reddit se mostrarem insuficientes.
 - [ ] Viral Score normalizado por tamanho do perfil; extrair fórmula (gancho/estrutura)
       → alimenta `generate-*` para gerar **original** no nicho do cliente.
 - **Aceite:** dado um @, retorna top referências com score + brief de remix.

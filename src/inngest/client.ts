@@ -12,6 +12,10 @@ type Events = {
   // pra reportar o status de volta na tabela scan_runs. clientId (manual)
   // restringe a varredura às fontes do cliente ativo.
   "news/scan.requested": { data: { scanRunId?: string; clientId?: string } };
+  // Viral Radar (Sprint E): coleta referências com engajamento medido.
+  // Sem clientId (cron) varre o cliente ATIVO de cada dono; com clientId
+  // (botão na tela do Radar) varre só aquele.
+  "radar/scan.requested": { data: { clientId?: string } };
   // Uma notícia passou do threshold e virou candidata → gerar post
   "post/generate.requested": {
     data: { newsItemId: string; userId: string };

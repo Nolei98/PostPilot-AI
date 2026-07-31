@@ -975,6 +975,38 @@ export async function markAsPosted(postId: string) {
  * e o botão faz polling nela (getScanRunStatus) pra mostrar
  * "rodando..." → "nada novo" ou "N encontrados, gerando...".
  */
+/**
+ * Dispara o Viral Radar (Sprint E) para o cliente ativo.
+ *
+ * Sem tabela de acompanhamento como a `scan_runs` da varredura de
+ * notícias: o Radar não gasta IA e termina em segundos (é fetch + conta),
+ * então a tela só recarrega quando o usuário quiser. Se o Radar passar a
+ * demorar, aí sim vale o mesmo mecanismo de polling.
+ */
+export async function triggerRadarScan(): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+
+  try {
+    const { getActiveClientId } = await import("@/lib/client-context");
+    const clientId = await getActiveClientId();
+    if (!clientId) return { ok: false, error: "Nenhum cliente ativo." };
+
+    await enqueue("triggerRadarScan", {
+      name: "radar/scan.requested",
+      data: { clientId },
+    });
+    revalidatePath("/radar");
+    return { ok: true };
+  } catch (err) {
+    console.error("[triggerRadarScan] falha ao iniciar o radar:", err);
+    return { ok: false, error: "Não foi possível iniciar o radar. Tente de novo." };
+  }
+}
+
 export async function triggerScan(): Promise<{
   ok: boolean;
   error?: string;
