@@ -16,6 +16,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
 import { nicheLabel } from "@/lib/niches";
+import type { TextProvider } from "@/lib/types";
 
 export interface GenerateInput {
   title: string;
@@ -223,6 +224,27 @@ async function geminiGenerate(input: GenerateInput): Promise<PostPackage> {
  * é ignorado — só o "content" (JSON do pacote) importa. hashtags
  * às vezes volta como array em vez de string — normaliza aqui.
  */
+async function nvidiaGenerate(input: GenerateInput): Promise<PostPackage> {
+  const { nvidiaChatJson } = await import("@/lib/ai/nvidia");
+  const lang = languageName(input.language ?? "pt-BR");
+  const raw = await nvidiaChatJson(
+    buildSystemPrompt(lang, input.niche),
+    `Crie o pacote de post para esta notícia:
+
+Título: ${input.title}
+Resumo: ${input.summary ?? "(sem resumo)"}
+Fonte: ${input.url}${angleSuffix(input)}
+
+Responda APENAS com o JSON do pacote (hook, caption, hashtags, image_prompt).`
+  );
+  const parsed = JSON.parse(raw) as PostPackage & { hashtags: string | string[] };
+  // hashtags às vezes volta como array — mesma normalização da Pollinations.
+  return {
+    ...parsed,
+    hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags.join(" ") : parsed.hashtags,
+  };
+}
+
 async function pollinationsGenerate(input: GenerateInput): Promise<PostPackage> {
   const lang = languageName(input.language ?? "pt-BR");
   const apiKey = process.env.POLLINATIONS_API_KEY;
@@ -272,10 +294,13 @@ async function pollinationsGenerate(input: GenerateInput): Promise<PostPackage> 
  */
 export async function generatePostPackage(
   input: GenerateInput,
-  provider: "claude" | "gemini" | "pollinations" = "gemini"
+  provider: TextProvider = "gemini"
 ): Promise<PostPackage> {
   if (provider === "pollinations") {
     return pollinationsGenerate(input);
+  }
+  if (provider === "nvidia" && process.env.NVIDIA_API_KEY) {
+    return nvidiaGenerate(input);
   }
   if (provider === "gemini" && process.env.GEMINI_API_KEY) {
     return geminiGenerate(input);

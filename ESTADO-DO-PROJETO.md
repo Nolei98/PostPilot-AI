@@ -31,7 +31,7 @@ com Brand Kit próprio (logo, cores, nicho, idioma, providers de IA).
 | Supabase (Postgres + Auth + Storage) | banco, login, arquivos das artes |
 | Inngest | jobs em segundo plano e o cron de varredura (a cada 3h) |
 | Stripe | assinatura (**hoje em modo de teste**) |
-| Gemini / Claude / Pollinations | texto |
+| NVIDIA NIM / Gemini / Claude / Pollinations | texto |
 | Pexels + Unsplash (stock) / Gemini Image / Fal | imagem |
 | ffmpeg + sharp + resvg | render de arte e vídeo |
 | Vercel | deploy (`post-pilot-ai-seven.vercel.app`) |
@@ -177,7 +177,9 @@ Free leva marca "feito com PostPilot" na arte — é o loop viral.
 💸 **Política em vigor: não gastar nada.** O controle não é teto de fatura, é
 escolha de provider:
 
-- **Texto:** `gemini-2.5-flash` (tem free tier). ✅
+- **Texto:** **NVIDIA NIM** (`deepseek-v4-flash`, créditos grátis) ✅ — entrou
+  em 31/07 porque o free tier do Gemini são só **20 requisições por DIA**.
+- **Texto (alternativa):** `gemini-2.5-flash`, dentro das 20/dia. ✅
 - **Imagem:** `stock` (Pexels/Unsplash). ✅
 - **Custa dinheiro, não usar por enquanto:** `gemini-2.5-flash-image`, Fal,
   Anthropic.

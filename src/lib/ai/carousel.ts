@@ -8,6 +8,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
 import { nicheLabel } from "@/lib/niches";
+import type { TextProvider } from "@/lib/types";
 
 export type CardRole = "hook" | "value" | "cta";
 
@@ -179,8 +180,29 @@ async function pollinationsCarousel(input: CarouselInput): Promise<CarouselPacka
   return { ...parsed, hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags.join(" ") : parsed.hashtags };
 }
 
-function pickProvider(provider: "claude" | "gemini" | "pollinations") {
+async function nvidiaCarousel(input: CarouselInput): Promise<CarouselPackage> {
+  const { nvidiaChatJson } = await import("@/lib/ai/nvidia");
+  const raw = await nvidiaChatJson(
+    buildSystemPrompt(languageName(input.language ?? "pt-BR"), input.niche),
+    `Crie o carrossel para esta notícia:
+
+Título: ${input.title}
+Resumo: ${input.summary ?? "(sem resumo)"}
+Fonte: ${input.url}
+
+Responda APENAS com o JSON do pacote.`,
+    { maxTokens: 2400 }
+  );
+  const parsed = JSON.parse(raw) as CarouselPackage & { hashtags: string | string[] };
+  return {
+    ...parsed,
+    hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags.join(" ") : parsed.hashtags,
+  };
+}
+
+function pickProvider(provider: TextProvider) {
   if (provider === "pollinations") return pollinationsCarousel;
+  if (provider === "nvidia" && process.env.NVIDIA_API_KEY) return nvidiaCarousel;
   if (provider === "gemini" && process.env.GEMINI_API_KEY) return geminiCarousel;
   if (!process.env.ANTHROPIC_API_KEY) return null; // sem key → mock
   return claudeCarousel;
@@ -192,7 +214,7 @@ function pickProvider(provider: "claude" | "gemini" | "pollinations") {
  */
 export async function generateCarouselPackage(
   input: CarouselInput,
-  provider: "claude" | "gemini" | "pollinations" = "gemini"
+  provider: TextProvider = "gemini"
 ): Promise<CarouselPackage> {
   const gen = pickProvider(provider);
   if (!gen) {

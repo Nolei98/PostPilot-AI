@@ -6,6 +6,11 @@
 import type { CardBrand } from "@/lib/render-shared";
 import type { LumGrid } from "@/lib/contrast";
 
+/** Providers de TEXTO. `nvidia` = NVIDIA NIM (API compatível com a da
+ *  OpenAI); entrou porque o free tier do Gemini são 20 requisições por
+ *  DIA e isso não cobre nem uma varredura. Ver src/lib/ai/nvidia.ts. */
+export type TextProvider = "claude" | "gemini" | "pollinations" | "nvidia";
+
 export type NewsStatus = "new" | "scored" | "candidate" | "discarded";
 
 // 'scheduled' e 'published' reservados para a Fase 2 (Graph API)
@@ -35,7 +40,7 @@ export interface BrandKit {
   client_id: string;
   // geração
   post_language: string;
-  text_provider: "claude" | "gemini" | "pollinations";
+  text_provider: TextProvider;
   image_provider: "fal" | "gemini" | "pollinations" | "stock";
   default_format: "single" | "carousel"; // formato que o pipeline gera
   /** false pausa a criação automática (migration 047) — a varredura e a

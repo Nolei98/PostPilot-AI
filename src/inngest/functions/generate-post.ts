@@ -15,6 +15,7 @@
 // ============================================================
 import { inngest } from "@/inngest/client";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveTextProvider } from "@/lib/ai/provider";
 import { generatePostPackage } from "@/lib/ai/generate";
 import {
   embedText,
@@ -113,10 +114,7 @@ export const generatePost = inngest.createFunction(
       // pollinations "pra custo zero", o que deixou a conta ilimitada presa
       // no único provider que passou a cobrar (402 em requests
       // multi-mensagem), com a fila parada e Ajustes sem efeito nenhum.
-      const textProvider: "claude" | "gemini" | "pollinations" =
-        data?.text_provider === "claude" || data?.text_provider === "pollinations"
-          ? data.text_provider
-          : "gemini";
+      const textProvider = resolveTextProvider(data?.text_provider);
       const imageProvider: "fal" | "gemini" | "pollinations" | "stock" =
         data?.image_provider === "fal" ||
         data?.image_provider === "pollinations" ||

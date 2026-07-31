@@ -16,6 +16,7 @@
 // ============================================================
 import { inngest } from "@/inngest/client";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveTextProvider } from "@/lib/ai/provider";
 
 const BUCKET = "post-images";
 
@@ -73,7 +74,7 @@ export const convertPostFormat = inngest.createFunction(
             .eq("client_id", post.client_id)
             .maybeSingle();
           return {
-            textProvider: (data?.text_provider ?? "claude") as "claude" | "gemini" | "pollinations",
+            textProvider: resolveTextProvider(data?.text_provider),
             language: (data?.language ?? "pt-BR") as string,
             niche: (data?.niche ?? null) as string | null,
           };

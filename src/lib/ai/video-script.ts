@@ -13,6 +13,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
 import { nicheLabel } from "@/lib/niches";
+import type { TextProvider } from "@/lib/types";
 
 export type VideoNetwork = "reels" | "tiktok";
 
@@ -220,8 +221,29 @@ async function pollinationsVideoScript(input: VideoScriptInput): Promise<VideoSc
   return { ...parsed, hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags.join(" ") : parsed.hashtags };
 }
 
-function pickProvider(provider: "claude" | "gemini" | "pollinations") {
+async function nvidiaVideoScript(input: VideoScriptInput): Promise<VideoScript> {
+  const { nvidiaChatJson } = await import("@/lib/ai/nvidia");
+  const raw = await nvidiaChatJson(
+    buildSystemPrompt(languageName(input.language ?? "pt-BR"), input.niche, input.network),
+    `Crie o roteiro do vídeo para esta notícia:
+
+Título: ${input.title}
+Resumo: ${input.summary ?? "(sem resumo)"}
+Fonte: ${input.url}
+
+Responda APENAS com o JSON do roteiro.`,
+    { maxTokens: 1200 }
+  );
+  const parsed = JSON.parse(raw) as VideoScript & { hashtags: string | string[] };
+  return {
+    ...parsed,
+    hashtags: Array.isArray(parsed.hashtags) ? parsed.hashtags.join(" ") : parsed.hashtags,
+  };
+}
+
+function pickProvider(provider: TextProvider) {
   if (provider === "pollinations") return pollinationsVideoScript;
+  if (provider === "nvidia" && process.env.NVIDIA_API_KEY) return nvidiaVideoScript;
   if (provider === "gemini" && process.env.GEMINI_API_KEY) return geminiVideoScript;
   if (!process.env.ANTHROPIC_API_KEY) return null; // sem key → mock
   return claudeVideoScript;
@@ -234,7 +256,7 @@ function pickProvider(provider: "claude" | "gemini" | "pollinations") {
  */
 export async function generateVideoScript(
   input: VideoScriptInput,
-  provider: "claude" | "gemini" | "pollinations" = "gemini"
+  provider: TextProvider = "gemini"
 ): Promise<VideoScript> {
   const gen = pickProvider(provider);
   if (!gen) {

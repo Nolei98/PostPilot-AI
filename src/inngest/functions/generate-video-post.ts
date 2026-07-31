@@ -30,6 +30,7 @@
 // ============================================================
 import { inngest } from "@/inngest/client";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveTextProvider } from "@/lib/ai/provider";
 import { generateVideoScript, type VideoScript } from "@/lib/ai/video-script";
 import type { NewsItem } from "@/lib/types";
 
@@ -89,10 +90,7 @@ export const generateVideoPost = inngest.createFunction(
         .eq("client_id", post.client_id)
         .maybeSingle();
 
-      const textProvider: "claude" | "gemini" | "pollinations" =
-        brand?.text_provider === "claude" || brand?.text_provider === "pollinations"
-          ? brand.text_provider
-          : "gemini";
+      const textProvider = resolveTextProvider(brand?.text_provider);
 
       return {
         news: news as NewsItem,

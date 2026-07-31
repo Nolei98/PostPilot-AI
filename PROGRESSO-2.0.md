@@ -5,7 +5,7 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga não recebe mais commits.
-**Última atualização:** 2026-07-30 (noite) — **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Última atualização:** 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
 ### Bloqueio ENCERRADO em 29/07: Pollinations.ai exigia pagamento pra requests multi-mensagem
 > ✅ Resolvido trocando os dois clientes afetados pra `gemini` (ver §0-C.6).
@@ -28,6 +28,66 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0-I. Sessão 2026-07-30 (madrugada) — NVIDIA NIM como provider de texto, fila remontada, deploy
+
+### 0-I.1 Deploy
+
+`git push` de 11 commits (`914c2cc..f0d5f47`). Migrations 049 e 050 já
+estavam aplicadas ANTES do push — banco na frente do código, que é a
+ordem que não quebra deploy.
+
+### 0-I.2 Fila zerada e remontada com um exemplo de cada estilo
+
+Os 8 posts antigos foram **descartados, não apagados** (`status =
+'discarded'` volta pra fila com um update; apagar não tem volta). O
+`seed-preview-posts.ts` remontou a matriz de formatos, e o Sprint D
+entrou com um vídeo GERADO. Os dois modos de título ficaram lado a lado
+de propósito: #597 (gerado) com "some depois", #601 (upload) com "fixo".
+
+### 0-I.3 NVIDIA NIM entra como quarto provider de texto
+
+O teto de **20 requisições por DIA** do Gemini free é o que travava o
+produto — todo texto testado até aqui saía de mock. A NIM
+(`integrate.api.nvidia.com`) tem API **compatível com a da OpenAI**,
+então entrou como `fetch`, sem SDK novo no lockfile.
+
+**A medição que importou, e a armadilha:** com prompt curto ("responda
+OK") o `llama-3.1-70b` respondia em **1,8s** — e isso enganou. Com o
+prompt REAL (system longo + 1200 tokens de saída) ele **estoura 45s**, e
+o `nemotron-super-49b` também. No tier grátis quem decide não é o tamanho
+do modelo, é a FILA, e a fila só aparece com carga real.
+
+Medido com prompt de verdade:
+
+| modelo | tempo | veredito |
+|---|---|---|
+| `deepseek-ai/deepseek-v4-flash` | 34s | **padrão** — melhor texto |
+| `meta/llama-3.1-8b-instruct` | 14s | rede de segurança |
+| `nvidia/llama-3.3-nemotron-super-49b-v1.5` | estourou | fila |
+| `meta/llama-3.1-70b-instruct` | estourou | fila |
+
+Daí o **fallback em cadeia** dentro do `nvidiaChatJson`: se o modelo bom
+está enfileirado, cai no rápido em vez de derrubar a geração e deixar o
+post sem nascer. Timeout de 90s.
+
+`resolveTextProvider` (`src/lib/ai/provider.ts`) nasceu junto: a
+normalização do provider estava copiada em três jobs, listando os
+providers conhecidos um a um — entrar um provider novo exigia editar os
+três, e esquecer um faz o cliente cair calado no default.
+
+Sem migration: `brand_kits.text_provider` não tem CHECK.
+
+### 0-I.4 Pendências
+
+- **Nenhum post foi gerado pelo pipeline com a NVIDIA ainda** — o teste
+  foi direto nos módulos (`generatePostPackage` e `generateVideoScript`).
+  Falta trocar o provider do kit em Ajustes e rodar o job.
+- `NVIDIA_API_KEY` está só no `.env.local`. **Falta pôr na Vercel** —
+  sem isso, produção continua no Gemini com o teto de 20/dia.
+- A chave foi colada no chat; vale revogar e gerar outra quando der.
 
 ---
 

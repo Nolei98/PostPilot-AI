@@ -17,6 +17,7 @@
 // ============================================================
 import { inngest } from "@/inngest/client";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveTextProvider } from "@/lib/ai/provider";
 import { generateCarouselPackage } from "@/lib/ai/carousel";
 import { type CardBrand } from "@/lib/carousel-render";
 import { resolvePostFontFamily } from "@/lib/font-data";
@@ -57,10 +58,7 @@ export const generateCarousel = inngest.createFunction(
         .select("*")
         .eq("client_id", news.client_id)
         .maybeSingle();
-      const textProvider: "claude" | "gemini" | "pollinations" =
-        data?.text_provider === "claude" || data?.text_provider === "pollinations"
-          ? data.text_provider
-          : "gemini";
+      const textProvider = resolveTextProvider(data?.text_provider);
       const card: CardBrand = {
         colorBackground: data?.color_background ?? "#0B0B12",
         colorAccent: data?.color_accent ?? "#7C5CFF",
