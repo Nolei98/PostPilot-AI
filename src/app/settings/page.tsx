@@ -418,6 +418,15 @@ export default async function SettingsPage({
                       <div className="space-y-1.5">
                         <label htmlFor="layout_preset" className="block text-caption text-muted">
                           Estilo visual dos cards (capa, interior e fechamento)
+                          {WIRED_SURFACES.some(
+                            ({ key }) => brandKit?.template_selection?.[key]
+                          ) && (
+                            <>
+                              {" "}
+                              — <strong>atenção:</strong> superfícies com modelo escolhido
+                              em &quot;Modelos avançados&quot; ignoram este layout
+                            </>
+                          )}
                         </label>
                         <select
                           id="layout_preset"
@@ -499,11 +508,31 @@ export default async function SettingsPage({
               label: "Modelos avançados",
               content: (
                 <>
+                  {/* A relação entre as duas camadas precisa estar ESCRITA
+                      (Sprint G, 31/07): o modelo vence o preset na
+                      superfície em que foi escolhido, e sem isso a pessoa
+                      troca o layout na aba anterior, não vê efeito nenhum
+                      naquela página, e conclui que o app está quebrado. */}
                   <p className="text-caption text-muted">
-                    Modelos novos, com composição livre de marca e texto. Escolher um
-                    aqui vale só para as próximas gerações de carrossel — sem escolha,
-                    continua no layout da aba anterior.
+                    O <strong>layout</strong> da aba anterior decide tipografia e
+                    assinatura. O <strong>modelo</strong> aqui decide a planta baixa —
+                    onde entram título, corpo e marca — e <strong>vence o layout</strong>{" "}
+                    na superfície em que for escolhido. Sem modelo, a superfície segue
+                    o layout. Vale só para as próximas gerações.
                   </p>
+                  {(() => {
+                    const comModelo = WIRED_SURFACES.filter(
+                      ({ key }) => brandKit?.template_selection?.[key]
+                    );
+                    if (comModelo.length === 0) return null;
+                    return (
+                      <p className="text-caption text-subtle">
+                        Hoje o modelo manda em:{" "}
+                        <strong>{comModelo.map((s) => s.label).join(", ")}</strong>. As
+                        demais superfícies seguem o layout.
+                      </p>
+                    );
+                  })()}
                   {WIRED_SURFACES.map(({ key: surface, label }) => {
                     const options = templateList.filter((t) => t.surface === surface);
                     const selectedId = brandKit?.template_selection?.[surface];

@@ -112,14 +112,21 @@ Estas eu **não** decido sozinho:
 1. ~~Telegram~~ → **fica** (resposta em 31/07).
 2. ~~`image_provider`~~ → **padrão fixo**, seletor removido.
 3. ~~`ig_verified`~~ → **fora da tela, em standby**.
-4. **Template Studio** — ainda aberto. São 3 seletores de superfície +
-   galeria, e é o que mais ocupa a tela. Ele convive com o `layout_preset`:
-   o preset decide tipografia e assinatura; o modelo decide a planta baixa
-   (onde entra título, corpo, marca) e **vence o preset** na superfície em
-   que foi escolhido. Foi por isso que a contra-capa passou a usar o modelo
-   "Fechamento" em vez do desenho do Editorial Noir. A pergunta é se essa
-   segunda camada se paga, já que o preset entrega sozinho um resultado
-   completo — e quem usa os dois precisa saber qual manda em qual caso.
+4. ~~Template Studio~~ → **fica, recolhido**. Duas correções na premissa da
+   minha própria pergunta, ao ir olhar:
+   - **Remover estava fora de cogitação.** O kit do João tem os três
+     modelos selecionados e `template_apply_mode='on_approval'`. A
+     contra-capa corrigida em §0-J É o modelo "Fechamento" — tirar o
+     Template Studio desfaria o trabalho do dia.
+   - **Ele já estava recolhido.** É a aba "Modelos avançados" dentro do
+     bloco de identidade, e não aparece até ser clicada. O peso de tela que
+     eu apontei era menor do que descrevi.
+
+   O problema REAL era outro, e esse foi corrigido: a tela **não dizia que
+   o modelo vence o layout**. Quem trocasse o preset e não visse efeito na
+   contra-capa concluiria que o app está quebrado. Agora a aba de modelos
+   explica a precedência e lista quais superfícies estão sob modelo, e a
+   aba de layouts avisa quando alguma superfície está ignorando a escolha.
 
 ---
 
