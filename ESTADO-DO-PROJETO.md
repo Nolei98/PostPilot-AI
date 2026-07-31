@@ -142,31 +142,50 @@ Numeração igual à de `docs/auditoria-lancamento.md`, pra dar pra cruzar.
 lint, testes e build, mas nenhum deles executa `deleteUser`. A ação é
 irreversível: teste com uma conta descartável, não com a sua.
 
-### Defeitos relatados em 31/07, ainda abertos
+### Defeitos de 31/07 — todos fechados no mesmo dia
 
-| item | o que se sabe |
-|---|---|
-| Pôster antigo aparece ao trocar o vídeo | o caminho no Storage é fixo, então sobrescrever não muda a URL e o browser serve o cache. Falta reproduzir subindo dois vídeos no mesmo post — ver `PROGRESSO` §0-I.7a |
-| Divisor `———WORDMARK———` desalinhado | precisa de margem igual dos dois lados. A régua é desenhada POR PRESET (cada `layout-*.ts` tem o seu), então provavelmente não é um bug único — §0-I.7b |
+| item | causa real (nem sempre a suposta) | commit |
+|---|---|---|
+| Pôster antigo ao trocar o vídeo | **não era cache do browser**: `attachUploadedPostVideo` deixava `video_poster_url` apontando pro pôster do vídeo anterior durante todo o processamento | `2c6d01c` |
+| Divisor `———WORDMARK———` desalinhado | **não era margem de preset**: o `®` é vetor desenhado à parte, pendurado à direita de um texto centrado — 54px de respiro à esquerda contra 17px à direita | `2c6d01c` |
+| Emoji virando quadradinho no motor de template | faltava `stripEmoji`, que o motor sem template já fazia | `2c6d01c` |
+| Cota contava post descartado | punia justamente quem usa a fila de aprovação direito | `2c6d01c` |
+| Exclusão de conta deixava imagem pessoal pública | a limpeza só cobria `{client_id}.png`; logo e avatar legado (`user_id`) sobreviviam | `2c6d01c` |
+| Wordmark sumindo no Reels gerado | contraste medido em UM frame de um vídeo que troca de b-roll | `5b14a8b` |
+| Toda chamada à NVIDIA falhando em produção | **BOM (U+FEFF) na chave**, posto por um pipe do PowerShell na rotação | `7d4632e` |
 
 ### Ainda aberto
 
-| # | Item | Impacto |
+| # | Item | Quem resolve |
 |---|---|---|
-| 2.10 | **Stripe em modo de teste** — ninguém consegue pagar de verdade | trava a receita |
-| 2.9 | **App Review do Meta não submetido** — publicação automática só em contas de teste. Para o público, o produto entrega até o download da arte | dossiê pronto em `docs/meta-app-review.md`; falta Business Verification, screencast, ícone/categoria |
+| 2.10 | **Stripe em modo de teste** — ninguém consegue pagar de verdade | **só você** |
+| 2.9 | **App Review do Meta** — sem ele a publicação automática só roda em conta de teste | **só você** (dossiê pronto em `docs/meta-app-review.md`) |
+| — | **Exclusão de conta nunca exercida no browser** — o código foi corrigido, o fluxo nunca rodou | **só você** (criar conta descartável) |
+| — | **Reddit fora do Radar** — o `.json` público virou 403 e exige app OAuth | **só você** (criar o app; o coletor eu escrevo) |
 | — | Presets de nicho (confeitaria, saúde, advocacia) prontos porém **em standby** | decisão de produto |
-| — | **Free tier do Gemini: 20 requisições por DIA** (`gemini-2.5-flash`) — bateu 429 na primeira geração de roteiro | é o teto do provider de texto do produto inteiro, não só do vídeo. Contar antes de religar o piloto |
-| — | O **botão** "gerar vídeo" nunca foi clicado por gente — o job foi disparado por evento direto no Inngest, e funcionou ponta a ponta | abrir a fila e clicar, pra ver o estado mudar na tela |
-| — | **Post #47 virou vídeo em produção** (foi a cobaia do teste) | reverter se incomodar: apagar 2 arquivos do Storage e voltar `format='single'` |
-| — | Publicação de Reels (Graph API) e TikTok | Sprint D segue aberto nesse ponto |
-| — | Sprints E (Viral Radar) e F (ações de agente) | não começados |
+| — | Publicação de Reels (Graph API) e TikTok | travado no 2.9 |
+| — | Sprint F (ações de agente) | não começada; sem dependência externa |
 
-### Nunca foi testado
+### Carga e concorrência — medido em 31/07
 
-Carga/concorrência (muitos usuários ao mesmo tempo) · custo real por usuário
-em produção · e-mail de confirmação do Supabase chega/cai em spam ·
-pagamento ponta a ponta (bloqueado pelo 2.10) · acessibilidade e celular real.
+Deixou de ser "nunca testado", mas o teste foi de **capacidade declarada e
+latência**, não de usuários reais simultâneos.
+
+- **Camada web:** 10 requisições paralelas em `/pricing` → 10/10 OK, média
+  1,2s, máximo 2,2s. Não é gargalo.
+- **Render:** 26 posts re-renderizados em ~3 minutos com `concurrency: 3`
+  (~7s por post). Vídeo: 2 reencodados em menos de 90s.
+- **Gargalo real é a IA**, e os tetos são **globais por função**, não por
+  usuário: `generate-post` 3, `generate-carousel` 2, `render-approved-post`
+  3, `publish-scheduled-posts` 1.
+- **Corrigido no mesmo dia:** `scan-news` era a única função SEM teto — e é
+  a que mais gasta IA (tria até 100 notícias em lotes de 20). Dez pessoas
+  clicando "Varrer agora" juntas afogariam o provider. Agora tem
+  `concurrency: 2`.
+
+⚠️ **Continua sem teste:** usuários reais simultâneos, custo por usuário em
+produção, e-mail de confirmação do Supabase, pagamento ponta a ponta
+(travado no 2.10), acessibilidade e celular real.
 
 ---
 

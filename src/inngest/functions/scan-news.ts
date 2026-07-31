@@ -36,7 +36,20 @@ const TRIAGE_BATCH_SIZE = 20;
 const MAX_AGE_HOURS = 48;
 
 export const scanNews = inngest.createFunction(
-  { id: "scan-news", retries: 2 },
+  {
+    id: "scan-news",
+    retries: 2,
+    // Teto de concorrência: esta era a ÚNICA função sem um, e é a que mais
+    // gasta IA — cada varredura tria até 100 notícias em lotes de 20.
+    // Sem limite, dez pessoas clicando "Varrer agora" juntas disparam dez
+    // varreduras paralelas e afogam o provider: a NVIDIA já devolveu 529
+    // ("Service temporarily overloaded") em 31/07 com UM cliente só.
+    //
+    // 2 e não 3 porque cada execução aqui já dispara N gerações depois,
+    // e generate-post tem o próprio teto de 3 — o funil inteiro precisa
+    // caber no mesmo provider.
+    concurrency: { limit: 2 },
+  },
   [
     { cron: "0 */3 * * *" }, // a cada 3 horas
     { event: "news/scan.requested" }, // ou disparo manual
