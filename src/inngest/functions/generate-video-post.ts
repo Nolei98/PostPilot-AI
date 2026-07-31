@@ -40,6 +40,23 @@ export const generateVideoPost = inngest.createFunction(
     // Montagem é ffmpeg puro: dois vídeos ao mesmo tempo já saturam a
     // função. Mesmo teto do attach-video, pelo mesmo motivo.
     concurrency: { limit: 2 },
+    // Rede de segurança pra QUALQUER step que estoure depois das
+    // tentativas — o `try/catch` do assemble cobre a montagem, mas não
+    // cobria a geração do roteiro. E é justamente ela que falha por algo
+    // fora do nosso controle: a cota diária do provider de texto (o free
+    // tier do Gemini são 20 requisições por DIA, e um 429 chega sem
+    // aviso). Sem isto, o post ficava 'processing' pra sempre — o modo de
+    // falha que este arquivo inteiro foi escrito pra não repetir.
+    onFailure: async ({ event }) => {
+      const { postId } = (event.data.event.data ?? {}) as { postId?: string };
+      if (!postId) return;
+      const motivo = event.data.error?.message ?? "Falha desconhecida na geração do vídeo";
+      console.error(`[generate-video-post] desistiu do post ${postId}:`, motivo);
+      await createAdminClient()
+        .from("posts")
+        .update({ video_status: "error", video_error: motivo })
+        .eq("id", postId);
+    },
   },
   { event: "post/generate-video.requested" },
   async ({ event, step }) => {

@@ -139,6 +139,41 @@ Os dois confirmados no MESMO instante do vídeo depois do conserto
 > menos de uma varredura completa. Precisa entrar na conta antes de
 > qualquer divulgação.
 
+### 0-H.8 Rodou dentro do app, num post de produção
+
+Dev + Inngest no ar, evento `post/generate-video.requested` disparado pro
+post **#47** (o mais antigo da fila, `892fe166…`, sem foto base — nada a
+perder). A cadeia inteira funcionou em ~26s:
+
+`generate-video-post` → roteiro (MOCK, ver abaixo) → 5 clipes do Pexels →
+montagem → `{postId}-video-source.mp4` no Storage → `attach-video` →
+pôster extraído e luminância medida → `video_status='ready'`,
+`format='video'`, `video_shape='reels'`, `video_origin='generated'`.
+
+`video_url` continua nulo, e está certo: o vídeo COMPOSTO (com marca)
+nasce na aprovação. É o mesmo estado de um upload manual recém-anexado.
+
+**A correção do emoji confirmada no dado real:** o hook do #47 é
+`🚨 HubSpot reverses course…`, o emoji está guardado em `video_script`, e
+a legenda queimada saiu limpa — sem tofu.
+
+> Roteiro em MOCK de propósito: a cota diária do Gemini seguia estourada,
+> então o dev subiu com as keys de IA vazias. O caminho de código é o
+> mesmo; o que não foi exercido é o texto de um provider real.
+
+### 0-H.9 Um buraco encontrado ao preparar essa execução
+
+O `try/catch` cobria a MONTAGEM, mas não a geração do roteiro. Um 429 do
+provider (que é o modo de falha mais provável, ver a cota de 20/dia)
+derrubaria a função depois de `mark-processing` e **ninguém gravaria o
+erro** — post preso em 'processing' pra sempre, exatamente o que o
+cabeçalho do arquivo promete evitar.
+
+Resolvido com `onFailure` na config da função: qualquer step que estoure
+depois das tentativas grava `video_status='error'` + `video_error`. Cobre
+o roteiro, o dispatch e o que vier depois — melhor que empilhar
+`try/catch` por step.
+
 ### 0-H.6 Pendências
 
 - ✅ **Migration 049 aplicada no Supabase de produção em 30/07** —
@@ -148,9 +183,15 @@ Os dois confirmados no MESMO instante do vídeo depois do conserto
   missing", e o "Success. No rows returned" seguinte era do SELECT de
   verificação, não do ALTER — parecia sucesso e não era. Aplicada pelo SQL
   Editor do dashboard.
-- ✅ **Rodou de ponta a ponta com Pexels real** em 30/07 — ver §0-H.7. O
-  que ainda NÃO rodou é o job dentro do app (fila → botão → Inngest →
-  Storage): o teste foi pelos módulos, sem banco.
+- ✅ **Rodou de ponta a ponta com Pexels real** em 30/07, pelos módulos
+  (§0-H.7) e **dentro do app num post de produção** (§0-H.8).
+- **O BOTÃO da fila não foi clicado por gente**: o disparo foi por evento
+  direto no Inngest. A server action é fina e tipada, mas ninguém viu o
+  estado mudar na tela.
+- **Post #47 ficou como vídeo em produção** — foi a cobaia. Reverter é
+  apagar os 2 arquivos do Storage e voltar `format='single'`,
+  `video_status='none'`, `video_origin='upload'`, `video_script=null`,
+  `base_image_url=null`.
 - **Roteiro real nunca saiu**: a amostra usou MOCK porque a cota diária do
   Gemini estava estourada. O texto queimado no vídeo de exemplo é
   `[MOCK] …` e vem truncado pelo próprio mock, não pelo render.

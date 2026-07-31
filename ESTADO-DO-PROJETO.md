@@ -148,7 +148,8 @@ Numeração igual à de `docs/auditoria-lancamento.md`, pra dar pra cruzar.
 | 2.9 | **App Review do Meta não submetido** — publicação automática só em contas de teste. Para o público, o produto entrega até o download da arte | dossiê pronto em `docs/meta-app-review.md`; falta Business Verification, screencast, ícone/categoria |
 | — | Presets de nicho (confeitaria, saúde, advocacia) prontos porém **em standby** | decisão de produto |
 | — | **Free tier do Gemini: 20 requisições por DIA** (`gemini-2.5-flash`) — bateu 429 na primeira geração de roteiro | é o teto do provider de texto do produto inteiro, não só do vídeo. Contar antes de religar o piloto |
-| — | Vídeo gerado rodou pelos módulos com Pexels real, mas **o job dentro do app (fila → botão → Inngest → Storage) nunca rodou** | subir dev + Inngest e clicar "gerar vídeo" num post real |
+| — | O **botão** "gerar vídeo" nunca foi clicado por gente — o job foi disparado por evento direto no Inngest, e funcionou ponta a ponta | abrir a fila e clicar, pra ver o estado mudar na tela |
+| — | **Post #47 virou vídeo em produção** (foi a cobaia do teste) | reverter se incomodar: apagar 2 arquivos do Storage e voltar `format='single'` |
 | — | Publicação de Reels (Graph API) e TikTok | Sprint D segue aberto nesse ponto |
 | — | Sprints E (Viral Radar) e F (ações de agente) | não começados |
 
