@@ -5,7 +5,7 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga não recebe mais commits.
-**Última atualização:** 2026-07-31 — **contra-capa**: o convite a deslizar sai (vinha de um texto embutido no fallback do `content.cta`), o chip de perfil passa a valer em qualquer layout e ancora na medida real do texto, 35% maior — ver §0-J. **Nenhuma migration nova**; 2 presets de sistema atualizados na tabela `templates`. Antes: 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Última atualização:** 2026-07-31 — **chaves da NVIDIA rotacionadas** (4 revogadas, 1 ativa; ver §0-J.4) e **contra-capa**: o convite a deslizar sai (vinha de um texto embutido no fallback do `content.cta`), o chip de perfil passa a valer em qualquer layout e ancora na medida real do texto, 35% maior — ver §0-J. **Nenhuma migration nova**; 2 presets de sistema atualizados na tabela `templates`. Antes: 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
 ### Bloqueio ENCERRADO em 29/07: Pollinations.ai exigia pagamento pra requests multi-mensagem
 > ✅ Resolvido trocando os dois clientes afetados pra `gemini` (ver §0-C.6).
@@ -109,7 +109,40 @@ Coberto por `src/lib/closing-chip.test.ts` (6 casos: desce com o título, nunca
 ancora em cima do texto, cai no rodapé no título longo e sem texto, cabe no
 quadro, é maior que o de rodapé).
 
-### 0-J.4 Banco
+### 0-J.4 Rotação das chaves da NVIDIA (segurança)
+
+Chaves antigas tinham passado por chat em sessões anteriores — histórico de
+conversa guarda tudo, então chave que aparece lá está exposta a quem tiver
+acesso ao histórico. Rotacionadas em 2026-07-31.
+
+**Estado final:** uma única chave ativa, `postpilot-prod-2026-07-31`
+(termina em `…J1u`, expira 07/31/2027). Revogadas quatro: `NVIDIA KEY`
+(…CNQ), `postp` (…j5l), `NVIDIABuild-Autogen-46` (…wHC) e
+`NVIDIABuild-Autogen-02` (…tLc).
+
+**Ordem seguida, e por quê:** gerar nova → gravar em `.env.local` e na
+Vercel Production → redeploy → testar contra a API real → só então revogar.
+Revogar antes do redeploy deixaria produção sem chave válida, porque
+variável de ambiente na Vercel só vale em build novo.
+
+**Como o valor foi manuseado:** área de transferência direto pro destino
+(`Get-Clipboard` alimentando o arquivo e o `vercel env add`), sem nunca ser
+impresso. Só os 3 últimos caracteres apareceram, pra conferência. Regra pra
+próxima vez: **chave nova nunca é colada no chat** — o pedido certo é
+"copiei", e o valor vai do clipboard pro destino.
+
+**Efeito colateral aceito:** se alguma das duas `Autogen` estivesse em uso
+em outro projeto, aquilo passa a receber 401 e precisa de chave nova. Foram
+revogadas mesmo assim porque não havia como saber quais duas das antigas
+tinham vazado, e deixar uma viva por precaução anularia a rotação.
+
+**Observação pro futuro:** no teste pós-rotação o modelo padrão
+`deepseek-ai/deepseek-v4-flash` estourou 90s e o fallback
+`meta/llama-3.1-8b-instruct` respondeu na hora. É a fila do tier grátis
+descrita em `nvidia.ts:22`, não a chave. Se virar rotina, o texto sai pior
+sem ninguém notar — vale medir.
+
+### 0-J.5 Banco
 
 Presets de sistema **Fechamento** (`carousel_last`) e **Tag**
 (`cover_image`) tiveram `style.color` do elemento `cta` trocado de `accent`
