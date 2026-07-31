@@ -222,11 +222,15 @@ async function nvidiaBrief(input: RemixInput): Promise<RemixBrief> {
   const raw = await nvidiaChatJson(
     buildSystemPrompt(languageName(input.language ?? "pt-BR"), input.niche),
     `${userPrompt(input)}\n\nResponda APENAS com o JSON do brief.`,
-    // Rápido primeiro: este brief roda DENTRO do clique do usuário, não
-    // num job. Com o modelo padrão levou 21s em teste real e a função
-    // serverless cortou antes — o usuário via "não foi possível gerar".
-    // O texto aqui é curto e estruturado; o modelo pequeno dá conta.
-    { maxTokens: 1200, preferirRapido: true }
+    // Modelo PADRÃO (o melhor), apesar de rodar dentro do clique.
+    //
+    // Cheguei a trocar pelo rápido achando que o erro em produção era
+    // timeout; era BOM na chave (ver §0-M.7). Com a causa real corrigida
+    // e maxDuration=60 na página, o modelo bom cabe — e a diferença é
+    // grande: o pequeno devolveu "O conhecimento é uma arma", o padrão
+    // devolveu "O próximo gargalo da IA não é computação, é curadoria de
+    // dados". Gancho genérico não serve de brief.
+    { maxTokens: 1200 }
   );
   return JSON.parse(raw) as RemixBrief;
 }
