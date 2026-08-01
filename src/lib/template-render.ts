@@ -154,6 +154,7 @@ function measureTextElement(
   const raw = (el.bind ?? "").startsWith("content.") ? stripEmoji(bruto) : bruto;
   if (!raw) return null;
   const text = el.style?.case === "upper" ? raw.toUpperCase() : raw;
+  const anchor = el.anchor ?? "center";
   const x = Math.round((el.offset?.x ?? 0.5) * W);
   const y = Math.round((el.offset?.y ?? 0.5) * H);
   const fontSize = el.size?.fontSize ?? 40;
@@ -161,7 +162,38 @@ function measureTextElement(
   const maxChars = Math.max(6, Math.floor(maxWidth / (fontSize * 0.56)));
   const lineH = Math.round(fontSize * (el.style?.lineHeight ?? 1.15));
   const lines = wrapText(text, maxChars).slice(0, 6);
-  return { text, x, y, lineH, fontSize, lines, baselineLast: y + (lines.length - 1) * lineH };
+
+  // A metade VERTICAL da âncora decide o que o "Posição Y" significa. Até
+  // 31/07 ela era ignorada — `textAnchor` só lia "-left"/"-right" — então
+  // `top-left` e `bottom-left` desenhavam idêntico, e das 9 opções do
+  // seletor só 3 tinham efeito.
+  //
+  // `y` é a baseline da PRIMEIRA linha. Ajustar aqui, e não no desenho,
+  // mantém `lowestTextBottomFrac` (âncora do chip) medindo a posição real.
+  const ascendente = fontSize * 0.8;
+  const descendente = fontSize * 0.2;
+  const alturaDoBloco = (lines.length - 1) * lineH + fontSize;
+  let baselinePrimeira = y;
+  if (anchor.startsWith("top-")) {
+    // Y é o TOPO do bloco.
+    baselinePrimeira = y + ascendente;
+  } else if (anchor.startsWith("bottom-")) {
+    // Y é a BASE do bloco.
+    baselinePrimeira = y - (lines.length - 1) * lineH - descendente;
+  } else if (anchor.startsWith("center")) {
+    // Y é o MEIO do bloco.
+    baselinePrimeira = y - alturaDoBloco / 2 + ascendente;
+  }
+
+  return {
+    text,
+    x,
+    y: baselinePrimeira,
+    lineH,
+    fontSize,
+    lines,
+    baselineLast: baselinePrimeira + (lines.length - 1) * lineH,
+  };
 }
 
 /**

@@ -29,6 +29,21 @@ const fieldClasses =
 
 const TEXTLIKE_TYPES = new Set(["headline", "body", "cta", "handleLabel", "wordmark"]);
 
+/**
+ * O que dá pra acrescentar num modelo. Só entram tipos que o renderizador
+ * REALMENTE desenha (`renderFromSpec`): oferecer `media`, `logo`, `badge`
+ * ou `dots` criaria elemento que some na arte final, o que é pior do que
+ * não oferecer.
+ */
+const ELEMENTOS_DISPONIVEIS = [
+  { type: "headline", rotulo: "Título", bind: "content.headline", textLike: true },
+  { type: "body", rotulo: "Corpo do texto", bind: "content.body", textLike: true },
+  { type: "cta", rotulo: "Chamada (CTA)", bind: "content.cta", textLike: true },
+  { type: "wordmark", rotulo: "Wordmark (texto)", bind: "brand.wordmark", textLike: true },
+  { type: "handleLabel", rotulo: "@handle + palavras-chave", bind: "brand.label", textLike: true },
+  { type: "divider", rotulo: "Divisor com wordmark", bind: undefined, textLike: false },
+] as const;
+
 /** Onde cada superfície aparece no produto — a prévia sozinha não conta. */
 const SUPERFICIE_LABEL: Record<string, string> = {
   cover_image: "Capa do carrossel / post único",
@@ -85,6 +100,41 @@ export function TemplateSpecEditor({ template }: { template: Template }) {
 
   const selected = spec.elements.find((e) => e.id === selectedId) ?? null;
 
+  /** Acrescenta um elemento do catálogo. O `id` precisa ser único dentro
+   *  da spec — é ele que a lista e a seleção usam. */
+  function addElement(tipo: (typeof ELEMENTOS_DISPONIVEIS)[number]) {
+    const usados = new Set(spec.elements.map((e) => e.id));
+    let id: string = tipo.type;
+    let n = 2;
+    while (usados.has(id)) id = `${tipo.type}-${n++}`;
+
+    const novo: TemplateElement = {
+      id,
+      type: tipo.type,
+      anchor: "center",
+      offset: { x: 0.5, y: 0.5 },
+      ...(tipo.bind ? { bind: tipo.bind } : {}),
+      ...(tipo.textLike
+        ? {
+            size: { fontSize: 40, maxWidth: 0.84 },
+            style: { color: "auto", weight: 400, align: "center" },
+          }
+        : {}),
+      z: spec.elements.length + 1,
+    };
+    setSpec((s) => ({ ...s, elements: [...s.elements, novo] }));
+    setSelectedId(id);
+  }
+
+  function removeSelected() {
+    if (!selectedId) return;
+    setSpec((s) => {
+      const restantes = s.elements.filter((e) => e.id !== selectedId);
+      setSelectedId(restantes[0]?.id ?? null);
+      return { ...s, elements: restantes };
+    });
+  }
+
   function updateSelected(patch: Partial<TemplateElement>) {
     if (!selectedId) return;
     setSpec((s) => ({
@@ -117,7 +167,10 @@ export function TemplateSpecEditor({ template }: { template: Template }) {
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-[280px_1fr_320px]">
       {/* Lista de elementos */}
       <Card className="h-fit p-3">
-        <p className="mb-2 text-caption font-semibold text-muted">Elementos</p>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-caption font-semibold text-muted">Elementos</p>
+          <span className="text-micro text-subtle">{spec.elements.length}</span>
+        </div>
         <div className="space-y-1">
           {spec.elements.map((el) => (
             <button
@@ -137,6 +190,44 @@ export function TemplateSpecEditor({ template }: { template: Template }) {
               </span>
             </button>
           ))}
+        </div>
+
+        {/* Acrescentar e remover — antes o modelo era fechado nos elementos
+            que o preset trouxe, e "editar" parava aí. */}
+        <div className="mt-3 space-y-1.5 border-t border-line pt-3">
+          <label className="block text-caption text-muted">Acrescentar elemento</label>
+          <select
+            value=""
+            onChange={(e) => {
+              const t = ELEMENTOS_DISPONIVEIS.find((x) => x.type === e.target.value);
+              if (t) addElement(t);
+              e.target.value = "";
+            }}
+            className={fieldClasses}
+          >
+            <option value="">Escolha um tipo...</option>
+            {ELEMENTOS_DISPONIVEIS.map((t) => (
+              <option key={t.type} value={t.type}>
+                {t.rotulo}
+              </option>
+            ))}
+          </select>
+          {selected && (
+            <Button
+              variant="danger"
+              size="sm"
+              className="w-full"
+              onClick={removeSelected}
+              disabled={spec.elements.length <= 1}
+              title={
+                spec.elements.length <= 1
+                  ? "Um modelo precisa de ao menos um elemento"
+                  : undefined
+              }
+            >
+              Remover &quot;{selected.id}&quot;
+            </Button>
+          )}
         </div>
       </Card>
 

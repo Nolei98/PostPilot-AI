@@ -59,10 +59,21 @@ describe("chip da contra-capa", () => {
     }
   });
 
-  it("cai no rodapé quando o texto é longo demais pra caber um chip abaixo", () => {
-    const placement = closingChipPlacement(medir(LONGO)!);
+  it("cai no rodapé quando o texto termina baixo demais pra caber um chip", () => {
+    // Testado direto na função, e não pelo título longo do preset: desde
+    // que a âncora vertical passou a funcionar (31/07), o título do
+    // Fechamento é CENTRALIZADO — texto longo cresce pros dois lados e
+    // continua sobrando espaço embaixo. A regra do rodapé segue valendo,
+    // só não é mais o texto longo que a dispara neste preset.
+    const placement = closingChipPlacement(0.82);
     expect(placement.topFrac).toBeUndefined();
     expect(placement.position).toBe("bottom-center");
+  });
+
+  it("título longo continua deixando o chip abaixo do texto, sem colidir", () => {
+    const bottom = medir(LONGO)!;
+    const { topFrac } = closingChipPlacement(bottom);
+    if (topFrac !== undefined) expect(topFrac).toBeGreaterThan(bottom);
   });
 
   it("cai no rodapé quando não há texto medível", () => {
