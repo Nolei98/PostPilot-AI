@@ -77,6 +77,8 @@ export function TemplateSpecEditor({ template }: { template: Template }) {
   const [previewPending, startPreview] = useTransition();
   const [savePending, startSave] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const arrastandoRef = useRef(false);
 
   // Prévia com debounce: cada mudança de spec re-renderiza no servidor
   // (mesmo motor do post real) depois de 500ms sem novas mudanças.
@@ -99,6 +101,63 @@ export function TemplateSpecEditor({ template }: { template: Template }) {
   }, [spec]);
 
   const selected = spec.elements.find((e) => e.id === selectedId) ?? null;
+
+  // ---- Arrastar na prévia -------------------------------------------
+  //
+  // Posicionar por número de 0 a 1 funciona, mas é onde se perde mais
+  // tempo: pra mover "um dedinho pra baixo" a pessoa precisa adivinhar se
+  // é 0,46 ou 0,49. O arrasto grava exatamente a mesma coisa nos mesmos
+  // campos — é entrada alternativa, não um segundo modelo de dados.
+  //
+  // O ponto arrastado é a ÂNCORA do elemento, não o canto do texto: é o
+  // que o `offset` significa, e é por isso que os marcadores existem.
+
+  /** Converte a posição do ponteiro em offset 0–1 dentro da prévia. */
+  function offsetDoPonteiro(e: { clientX: number; clientY: number }) {
+    const caixa = previewRef.current?.getBoundingClientRect();
+    if (!caixa || caixa.width === 0 || caixa.height === 0) return null;
+    const bruto = {
+      x: (e.clientX - caixa.left) / caixa.width,
+      y: (e.clientY - caixa.top) / caixa.height,
+    };
+    // Preso na área visível e com 3 casas: mais que isso vira ruído no
+    // JSON da spec sem mudar um pixel.
+    return {
+      x: Number(Math.min(1, Math.max(0, bruto.x)).toFixed(3)),
+      y: Number(Math.min(1, Math.max(0, bruto.y)).toFixed(3)),
+    };
+  }
+
+  /**
+   * Começa o arrasto capturando o ponteiro no CONTAINER, nunca no
+   * marcador: capturar no marcador faria os `pointermove` seguintes irem
+   * só pra ele, e o handler do container — que é quem calcula a posição —
+   * pararia de receber evento no primeiro pixel de movimento.
+   */
+  function iniciarArrasto(e: React.PointerEvent) {
+    arrastandoRef.current = true;
+    previewRef.current?.setPointerCapture?.(e.pointerId);
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (!selectedId) return;
+    iniciarArrasto(e);
+    const off = offsetDoPonteiro(e);
+    if (off) updateSelected({ offset: off });
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!arrastandoRef.current || !selectedId) return;
+    const off = offsetDoPonteiro(e);
+    if (off) updateSelected({ offset: off });
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    arrastandoRef.current = false;
+    if (previewRef.current?.hasPointerCapture?.(e.pointerId)) {
+      previewRef.current.releasePointerCapture(e.pointerId);
+    }
+  }
 
   /** Acrescenta um elemento do catálogo. O `id` precisa ser único dentro
    *  da spec — é ele que a lista e a seleção usam. */
@@ -246,23 +305,69 @@ export function TemplateSpecEditor({ template }: { template: Template }) {
           </p>
         </div>
         <div
-          className="relative w-full max-w-sm overflow-hidden rounded-card bg-black"
+          ref={previewRef}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          className={`relative w-full max-w-sm touch-none overflow-hidden rounded-card bg-black ${
+            selected ? "cursor-grab active:cursor-grabbing" : ""
+          }`}
           style={{ aspectRatio: `${spec.canvas?.w ?? 1080} / ${spec.canvas?.h ?? 1350}` }}
         >
           {previewSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={previewSrc} alt="Prévia do modelo" className="h-full w-full object-cover" />
+            <img
+              src={previewSrc}
+              alt="Prévia do modelo"
+              draggable={false}
+              className="h-full w-full select-none object-cover"
+            />
           ) : (
             <div className="flex h-full items-center justify-center text-caption text-subtle">
               Gerando prévia...
             </div>
           )}
+
+          {/* Marcadores: mostram ONDE cada elemento está ancorado. Sem
+              eles, arrastar é às cegas — a prévia é o texto desenhado, não
+              o ponto de âncora. */}
+          {spec.elements.map((el) => {
+            const ativo = el.id === selectedId;
+            return (
+              <button
+                key={el.id}
+                type="button"
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  setSelectedId(el.id);
+                  iniciarArrasto(e);
+                }}
+                title={el.id}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 transition-all ${
+                  ativo
+                    ? "h-4 w-4 border-white bg-primary shadow-[0_0_0_3px_rgba(0,0,0,0.5)]"
+                    : "h-3 w-3 border-white/70 bg-black/50 hover:bg-white/30"
+                } ${el.visible === false ? "opacity-40" : ""}`}
+                style={{
+                  left: `${(el.offset?.x ?? 0.5) * 100}%`,
+                  top: `${(el.offset?.y ?? 0.5) * 100}%`,
+                }}
+              />
+            );
+          })}
+
           {previewPending && (
             <div className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-micro text-white">
               atualizando...
             </div>
           )}
         </div>
+        <p className="text-center text-micro text-subtle">
+          {selected
+            ? `Arraste o ponto de “${selected.id}” na prévia pra posicionar — ou use os campos de Posição.`
+            : "Selecione um elemento pra posicionar."}
+        </p>
         <p className="text-center text-micro text-subtle">
           Prévia com conteúdo de exemplo e as cores/fonte reais da marca — sem foto de fundo aqui (o post de verdade compõe sobre foto quando houver).
         </p>
