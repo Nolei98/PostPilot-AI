@@ -4,8 +4,8 @@
 > técnico do plano estratégico e do handoff v2. Ordem importa: as
 > tarefas têm dependência.
 
-**Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga não recebe mais commits.
-**Última atualização:** 2026-07-31 (noite) — **carga medida** e `scan-news` ganhou o teto de concorrência que faltava; **`docs/SO-VOCE.md`** separa o que depende do João do que depende de código. Antes: **SPRINT E com o aceite cumprido**: Radar no ar em produção (134 referências coletadas) + brief de remix, com guarda contra gancho que seja tradução do título alheio. Ver §0-M. Antes: **SPRINT E fatia 1 no código**: Viral Radar com engajamento REAL do Hacker News, sem Instagram e sem custo (Reddit fechou o `.json` público e agora exige OAuth). ⚠️ **Migration 051 pendente de aplicação.** Ver §0-M. Antes: **SPRINT D fechada de fato** (o primeiro Reel gerado foi aprovado e saiu com marca; só a publicação Reels/TikTok segue aberta, travada na Meta) e o **véu do vídeo passa a medir 5 frames** em vez de 1 — ver §0-L. Antes: **quatro pendências fechadas** (emoji/tofu no motor de template, cota deixa de contar descarte, pôster antigo ao trocar vídeo, divisor do wordmark) + **vazamento na exclusão de conta** corrigido (logo e avatar legado ficavam públicos) — ver §0-K. Antes: **chaves da NVIDIA rotacionadas** (4 revogadas, 1 ativa; ver §0-J.4) e **contra-capa**: o convite a deslizar sai (vinha de um texto embutido no fallback do `content.cta`), o chip de perfil passa a valer em qualquer layout e ancora na medida real do texto, 35% maior — ver §0-J. **Nenhuma migration nova**; 2 presets de sistema atualizados na tabela `templates`. Antes: 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga recebeu **um** commit avulso depois disso (`781c406`, a remoção dos protótipos), mergeado na `main` em 2026-08-02 — ver §0-N. De novo: ela não recebe mais commits.
+**Última atualização:** 2026-08-02 — **regras de agente versionadas** (viviam soltas na pasta-pai, fora do controle de versão) e **protótipos `v1.1`–`v1.4` removidos** da `main`, fechando a `feat/multi-tenant-brand-kit`. Só documentação e código morto; nada de runtime mudou, nenhuma migration — ver §0-N. Antes: 2026-07-31 (noite) — **carga medida** e `scan-news` ganhou o teto de concorrência que faltava; **`docs/SO-VOCE.md`** separa o que depende do João do que depende de código. Antes: **SPRINT E com o aceite cumprido**: Radar no ar em produção (134 referências coletadas) + brief de remix, com guarda contra gancho que seja tradução do título alheio. Ver §0-M. Antes: **SPRINT E fatia 1 no código**: Viral Radar com engajamento REAL do Hacker News, sem Instagram e sem custo (Reddit fechou o `.json` público e agora exige OAuth). ⚠️ **Migration 051 pendente de aplicação.** Ver §0-M. Antes: **SPRINT D fechada de fato** (o primeiro Reel gerado foi aprovado e saiu com marca; só a publicação Reels/TikTok segue aberta, travada na Meta) e o **véu do vídeo passa a medir 5 frames** em vez de 1 — ver §0-L. Antes: **quatro pendências fechadas** (emoji/tofu no motor de template, cota deixa de contar descarte, pôster antigo ao trocar vídeo, divisor do wordmark) + **vazamento na exclusão de conta** corrigido (logo e avatar legado ficavam públicos) — ver §0-K. Antes: **chaves da NVIDIA rotacionadas** (4 revogadas, 1 ativa; ver §0-J.4) e **contra-capa**: o convite a deslizar sai (vinha de um texto embutido no fallback do `content.cta`), o chip de perfil passa a valer em qualquer layout e ancora na medida real do texto, 35% maior — ver §0-J. **Nenhuma migration nova**; 2 presets de sistema atualizados na tabela `templates`. Antes: 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
 ### Bloqueio ENCERRADO em 29/07: Pollinations.ai exigia pagamento pra requests multi-mensagem
 > ✅ Resolvido trocando os dois clientes afetados pra `gemini` (ver §0-C.6).
@@ -28,6 +28,65 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0-N. Sessão 2026-08-02 — regras de agente entram no repo; protótipos v1.x saem
+
+Sessão de arrumação. **Nenhuma migration, nenhum job novo, nada de runtime
+tocado** — quem for procurar mudança de comportamento aqui não vai achar.
+
+### 0-N.1 As regras de agente estavam fora do controle de versão
+
+`AGENTS.md`, `.clinerules/`, `.cursor/rules/`, `.windsurf/rules/`,
+`.opencode/` e `.github/copilot-instructions.md` viviam em
+`Workspace/PostPilot/` — a pasta **pai** do repositório, que não é um repo
+git. Efeito prático: cada máquina precisava recriar os arquivos na mão, e as
+cópias divergiam em silêncio, sem diff pra mostrar que divergiram. Um agente
+lendo a regra do Cursor podia estar seguindo uma versão que a do Windsurf já
+tinha abandonado.
+
+Copiados pra dentro do repo e commitados (`9ef3d00`, 9 arquivos, 327 linhas).
+Agora todo agente lê a mesma regra e qualquer mudança aparece no diff.
+
+`CLAUDE.md` continua sendo a fonte completa — os arquivos por IDE são o
+resumo que cada uma consegue carregar. Ao mudar uma regra, mudar nos dois.
+
+**Pendência conhecida:** foi cópia, não movimentação. Os originais seguem na
+pasta-pai, e é de lá que a sessão do Claude Code roda hoje (o `cwd` é a
+pasta-pai, não o repo). Apagar os de fora agora deixaria o agente sem regra
+nenhuma. O jeito certo de fechar isso é passar a rodar de dentro de
+`PostPilot-AI/` e só então apagar os de fora — até lá, a duplicata existe e
+pode divergir de novo.
+
+`.claude/settings.local.json` ficou de fora de propósito: é local por
+definição, não vale versionar.
+
+### 0-N.2 v1.1–v1.4: 20 mil linhas de código morto parecido com o vivo
+
+As quatro pastas eram HTML/CSS/JS estático da fase de protótipo, anteriores
+ao app Next. Nada em `src/` importava delas, nenhuma rota as servia. O custo
+não era disco — era busca: `grep` por seletor, classe ou nome de função
+devolvia quatro cópias mortas junto com a viva, e nada no nome do arquivo
+dizia qual era qual.
+
+A remoção já existia pronta em `feat/multi-tenant-brand-kit` (`781c406`), um
+commit avulso empurrado pra branch **depois** dela ter sido dada como fechada
+em 27/07. Ficou lá, não mesclada, até hoje. Mergeada com `--no-ff` em
+`308aa9c`: 32 arquivos, 20.298 linhas apagadas.
+
+Antes de mesclar, conferido que o diff `origin/main...branch` não tocava
+nenhum `.md` — os documentos de relato eram a única coisa que não podia ser
+levada junto. Não tocou.
+
+Recuperar qualquer protótipo, se um dia fizer falta:
+
+```bash
+git checkout cd25f05 -- v1.1   # cd25f05 = último commit que ainda os tinha
+```
+
+A branch remota continua existindo. Está inteiramente contida na `main`
+agora, então apagar é seguro — mas é decisão do João, não foi feita aqui.
 
 ---
 

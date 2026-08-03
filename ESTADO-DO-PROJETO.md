@@ -4,8 +4,10 @@
 > está pronto, o que falta, e em que ordem fazer. Os outros documentos são
 > aprofundamento — a lista deles está no fim (§8).
 >
-> Atualizado em **2026-07-30** (noite). Commit de referência: `676f6b3` (`main`,
-> ainda não enviado pro origin).
+> Atualizado em **2026-08-02**. Commit de referência: `308aa9c` (`main`, já no
+> `origin`). Essa sessão foi só arrumação — regras de agente versionadas e
+> protótipos `v1.1`–`v1.4` removidos (§0-N do `PROGRESSO-2.0.md`). **O estado de
+> pronto/pendente abaixo não mudou**: nada de runtime foi tocado.
 
 ---
 
