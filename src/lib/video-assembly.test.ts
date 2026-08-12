@@ -79,7 +79,13 @@ describe("assembleScriptVideo (ffmpeg real, clipes sintéticos)", () => {
     expect(final.length).toBeGreaterThan(1000);
     // assinatura de container mp4 (ftyp) aparece nos primeiros bytes
     expect(final.subarray(4, 8).toString("ascii")).toBe("ftyp");
-  }, 30_000);
+    // 90s: o teste roda ~9 processos ffmpeg reais (4 clipes + 4 normalize +
+    // concat + 3 extractPosterFrame + overlay final). Isolado leva ~29s,
+    // mas rodando junto da suíte inteira (48 arquivos em paralelo,
+    // disputando CPU) passa fácil de 60s — orçamento de tempo, não flake
+    // de lógica (medido: só o normalize dos 4 clipes já soma ~15s
+    // isolado nesta máquina).
+  }, 90_000);
 
   it("rejeita quando o número de clipes não bate com os segmentos", async () => {
     await expect(assembleScriptVideo(script, [])).rejects.toThrow(/precisa ser 1:1/);
