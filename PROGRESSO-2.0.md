@@ -5,7 +5,10 @@
 > tarefas têm dependência.
 
 **Branch de trabalho:** `main`. Desde 2026-07-27 a `feat/multi-tenant-brand-kit` está inteiramente mergeada na `main` e **produção Vercel roda a `main`** (o push dispara deploy automático — ver §0-A). A branch antiga recebeu **um** commit avulso depois disso (`781c406`, a remoção dos protótipos), mergeado na `main` em 2026-08-02 — ver §0-N. De novo: ela não recebe mais commits.
-**Última atualização:** 2026-08-02 — **regras de agente versionadas** (viviam soltas na pasta-pai, fora do controle de versão) e **protótipos `v1.1`–`v1.4` removidos** da `main`, fechando a `feat/multi-tenant-brand-kit`. Só documentação e código morto; nada de runtime mudou, nenhuma migration — ver §0-N. Antes: 2026-07-31 (noite) — **carga medida** e `scan-news` ganhou o teto de concorrência que faltava; **`docs/SO-VOCE.md`** separa o que depende do João do que depende de código. Antes: **SPRINT E com o aceite cumprido**: Radar no ar em produção (134 referências coletadas) + brief de remix, com guarda contra gancho que seja tradução do título alheio. Ver §0-M. Antes: **SPRINT E fatia 1 no código**: Viral Radar com engajamento REAL do Hacker News, sem Instagram e sem custo (Reddit fechou o `.json` público e agora exige OAuth). ⚠️ **Migration 051 pendente de aplicação.** Ver §0-M. Antes: **SPRINT D fechada de fato** (o primeiro Reel gerado foi aprovado e saiu com marca; só a publicação Reels/TikTok segue aberta, travada na Meta) e o **véu do vídeo passa a medir 5 frames** em vez de 1 — ver §0-L. Antes: **quatro pendências fechadas** (emoji/tofu no motor de template, cota deixa de contar descarte, pôster antigo ao trocar vídeo, divisor do wordmark) + **vazamento na exclusão de conta** corrigido (logo e avatar legado ficavam públicos) — ver §0-K. Antes: **chaves da NVIDIA rotacionadas** (4 revogadas, 1 ativa; ver §0-J.4) e **contra-capa**: o convite a deslizar sai (vinha de um texto embutido no fallback do `content.cta`), o chip de perfil passa a valer em qualquer layout e ancora na medida real do texto, 35% maior — ver §0-J. **Nenhuma migration nova**; 2 presets de sistema atualizados na tabela `templates`. Antes: 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
+**Última atualização:** 2026-08-12 (noite) — **Sprint F entra no código: Copiloto de
+chat** (migration 052) — tela `/copilot` onde o agente aciona Radar/brief/geração
+por conversa, sempre terminando na fila de aprovação, nunca publica sozinho. Ver
+§0-P. Antes, mais cedo no mesmo dia: **exclusão de conta exercida de ponta a ponta** com conta descartável, fechando a última pendência de código do lançamento; **App Review do Meta formalizado em standby**; **coletor do Reddit escrito mas EM STANDBY** (a Reddit endureceu o acesso à API — exige "moderation use case" — Radar segue só com Hacker News); e o **standby dos presets de nicho fecha na UI** (prévia escondida, não só o seletor) — ver §0-O. Antes: 2026-08-02 — **regras de agente versionadas** (viviam soltas na pasta-pai, fora do controle de versão) e **protótipos `v1.1`–`v1.4` removidos** da `main`, fechando a `feat/multi-tenant-brand-kit`. Só documentação e código morto; nada de runtime mudou, nenhuma migration — ver §0-N. Antes: 2026-07-31 (noite) — **carga medida** e `scan-news` ganhou o teto de concorrência que faltava; **`docs/SO-VOCE.md`** separa o que depende do João do que depende de código. Antes: **SPRINT E com o aceite cumprido**: Radar no ar em produção (134 referências coletadas) + brief de remix, com guarda contra gancho que seja tradução do título alheio. Ver §0-M. Antes: **SPRINT E fatia 1 no código**: Viral Radar com engajamento REAL do Hacker News, sem Instagram e sem custo (Reddit fechou o `.json` público e agora exige OAuth). ⚠️ **Migration 051 pendente de aplicação.** Ver §0-M. Antes: **SPRINT D fechada de fato** (o primeiro Reel gerado foi aprovado e saiu com marca; só a publicação Reels/TikTok segue aberta, travada na Meta) e o **véu do vídeo passa a medir 5 frames** em vez de 1 — ver §0-L. Antes: **quatro pendências fechadas** (emoji/tofu no motor de template, cota deixa de contar descarte, pôster antigo ao trocar vídeo, divisor do wordmark) + **vazamento na exclusão de conta** corrigido (logo e avatar legado ficavam públicos) — ver §0-K. Antes: **chaves da NVIDIA rotacionadas** (4 revogadas, 1 ativa; ver §0-J.4) e **contra-capa**: o convite a deslizar sai (vinha de um texto embutido no fallback do `content.cta`), o chip de perfil passa a valer em qualquer layout e ancora na medida real do texto, 35% maior — ver §0-J. **Nenhuma migration nova**; 2 presets de sistema atualizados na tabela `templates`. Antes: 2026-07-31 (madrugada) — **NVIDIA NIM** vira o quarto provider de texto (o free tier do Gemini são 20 req/DIA, e era isso que travava tudo), fila remontada com um exemplo de cada estilo, e **deploy feito** (11 commits) — ver §0-I. Antes: **Sprint D ligado**: vídeo gerado do zero (roteiro + b-roll + legenda) entra na fila por botão manual, com o roteiro e a origem virando colunas (**migration 049 aplicada em produção**) — ver §0-H. Antes, na mesma noite: documentação unificada em `ESTADO-DO-PROJETO.md`, README reescrito, variáveis do Stripe no `.env.example`, e os 4 riscos abertos da auditoria fechados (teto de triagem, exclusão de conta, `/pricing` pública, API com 401) — ver §0-G. **Nenhuma migration nova.** Antes, no mesmo dia: três presets de NICHO (confeitaria, saúde, advocacia), painel visual `docs/layouts.html` gerado pelos builders reais, folga wordmark→título unificada como razão, véu escolhido valendo no render final, trava de salvamento em Ajustes e conserto da conversão pra carrossel — ver §0-E. **Nenhuma migration nova.** Antes: 2026-07-29 (tarde) — verificação em produção do carrossel com vídeo (aprovou certo; dois defeitos no caminho de VOLTA, corrigidos), rótulo do topo editável por post (046), pausa da criação automática (047) e aprovar/descartar em lote na fila — ver §0-D. **Migrations 046 e 047 aplicadas.** Antes, no mesmo dia: controle por POST em cima do render-on-approval: fundo (042), fundo por card, cor do wordmark (043), troca de formato único⇄carrossel (044), vídeo dentro de carrossel + código curto do post (045), card da fila reorganizado, além das correções do motor de vídeo (upload direto pro Storage, encode `veryfast`, vídeo no lugar certo) — ver §0-C. **Migrations 041–045 aplicadas no Supabase em 29/07** (`setval` da 045 retornou 582 → ~581 posts numerados). Antes: 2026-07-28 — render-on-approval (migration 040): a arte deixa de ser montada na geração e passa a ser montada na aprovação, com preview ao vivo na Fila (ver §0-B). Antes: 2026-07-27 — merge na `main` + Sprint C endurecido (renovação automática do token do Instagram, métricas com evento durável — ver §0-A); **bloqueio ativo:** geração de posts parada desde ~20/07 porque a Pollinations.ai (provider grátis do cliente, texto+imagem) passou a exigir pollen pago pra requests multi-mensagem (o que o app usa) — decisão pendente do usuário (pagar top-up, trocar provider, ou deixar parado). Nada quebrado no código; diagnóstico completo abaixo.
 
 ### Bloqueio ENCERRADO em 29/07: Pollinations.ai exigia pagamento pra requests multi-mensagem
 > ✅ Resolvido trocando os dois clientes afetados pra `gemini` (ver §0-C.6).
@@ -28,6 +31,226 @@ provider agora exigiria gerar uma key de verdade primeiro.
 
 > ⚠️ **Ponto de restauração:** ver seção 0 abaixo antes de mexer em qualquer
 > coisa nova — tem o commit exato pra voltar se algo quebrar.
+
+---
+
+## 0-P. Sessão 2026-08-12 (noite) — Sprint F: Copiloto de chat (v1)
+
+Primeiro código da Sprint F ("ações de agente" no roadmap §4.5 da Fase 4).
+Decisão de escopo, tomada antes de codar: **não é autonomia plena** — o
+produto continua "você só aprova". É um **copiloto de chat**: o usuário
+conversa em português, o agente aciona os módulos internos, e tudo cai na
+mesma fila de aprovação de sempre. Publicar/agendar sozinho e coletar
+métricas ficaram de fora de propósito (o primeiro contradiz o pitch do
+produto e depende do App Review, que está em standby — §0-O; o segundo só
+faz sentido depois do primeiro).
+
+### 0-P.1 Arquitetura — reuso em vez de duplicar
+
+`copilot_messages` (migration 052): uma tabela só, conversa CONTÍNUA por
+cliente (sem "threads" — mesmo espírito de "vale pra fila inteira" que já
+existe em Ajustes). RLS por `user_id = auth.uid()`, com policy de INSERT
+também (diferente de `viral_references`, que só job escreve — aqui é a
+própria rota que grava, com a sessão do usuário).
+
+`src/lib/copilot/tools.ts`: 4 ferramentas, todas wrappers finos:
+- `buscarReferencias` lê `viral_references` (não re-coleta — reusa o que
+  o Radar já juntou, mesmo padrão de leitura de `gerarBriefDeRemix`).
+- `gerarBrief` chama `generateRemixBrief` direto (síncrono).
+- `gerarPostUnico`/`gerarCarrossel` **não** chamam `generatePostPackage`/
+  `generateCarouselPackage` direto. Criam uma notícia SINTÉTICA (mesmo
+  contrato que o `scan-news` preenche) e disparam o MESMO evento que ele
+  dispara (`post/generate.requested`/`post/generate-carousel.requested`)
+  — os jobs de sempre cuidam de cota, dedupe por embedding, imagem base e
+  `pending_approval`. Testado em produção local: o post do copiloto
+  passou pelos MESMOS steps do Inngest que um post do cron (`fetch-news`
+  → `check-quota` → `generate-text` → `resolve-base-image` →
+  `mark-ready` → `notify`), sem nenhum código novo nesse caminho.
+
+**Achado ao testar:** a fonte sintética (`source_configs`, feed_url
+`internal://copilot`) contava contra o teto de fontes do plano e
+aparecia em "Fontes RSS" de Ajustes — `addSource` (actions.ts) e a
+listagem (`settings/page.tsx`) contavam/listavam TODAS as linhas do
+cliente, sem filtro. Corrigido com `.neq("feed_url", ...)` nos dois
+lugares, constante compartilhada em `src/lib/copilot/constants.ts`.
+Confirmado depois em Ajustes: fonte sintética invisível, cota subiu 1
+(340→341) só pelo post real gerado.
+
+### 0-P.2 O "cérebro" do agente é só NVIDIA, não o provider do Brand Kit
+
+`src/lib/copilot/agent.ts`: ReAct simples (contrato JSON + 1 retry, mesmo
+padrão de `generate.ts`/`carousel.ts`), teto de 4 idas-e-vindas de
+ferramenta por mensagem. Decisão deliberada: quem decide a PRÓXIMA AÇÃO
+é sempre `nvidiaChatJson`, não `resolveTextProvider(brandKit.text_provider)`
+— são problemas diferentes (quem escreve a LEGENDA do post vs. quem
+roteia qual ferramenta chamar), e escrever 4 transportes quase iguais
+(Claude/Gemini/Pollinations/NVIDIA) só pro roteador não compensava.
+NVIDIA é o default grátis da política de custo zero (ESTADO-DO-PROJETO
+§6) de qualquer forma.
+
+**Bug pego pelo próprio teste local:** `nvidiaChatJson` não tem mock
+embutido (diferente de `generate.ts`/`carousel.ts`/`remix.ts`, que caem
+em MOCK determinístico sem key) — sem `NVIDIA_API_KEY`, TODO turno do
+chat quebrava com "Deu um erro por aqui". Corrigido com `mockProximaAcao`
+(mesmo espírito de `mockBrief`): heurística fixa que encadeia
+buscar_referencias → gerar_brief → gerar_post/carrossel lendo o
+`resultado=` já registrado na transcrição, sem chamar rede. Sem essa
+correção o Copiloto simplesmente não funcionaria em ambiente local sem
+chave — o que teria passado batido no `tsc`/lint/testes (o bug só
+apareceu testando de verdade no navegador, não nos testes unitários
+originais, que mockavam `nvidiaChatJson` direto). 3 testes novos cobrem
+o caminho mock também.
+
+Transporte do histórico: `nvidiaChatJson` só aceita system+user ÚNICOS
+(sem array de mensagens) — o histórico da conversa vira texto simples
+concatenado (`"Usuário: ...\nCopiloto: ..."`), não um array estruturado.
+Suficiente pro v1; se algum dia trocar de provider por um com
+tool-calling nativo, essa parte muda sozinha sem tocar nas ferramentas.
+
+### 0-P.3 Rota e tela
+
+`src/app/api/copilot/chat/route.ts` — primeiro Route Handler do projeto
+com streaming real (`ReadableStream`, SSE). Nenhum provider do projeto
+usa `stream:true` hoje, então não é token a token: é **stream de
+progresso** ("Buscando referências…", "Gerando o post…"), com a
+mensagem final inteira quando pronta. `src/app/copilot/page.tsx` +
+`src/components/CopilotChat.tsx` (novo, "use client", consome o stream
+via `fetch(...).body.getReader()` — não dá pra usar `EventSource`, que é
+GET-only). Item novo em `navItems` (`AppShell.tsx`), ícone de balão de
+chat.
+
+### 0-P.4 Testado localmente, ponta a ponta
+
+`npx tsc --noEmit` + `lint` limpos, 599 testes verdes (11 novos: 9 do
+`agent.ts` — contrato JSON, retry, teto de passos, erro de ferramenta
+não derruba o turno, caminho mock — + 2 de RLS do `copilot_messages`
+via pglite, migrations reais). No navegador: "faz um post sobre o que
+bombou em IA hoje" encadeou buscar_referencias → gerar_brief →
+gerar_post_unico → confirmação; o job do Inngest rodou de ponta a ponta
+(`generate-post` → `notify-post-ready`) e o post apareceu em `/fila`
+como `pending_approval`, indistinguível de um post nascido do cron.
+
+**Migration 052 já aplicada** no Supabase (rodada pelo usuário).
+
+---
+
+## 0-O. Sessão 2026-08-12 — App Review em standby, Reddit no Radar, nichos somem da UI
+
+Sessão de decisões pré-lançamento. Três itens do `ESTADO-DO-PROJETO.md` §5
+que dependiam do usuário foram resolvidos.
+
+### 0-O.1 App Review do Meta — standby formalizado, não é mudança de rota
+
+A decisão de adiar já existia desde 31/07 (§0-L.1: "travado na Meta"), mas a
+redação nos três documentos (`PROGRESSO-2.0.md`, `ESTADO-DO-PROJETO.md`,
+`LANCAMENTO.md`) usava "adiado"/"NÃO INICIADO"/"travado" — linguagem que não
+distingue "decisão deliberada de não fazer agora" de "falta tempo, é só
+continuar". Reescrito nos três pra "**EM STANDBY por decisão do usuário
+(2026-08-12). Não submeter nesta fase.**", e a mesma nota entrou no topo de
+`docs/meta-app-review.md`.
+
+**Achado da investigação, registrado por segurança (nenhum código mudou):**
+não existe trava de código pro App Review — a única barreira é
+`META_APP_ID`/`META_APP_SECRET` vazias (`hasMetaApp()` em
+`src/lib/instagram-graph.ts:24-26`). Sem elas, OAuth e publicação caem em
+mock determinístico. Se essas duas env vars forem preenchidas com
+credenciais reais por qualquer motivo (ex.: testar OAuth com conta
+Testador), o cron `publish-scheduled-posts` (a cada 5 min) publica de
+verdade, sem segundo portão. Ficou fora de escopo desta sessão adicionar
+uma trava explícita (`PUBLISH_AUTOMATION_ENABLED` ou aviso na tela de
+Ajustes) — o pedido foi só documentação. Fica registrado como risco residual
+conhecido e aceito: quem mexe nas env vars de produção é o próprio usuário.
+
+### 0-O.2 Reddit entra no Viral Radar
+
+A arquitetura já tinha sido desenhada de propósito pra isso em 31/07
+(§0-M.1): `RadarPlatform` já incluía `"reddit"`, o CHECK da migration 051
+já aceitava o valor, e `RadarCollector` é só `collect(topic, opts) =>
+RadarItem[]`. Faltava escrever o coletor.
+
+`src/lib/radar/reddit.ts` (novo): autentica via OAuth `client_credentials`
+(app tipo "script", sem login de usuário — `POST
+reddit.com/api/v1/access_token` com Basic Auth de `REDDIT_CLIENT_ID` +
+`REDDIT_CLIENT_SECRET`), cacheia o token em variável de módulo até expirar,
+busca em `oauth.reddit.com/search` ordenado por `top`/`week`. Mesmo padrão
+defensivo do `hackernews.ts`: nunca lança, timeout de 15s, HTTP não-ok ou
+erro de rede viram `[]`. Sem as duas env vars, `collect()` devolve `[]` sem
+tentar rede — mesmo comportamento de qualquer outra chave ausente no
+projeto (Pexels, NVIDIA).
+
+Registrado em `scan-radar.ts`: `COLETORES = [hackerNewsCollector,
+redditCollector]`. Nenhuma outra mudança no job — loop, score
+(`src/lib/radar/score.ts`) e upsert em `viral_references` já são genéricos
+por `platform`.
+
+`REDDIT_CLIENT_ID`/`REDDIT_CLIENT_SECRET` entraram no `.env.example` com o
+comentário de onde criar (`reddit.com/prefs/apps` → "create app" → tipo
+"script", grátis, sem review). 5 testes novos em `reddit.test.ts` (token
+ausente, coleta feliz, HTTP não-ok na busca, falha de autenticação, corte
+por `desde`) — `npm test` continua verde.
+
+**Ainda depende do usuário:** criar o app no Reddit e colar as duas chaves
+em `.env.local`/Vercel. Mesma regra do resto do projeto — eu não crio conta
+em serviço de terceiro nem manipulo credencial colada no chat.
+
+⚠️ **Bloqueio novo, descoberto ao tentar criar o app (2026-08-12): a Reddit
+endureceu o acesso desde 31/07.** A decisão de §0-M.1 registrou "app OAuth,
+grátis, sem review" — não é mais assim. Testado ao vivo: o formulário
+clássico (`reddit.com/prefs/apps`, tipo `script`) preenchido certo não
+conclui a criação — ao clicar em "create app" ela devolve um link pra
+**Responsible Builder Policy** em vez do `client_id`/`secret`. A wiki
+oficial (`reddit.com/r/reddit.com/wiki/api`) confirma: acesso à "legacy
+Data API" (a que o coletor usa) agora exige **"submit a request"**, e o
+texto do formulário de solicitação fala em **"valid moderation use case"**
+— um bot de moderação de subreddit, não uma ferramenta de conteúdo/
+marketing como a nossa. A alternativa que a Reddit empurra hoje (**Devvit**,
+`developers.reddit.com`) é pra construir apps que RODAM dentro do Reddit
+(jogos, mod tools), não pra consumir dados de fora — não serve pro caso.
+
+**Decisão do usuário (2026-08-12): engavetar.** Não submeter o pedido de
+moderação (não se aplica). O coletor (`reddit.ts`) fica pronto e parado —
+mesmo padrão de qualquer chave ausente: sem `REDDIT_CLIENT_ID`/
+`REDDIT_CLIENT_SECRET`, `collect()` devolve `[]` sem tentar rede, e o Radar
+segue rodando só com Hacker News. Reavaliar se surgir um caminho melhor:
+revisitar Devvit, um provider pago (Apify/Bright Data já cotados em
+`postpilot_evolution_plan` como alternativa paga), ou a própria política da
+Reddit mudar de novo.
+
+### 0-O.3 Presets de nicho — standby fecha também na prévia
+
+§0-E.7 (30/07) já tinha decidido standby pros 3 presets (Doce Vitrine,
+Clínica Clara, Tribuna) e apontava que o `<select>` de Ajustes precisaria
+ser filtrado se o standby tivesse que ficar invisível pro cliente. Isso já
+tinha acontecido num commit posterior (o `<select>` só lista os 5 padrão),
+mas ninguém tinha atualizado a nota — e o loop de PRÉVIA
+(`PREVIEW_LAYOUTS.map` em `settings/page.tsx`) continuava mostrando os 3
+cards, que o cliente via mas não conseguia aplicar.
+
+Filtrado também: `settings/page.tsx` agora exclui `doce-vitrine`,
+`clinica-clara` e `tribuna` do array antes de mapear os cards de prévia,
+com o mesmo comentário padrão "EM STANDBY, não removido" usado no
+`ig_verified` (§0-M.15). Nada mudou em `render-shared.ts` (`LayoutPreset`
+continua com os 8 valores), nos 3 builders (`layout-doce-vitrine.ts` etc.)
+nem em `layout-preview.ts` (`PREVIEW_LAYOUTS` completo — `docs/layouts.html`
+via `scripts/build-layouts-html.ts` continua gerando os 8×6 pra referência
+interna). Nenhum cliente real tinha um desses 3 presets configurado (o
+`<select>` nunca ofereceu a opção pra gravar), então não há dado a migrar.
+
+### 0-O.4 Exclusão de conta — fechada de ponta a ponta
+
+Pendência de 31/07 (§0-K.5) fechada: o usuário criou uma conta descartável,
+logou, e executou o fluxo real em Ajustes → "Excluir minha conta" → digitar
+`EXCLUIR` → confirmar. Confirmado pelo usuário que o fluxo completou sem
+erro. Não foi feita conferência direta no banco/Storage nesta sessão (sem
+credencial de Supabase no ambiente) — a verificação foi o próprio app
+confirmar a exclusão e devolver a tela de login/cadastro. Se algum dia
+sobrar rastro (ex.: arquivo órfão em `avatars`), é o mesmo tipo de
+vazamento já mapeado e corrigido em `actions.ts` (§0-K.5) — não uma
+regressão nova.
+
+**Encerra a última linha de "Ainda aberto" do `ESTADO-DO-PROJETO.md` §5 que
+dependia de execução (as que restam — Stripe live, Sprint F — são decisão
+de produto, não teste pendente).**
 
 ---
 

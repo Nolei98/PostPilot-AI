@@ -61,6 +61,17 @@ function navItems(readyCount: number): NavItem[] {
       ),
     },
     {
+      href: "/copilot",
+      label: "Copiloto",
+      icon: (
+        // balão de chat = conversa com o agente
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 5.5h16v11H9l-4 3.5v-3.5H4z" />
+          <path d="M8 10h8M8 13h5" opacity="0.6" />
+        </svg>
+      ),
+    },
+    {
       href: "/pricing",
       label: "Planos",
       icon: (

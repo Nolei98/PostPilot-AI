@@ -24,6 +24,7 @@ import { resolvePostFontFamily } from "@/lib/font-data";
 import { PLANS } from "@/lib/plans";
 import { getUserPlan } from "@/lib/subscription";
 import { assertPublicHost } from "@/lib/feed-url";
+import { COPILOT_SOURCE_FEED_URL } from "@/lib/copilot/constants";
 
 /**
  * A Fila mora em `/fila`. `/` é a landing ESTÁTICA (src/app/route.ts, um
@@ -1153,7 +1154,10 @@ export async function addSource(formData: FormData) {
     const { count } = await supabase
       .from("source_configs")
       .select("id", { count: "exact", head: true })
-      .eq("client_id", clientId);
+      .eq("client_id", clientId)
+      // Não conta a fonte sintética do Copiloto (src/lib/copilot/tools.ts)
+      // contra o teto de fontes do plano — não é uma fonte RSS de verdade.
+      .neq("feed_url", COPILOT_SOURCE_FEED_URL);
     if ((count ?? 0) >= limite) {
       throw new Error(
         `Seu plano (${PLANS[plano].label}) permite ${limite} ${limite === 1 ? "fonte" : "fontes"} por cliente. Remova uma fonte ou mude de plano.`
