@@ -37,6 +37,7 @@ import { getMonthlyQuota } from "@/lib/subscription";
 import { PLANS } from "@/lib/plans";
 import { POST_FONTS, resolvePostFontFamily } from "@/lib/font-data";
 import { NICHES } from "@/lib/niches";
+import { COPILOT_SOURCE_FEED_URL } from "@/lib/copilot/constants";
 import { LayoutPreview } from "@/components/LayoutPreview";
 import { PREVIEW_LAYOUTS, PREVIEW_FORMATS } from "@/lib/layout-preview";
 import type { CardBrand, LayoutPreset } from "@/lib/render-shared";
@@ -69,6 +70,10 @@ export default async function SettingsPage({
     .from("source_configs")
     .select("*")
     .eq("client_id", shell.activeClientId ?? "")
+    // A fonte sintética que o Copiloto usa (src/lib/copilot/tools.ts) não
+    // é uma fonte RSS de verdade — nunca varrida, existe só pra satisfazer
+    // a FK de news_items. Não aparece aqui nem conta no teto do plano.
+    .neq("feed_url", COPILOT_SOURCE_FEED_URL)
     .order("created_at");
 
   // Teto de fontes do plano, por CLIENTE (o custo de varredura é por
@@ -475,8 +480,19 @@ export default async function SettingsPage({
                   </Card>
 
                   {/* Previews (kit v2 §7.7): 5 layouts × 4 formatos, com a cor/fonte
-                      reais da marca — decida olhando antes de trocar acima. */}
-                  {PREVIEW_LAYOUTS.map((layout) => (
+                      reais da marca — decida olhando antes de trocar acima.
+                      Os 3 presets de nicho (doce-vitrine/clinica-clara/tribuna)
+                      saem da lista em 2026-08-12, fechando o standby decidido
+                      em 30/07 (§0-E.7): o <select> acima já não os oferecia,
+                      mas a prévia ainda mostrava um card que ninguém conseguia
+                      aplicar. EM STANDBY, não removido: PREVIEW_LAYOUTS
+                      (layout-preview.ts), os builders (layout-doce-vitrine.ts
+                      etc.) e docs/layouts.html continuam completos — é só
+                      devolver o filtro quando a decisão de produto for tomada.
+                      Ver PROGRESSO-2.0.md §0-O. */}
+                  {PREVIEW_LAYOUTS.filter(
+                    (layout) => !["doce-vitrine", "clinica-clara", "tribuna"].includes(layout.key)
+                  ).map((layout) => (
                     <Card
                       key={layout.key}
                       className={`p-4 ${
