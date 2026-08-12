@@ -13,13 +13,17 @@
 import { inngest } from "@/inngest/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hackerNewsCollector } from "@/lib/radar/hackernews";
+import { redditCollector } from "@/lib/radar/reddit";
 import { ranquear } from "@/lib/radar/score";
 import { topicsForClient } from "@/lib/radar/topics";
 import type { RadarCollector, RadarItem } from "@/lib/radar/types";
 
-/** Coletores ativos. O Reddit entra aqui quando existir app OAuth: o
- *  `.json` público passou a devolver 403 em 2025. Nada mais muda. */
-const COLETORES: RadarCollector[] = [hackerNewsCollector];
+/** Coletores ativos. O Reddit fica registrado sempre — sem
+ *  REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET ele devolve `[]` sozinho (ver
+ *  reddit.ts), então não precisa condicional aqui. EM STANDBY desde
+ *  2026-08-12: a Reddit passou a exigir "moderation use case" pra
+ *  liberar a credencial — ver PROGRESSO-2.0.md §0-O.2. */
+const COLETORES: RadarCollector[] = [hackerNewsCollector, redditCollector];
 
 /** Janela de coleta. Sete dias porque o score já penaliza o que é velho
  *  (fatorRecencia) — cortar antes disso deixaria a lista vazia em nicho
