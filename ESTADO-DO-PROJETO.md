@@ -4,10 +4,11 @@
 > está pronto, o que falta, e em que ordem fazer. Os outros documentos são
 > aprofundamento — a lista deles está no fim (§8).
 >
-> Atualizado em **2026-08-02**. Commit de referência: `308aa9c` (`main`, já no
-> `origin`). Essa sessão foi só arrumação — regras de agente versionadas e
-> protótipos `v1.1`–`v1.4` removidos (§0-N do `PROGRESSO-2.0.md`). **O estado de
-> pronto/pendente abaixo não mudou**: nada de runtime foi tocado.
+> Atualizado em **2026-08-12**. Sessão fechou 4 pendências do §5 (App Review
+> em standby, exclusão de conta testada, Reddit no Radar em standby, nichos
+> saem da UI) e entregou o v1 da Sprint F (Copiloto de chat, `/copilot`,
+> migration 052) — ver `PROGRESSO-2.0.md` §0-O e §0-P. Ainda não commitado
+> (ver §0-N pro commit de referência anterior, `308aa9c`).
 
 ---
 
@@ -115,7 +116,10 @@ Arquivos-chave:
 - **Páginas legais** (`/privacidade`, `/termos`, `/exclusao-de-dados`) no ar,
   respondendo 200.
 - **Vercel Analytics** ligado.
-- **Qualidade**: `tsc` limpo, `lint` limpo, build limpo, 499 testes + 3 e2e
+- **Copiloto de chat** (`/copilot`, Sprint F v1): conversa em português
+  aciona Radar/brief/geração — sempre cai na fila de aprovação, nunca
+  publica sozinho. Ver `PROGRESSO-2.0.md` §0-P.
+- **Qualidade**: `tsc` limpo, `lint` limpo, build limpo, 599 testes + 3 e2e
   passando. CI no GitHub Actions em todo push.
 
 ---
@@ -140,9 +144,9 @@ Numeração igual à de `docs/auditoria-lancamento.md`, pra dar pra cruzar.
 ✅ **Tudo isso está no ar** (deploy de 31/07, verificado em produção:
 `/pricing` responde 200 sem login e `POST /api/checkout` responde 401).
 
-⚠️ **A exclusão de conta nunca foi testada no browser** — passou por `tsc`,
-lint, testes e build, mas nenhum deles executa `deleteUser`. A ação é
-irreversível: teste com uma conta descartável, não com a sua.
+✅ **Exclusão de conta testada no browser em 2026-08-12** — conta
+descartável, fluxo completo (Ajustes → excluir → digitar `EXCLUIR` →
+confirmar), sem erro. Ver `PROGRESSO-2.0.md` §0-O.4.
 
 ### Defeitos de 31/07 — todos fechados no mesmo dia
 
@@ -161,12 +165,12 @@ irreversível: teste com uma conta descartável, não com a sua.
 | # | Item | Quem resolve |
 |---|---|---|
 | 2.10 | **Stripe em modo de teste** — ninguém consegue pagar de verdade | **só você** |
-| 2.9 | **App Review do Meta** — sem ele a publicação automática só roda em conta de teste | **só você** (dossiê pronto em `docs/meta-app-review.md`) |
-| — | **Exclusão de conta nunca exercida no browser** — o código foi corrigido, o fluxo nunca rodou | **só você** (criar conta descartável) |
-| — | **Reddit fora do Radar** — o `.json` público virou 403 e exige app OAuth | **só você** (criar o app; o coletor eu escrevo) |
+| 2.9 | **App Review do Meta — EM STANDBY por decisão do usuário (2026-08-12). Não submeter nesta fase.** | decisão tomada — dossiê fica pronto e parado em `docs/meta-app-review.md` |
+| ✅ | ~~Exclusão de conta nunca exercida no browser~~ — testada em 2026-08-12, sem erro | fechado |
+| — | **Reddit no Radar — EM STANDBY (2026-08-12)**: coletor pronto no código, mas a Reddit endureceu o acesso à API (exige "moderation use case", que não é o nosso) | decisão tomada — ver `PROGRESSO-2.0.md` §0-O.2 |
 | — | Presets de nicho (confeitaria, saúde, advocacia) prontos porém **em standby** | decisão de produto |
 | — | Publicação de Reels (Graph API) e TikTok | travado no 2.9 |
-| — | Sprint F (ações de agente) | não começada; sem dependência externa |
+| ✅ | Sprint F v1 (Copiloto de chat) — `/copilot`, testado ponta a ponta | fechado — ver `PROGRESSO-2.0.md` §0-P |
 
 ### Carga e concorrência — medido em 31/07
 
@@ -242,7 +246,9 @@ pública (pendente de commit).
 6. Testar o pagamento ponta a ponta.
 
 **Portão 3 — quando o produto abrir de fato:**
-7. App Review do Meta (libera a publicação automática).
+7. App Review do Meta — **em standby por decisão do usuário (2026-08-12)**,
+   não faz parte desta fase; reavaliar quando decidir religar publicação
+   automática.
 8. Teste de carga mínimo e medição do custo real por usuário.
 
 ### 7.3 A sequência de divulgação (dia do lançamento)

@@ -21,18 +21,17 @@ do usuário em 31/07:
   consegue virar pagante e todo mundo fica no free, o que torna os tetos de
   plano decorativos. Chaves `sk_live_`, produtos recriados, webhook no
   domínio real (`/api/stripe/webhook`) + novo `STRIPE_WEBHOOK_SECRET`.
-- [ ] **App Review do Meta** — sem ele a publicação automática só funciona
-  em contas de teste, e o produto entrega *até o download da arte*. É o
-  item de maior PRAZO (semanas de espera da Meta), então começa primeiro.
-  Material pronto em [`docs/meta-app-review.md`](./docs/meta-app-review.md);
-  falta Business Verification, screencast e ícone.
+- [ ] ~~App Review do Meta~~ — **EM STANDBY por decisão do usuário
+  (2026-08-12). Não submeter nesta fase.** Deixado de fora de propósito:
+  não é bloqueador pra abrir o link, o produto entrega até o download da
+  arte (publicação manual). Material fica pronto e parado em
+  [`docs/meta-app-review.md`](./docs/meta-app-review.md) pra quando a
+  decisão mudar.
 
 ### Verificações que ainda não foram feitas
 
-- [ ] **Exclusão de conta exercida no browser**, com conta descartável, e
-  conferência de que os arquivos somem dos dois buckets. O código foi
-  corrigido em 31/07 (a limpeza deixava logo e avatar legado pra trás), mas
-  o fluxo nunca rodou de ponta a ponta.
+- [x] **Exclusão de conta exercida no browser** (2026-08-12), com conta
+  descartável, fluxo completo sem erro. Ver `PROGRESSO-2.0.md` §0-O.4.
 - [ ] **Carga/concorrência** — ninguém testou com vários usuários ao mesmo
   tempo. `generate-post` tem `concurrency: 3` POR FUNÇÃO, não por usuário:
   dez pessoas varrendo juntas enfileiram atrás umas das outras.

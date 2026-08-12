@@ -1,5 +1,11 @@
 # App Review do Meta — dossiê de submissão
 
+> ⏸ **EM STANDBY por decisão do usuário (2026-08-12). Não submeter nesta
+> fase.** Este dossiê fica pronto e parado — não é bloqueador para abrir o
+> link publicamente, porque o produto entrega até o download da arte
+> (publicação manual). Reavaliar quando decidir religar a publicação
+> automática. Ver `ESTADO-DO-PROJETO.md` §5 e `PROGRESSO-2.0.md` §0-O.
+
 > Tudo que a submissão pede, escrito e conferido em 2026-07-29. O que
 > depende de código já está no ar; o que sobra é preencher e gravar.
 >
